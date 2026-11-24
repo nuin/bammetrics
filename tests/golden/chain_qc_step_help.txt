@@ -1,0 +1,37 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+qc
+--help
+## exit
+0
+## stdout
+bammetrics chain ... + qc [OPTIONS]: the last step. It evaluates the preset over the metrics files of the taps on its stream and writes PREFIX.verdict.json and PREFIX.report.html as bammetrics qc writes them for the same taps on the same records. A collector the preset needs that no tap of the stream runs is added as a tap. A tool with no collector (CollectWgsMetrics) reads a file of the stream after the chain: the source with no transform in front, the last kept stream (--keep) or the BAM a write step wrote (-o out.bam); with no such file it runs on a copy of the stream, as the wgs step does. The chain writes PREFIX.manifest.json (schema bammetrics.manifest/2).
+
+Every option also reads as KEY=VALUE. The source, -o, -R, --threads, --sample and --resume belong to the chain: give them before the first step, or after qc in the form without +. qc may follow a recipe: bammetrics prep BAM -o out.bam qc.
+
+Exit codes:
+  0   every sample passes, or none reaches --fail-on
+  1   an input could not be read, or the preset does not parse
+  2   usage error; nothing ran
+  10  a sample reached --fail-on: its verdict is fail (or warn with --fail-on warn)
+  11  a sample is incomplete (a rule's file, row or column is missing) and none reached --fail-on
+
+Options:
+  --preset NAME|FILE          The rules: generic (default), wgs, clinical-panel, rna-seq, or a preset file.
+  --report FORM[,FORM]        The sample report: html (PREFIX.report.html, the default), pdf (PREFIX.report.pdf, cargo feature pdf), or html,pdf. Repeatable.
+  --also FORMAT[,FORMAT]      The forms of the verdict: markdown (PREFIX.report.md), junit (PREFIX.junit.xml), multiqc (PREFIX.verdict_mqc.json). The per-file formats are the chain's --also. Repeatable.
+  --fail-on BAND              warn or fail: the chain exits 10 when the verdict reaches it, 11 when it is incomplete. Without it the verdict does not change the exit code.
+  --hs BAITS TARGETS          One CollectHsMetrics run: bait and target intervals (interval list or BED). Repeatable.
+  --panel FILE                Baits and targets in one file: the same as --hs FILE FILE.
+  --ref-flat FILE             Gene annotation (refFlat) for CollectRnaSeqMetrics; needs --strand.
+  --strand STRAND             CollectRnaSeqMetrics STRAND_SPECIFICITY: NONE, FIRST_READ_TRANSCRIPTION_STRAND or SECOND_READ_TRANSCRIPTION_STRAND.
+  --ribosomal-intervals FILE  CollectRnaSeqMetrics RIBOSOMAL_INTERVALS; needs --ref-flat.
+  --sex SEX                   male or female: CollectSexCheckMetrics EXPECTED_SEX, for a preset with a SexCheckMetrics rule.
+  --all-plots                 Draw every plot family the files have data for.
+  --date ISO                  The date printed on the page (default: now, as 2026-01-02 03:04:05 UTC).
+  --pdf-font FONT             A TrueType or OpenType font of at most 32 MiB for the text of the PDF.
+  --page-size SIZE            The page size of the PDF: a4 (default) or letter.
+  -h, --help                  This help.
+## stderr

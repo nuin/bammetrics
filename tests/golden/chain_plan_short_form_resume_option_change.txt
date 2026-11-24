@@ -1,0 +1,206 @@
+## argv
+chain
+tests/data/insert_size.bam
+-R
+tests/data/ref_100k.fa
+reorder-sam
+insert-size
+--minimum-pct
+0.2
+-o
+OUT/r.bam
+--resume
+--dry-run
+## exit
+0
+## stdout
+chain plan for tests/data/insert_size.bam
+  source    tests/data/insert_size.bam (BAM, 328 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/r (from -o)
+  reference tests/data/ref_100k.fa
+segment 1  one read of tests/data/insert_size.bam
+  step 1  reorder-sam  transform, first read  takes every record and sorts them in the stream order
+segment 2  the records step 1 holds, sorted by coordinate
+  step 1  reorder-sam  stream reordered       no file
+  step 2  insert-size  tap on reordered       OUT/r.insert_size_metrics
+  step 3  write        BAM of reordered       OUT/r.bam, OUT/r.bai
+manifest   OUT/r.manifest.json (bammetrics.manifest/2)
+barrier    step 1 reorder-sam: holds its records; about 4 records by the file size, no spill under --sort-memory 2.0 GiB; memory about 100.0 MiB
+temp disk  none expected
+output     about 280 bytes written by write
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+resume     from OUT/r.manifest.json
+resume     step 1 reorder-sam: skipped; the BAM a write step wrote of its stream, OUT/r.bam, starts the read
+resume     step 2 insert-size: runs: its options changed
+resume     step 3 write: skipped: its record and files match
+nothing ran: this is a plan
+## stderr
+## file r.bai
+<index not recorded>
+## file r.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+r0	99	0	1001	MC:Z:100M
+r0	147	0	1201	MC:Z:100M
+r1	99	0	2001	MC:Z:100M
+r1	147	0	2211	MC:Z:100M
+r2	99	0	3001	MC:Z:100M
+r2	147	0	3211	MC:Z:100M
+r3	99	0	4001	MC:Z:100M
+r3	147	0	4221	MC:Z:100M
+r4	99	0	5001	MC:Z:100M
+r4	147	0	5401	MC:Z:100M
+## file r.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/r.insert_size_metrics CHAIN=ReorderSam
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+310	310	10	300	500	310	8.164966	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	1
+310	2
+320	1
+
+## file r.manifest.json
+{
+  "schema": "bammetrics.manifest/2",
+  "tool_version": "0.32.0",
+  "verb": "chain",
+  "sample": "insert_size",
+  "directory": "<directory>",
+  "source": {
+    "path": "tests/data/insert_size.bam",
+    "size": "<size>",
+    "mtime": "<mtime>",
+    "edges_hash": "<edges_hash>"
+  },
+  "reference": {
+    "path": "tests/data/ref_100k.fa",
+    "size": "<size>",
+    "mtime": "<mtime>",
+    "edges_hash": "<edges_hash>"
+  },
+  "prefix": "OUT/r",
+  "stringency": "STRICT",
+  "started": "<started>",
+  "seconds": "<seconds>",
+  "exit": 0,
+  "steps": [
+    {
+      "id": "reordered",
+      "number": 1,
+      "verb": "reorder-sam",
+      "tool": "ReorderSam",
+      "role": "transform",
+      "reads": "in",
+      "leaves": "reordered",
+      "upstream": [],
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "REFERENCE_SEQUENCE=tests/data/ref_100k.fa",
+        "SEQUENCE_DICTIONARY=tests/data/ref_100k.fa.fai"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [
+        {
+          "path": "tests/data/ref_100k.fa",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "tests/data/ref_100k.fa.fai",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "outputs": [],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "insert-size@reordered",
+      "number": 2,
+      "verb": "insert-size",
+      "tool": "CollectInsertSizeMetrics",
+      "role": "tap",
+      "reads": "reordered",
+      "leaves": null,
+      "upstream": [
+        "reordered"
+      ],
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/r.insert_size_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/r.insert_size_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "write@reordered",
+      "number": 3,
+      "verb": "write",
+      "tool": null,
+      "role": "write",
+      "reads": "reordered",
+      "leaves": null,
+      "upstream": [
+        "reordered"
+      ],
+      "argv": [
+        "OUTPUT=OUT/r.bam",
+        "FORMAT=bam",
+        "COMPRESSION_LEVEL=5",
+        "CREATE_INDEX=true",
+        "CREATE_MD5_FILE=false"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/r.bam",
+          "kind": "bam",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/r.bai",
+          "kind": "index",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    }
+  ],
+  "kept": []
+}

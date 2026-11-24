@@ -1060,8 +1060,8 @@ pub fn check_stage(inv: &Invocation) -> Result<()> {
     let options = FilterOptions::from_invocation(inv)?;
     if options.write_reads {
         return Err(Error::Usage(
-            "WRITE_READS_FILES: the .reads files sit beside OUTPUT, and a chain step hands its \
-             records on (wave W14 of docs/07_full_parity_program.md)"
+            "WRITE_READS_FILES: the .reads files are named after OUTPUT, and a chain step \
+             writes no OUTPUT: run filter-sam-reads on its own for them"
                 .to_owned(),
         ));
     }

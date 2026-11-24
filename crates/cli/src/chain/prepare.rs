@@ -23,15 +23,17 @@ use bammetrics_core::{cram, java, pass};
 use clap::ValueEnum;
 
 use super::args::{
-    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
-    chain_option_on_step, find_step, is_split, is_transform, not_a_step, step_parser_flags,
-    unknown_step, write_flags,
+    AS, COMPRESSION_LEVEL, INDEX, KEEP, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
+    chain_option_on_step, find_step, is_chain_key, is_materialized, is_split, is_transform,
+    materialize_leaves, not_a_step, step_parser_flags, unknown_step, write_flags,
 };
 use super::claims::{
     Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs, refuse_unresolved,
 };
+use super::keep::{self, Kept};
 use super::planner;
-use super::{EMPTY_PREFIX_HINT, Spec, StepSpec, VERB, WRITE, usage};
+use super::qc_step::{self, QcPlan};
+use super::{EMPTY_PREFIX_HINT, QC, Spec, StepSpec, VERB, WRITE, usage};
 use crate::also::Also;
 use crate::error::VerbError;
 use crate::format::{self, Format};
@@ -39,6 +41,7 @@ use crate::grammar::{self, Flag, Key, Parsed};
 use crate::qc::with_suffix;
 use crate::verbs::{self, Files, Verb};
 
+pub(super) mod materialize;
 mod split;
 
 /// The stream of the source.
@@ -61,6 +64,13 @@ pub enum Role {
     /// A split tool: the records of its position over several BAMs in a
     /// directory, named once the stream is read (`split-sam-by-library`).
     Split,
+    /// `qc`, the last step: the verdict and report over the taps of its
+    /// stream.
+    Qc,
+    /// A tool run on a file of the records of its position (docs/07
+    /// section 2.3): the source itself, or a copy in the temporary
+    /// directory. One that writes a BAM leaves a stream (`merge-sam-files`).
+    Materialize,
 }
 
 impl Role {
@@ -70,6 +80,8 @@ impl Role {
             Role::Tap => "tap",
             Role::Write => "write",
             Role::Split => "split",
+            Role::Qc => "qc",
+            Role::Materialize => "materialize",
         }
     }
 }
@@ -161,6 +173,15 @@ pub struct Chain {
     pub steps: Vec<Planned>,
     /// `PREFIX.report.md` of `--also markdown`.
     pub report: Option<PathBuf>,
+    /// `--resume`: skip the steps `PREFIX.manifest.json` proves done.
+    pub resume: bool,
+    /// The streams the run writes as BAMs (`--keep`).
+    pub kept: Vec<Kept>,
+    /// The qc step, when the chain ends in one.
+    pub qc: Option<QcPlan>,
+    /// `PREFIX.manifest.json`, written by a run that resumes, keeps a
+    /// stream or ends in `qc`.
+    pub manifest: Option<PathBuf>,
     /// Every planned file with the label of its step.
     pub(crate) outputs: Outputs,
     /// Every file the chain reads: no step may write one.
@@ -191,12 +212,34 @@ impl Chain {
         1 + self
             .steps
             .iter()
-            .filter(|step| step.role == Role::Transform && !step.streams())
+            .filter(|step| step.starts_segment())
             .count()
     }
 }
 
 impl Planned {
+    /// True for a step whose records the steps after it read: a transform,
+    /// or a materialized tool that writes a BAM (`merge-sam-files`). `--keep`
+    /// writes its stream, `--resume` starts a read there, and the qc step
+    /// reads the stream of the last one.
+    pub fn hands_on(&self) -> bool {
+        self.role == Role::Transform || (self.role == Role::Materialize && self.leaves.is_some())
+    }
+
+    /// True for a step that reads the records of its position and changes
+    /// none: a tap, or a materialized tool that writes no BAM (`wgs`). It
+    /// fails alone, and the qc step reads its metrics file.
+    pub fn reads_only(&self) -> bool {
+        self.role == Role::Tap || (self.role == Role::Materialize && self.leaves.is_none())
+    }
+
+    /// True for a step whose stream goes on in the next segment: a barrier
+    /// transform, or a materialized tool that writes a BAM.
+    pub fn starts_segment(&self) -> bool {
+        (self.role == Role::Transform && !self.streams())
+            || (self.role == Role::Materialize && self.leaves.is_some())
+    }
+
     /// True for a transform that edits the stream as it passes
     /// ([`stage::streams`]): it takes and emits its records in its own
     /// segment.
@@ -213,6 +256,7 @@ impl Planned {
 enum What {
     Tool(&'static Verb, Role),
     Write,
+    Qc,
 }
 
 /// A step with its arguments parsed by its verb's flags.
@@ -235,7 +279,7 @@ impl Draft<'_> {
     fn error(&self, mut error: VerbError) -> VerbError {
         let what = match self.what {
             What::Tool(verb, _) => own_message(verb.tool().name, &error.what),
-            What::Write => &error.what,
+            What::Write | What::Qc => &error.what,
         };
         error.what = format!("{}: {what}", self.place());
         VERB.clone_into(&mut error.verb);
@@ -281,6 +325,9 @@ fn tool_role(spec: &StepSpec, number: usize) -> Result<(&'static Verb, Role), Ve
     if verb.tool().collector.is_some() {
         return Ok((verb, Role::Tap));
     }
+    if is_materialized(verb) {
+        return Ok((verb, Role::Materialize));
+    }
     let label = format!("step {number} ({})", verb.name);
     Err(not_a_step(verb, &place(spec, &label)).hint(STEPS_HINT))
 }
@@ -309,6 +356,8 @@ fn empty_path<'a>(draft: &'a Draft) -> Option<&'a str> {
 fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
     let (what, name, flags) = if spec.verb == WRITE {
         (What::Write, WRITE, write_flags())
+    } else if spec.verb == QC {
+        (What::Qc, QC, qc_step::flags())
     } else {
         let (verb, role) = tool_role(spec, number)?;
         (What::Tool(verb, role), verb.name, step_parser_flags(verb))
@@ -317,6 +366,17 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
     let parsed = grammar::parse(name, &flags, &spec.args).map_err(|mut error| {
         if let Some(belongs) = chain_option_on_step(&error, &place(spec, &label)) {
             return belongs;
+        }
+        let keep = grammar::unknown_option(&error)
+            .and_then(|spelled| spelled.trim_start_matches('-').split('=').next())
+            .is_some_and(|name| name.eq_ignore_ascii_case("keep"));
+        if keep {
+            return usage(format!(
+                "{}: --keep writes the stream a transform leaves, and {name} leaves none",
+                place(spec, &label)
+            ))
+            .from("--keep")
+            .hint("write [PATH] writes the records at its position as a BAM");
         }
         error.what = format!("{}: {}", place(spec, &label), error.what);
         VERB.clone_into(&mut error.verb);
@@ -341,9 +401,16 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
             .from(spelled));
     }
     let What::Tool(verb, role) = draft.what else {
+        if let (What::Qc, Some(extra)) = (draft.what, draft.parsed.positional.first()) {
+            return Err(draft
+                .usage("qc takes no input: it reads the metrics files of the taps on its stream")
+                .from(extra.clone()));
+        }
         return Ok(draft);
     };
-    if let Some(extra) = draft.parsed.positional.first() {
+    let several = bammetrics_core::stage::materialize::row_of(verb.tool())
+        .is_some_and(|row| row.several_inputs);
+    if let Some(extra) = draft.parsed.positional.first().filter(|_| !several) {
         let mut error = draft
             .usage("a step takes no input, the chain's source feeds every step")
             .from(extra.clone());
@@ -356,12 +423,12 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
         .parsed
         .given
         .iter()
-        .find(|given| CHAIN_KEYS.contains(&given.key))
+        .find(|given| is_chain_key(Some(verb), given.key))
     {
         return Err(belongs_to_chain(&draft.place(), &given.spelled));
     }
-    if let (Role::Transform, Files::Bam, Some(given)) =
-        (role, verb.files, draft.parsed.last(Key::Output))
+    let hands_on = role == Role::Transform || materialize_leaves(verb);
+    if let (true, Files::Bam, Some(given)) = (hands_on, verb.files, draft.parsed.last(Key::Output))
     {
         return Err(draft
             .usage(format!(
@@ -403,7 +470,10 @@ struct Position {
 /// The name of the stream a transform leaves: `--as`, or its default.
 fn stream_name(draft: &Draft, verb: &Verb) -> Result<String, VerbError> {
     let Some(given) = draft.parsed.last(AS) else {
-        return Ok(stage::label_of(verb.tool()).unwrap_or(verb.name).to_owned());
+        let default = stage::label_of(verb.tool())
+            .or_else(|| stage::materialize::leaves(verb.tool()))
+            .unwrap_or(verb.name);
+        return Ok(default.to_owned());
     };
     let name = &given.values[0];
     let plain = !name.is_empty()
@@ -449,7 +519,12 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             segment,
             behind: behind.join("+"),
         };
-        if let What::Tool(verb, Role::Transform) = draft.what {
+        let leaves = match draft.what {
+            What::Tool(verb, Role::Transform) => Some(verb),
+            What::Tool(verb, Role::Materialize) if materialize_leaves(verb) => Some(verb),
+            _ => None,
+        };
+        if let Some(verb) = leaves {
             stream = stream_name(draft, verb)?;
             if taken.contains(&stream) {
                 if let Some(given) = draft.parsed.last(AS) {
@@ -478,7 +553,7 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             let picard = verb
                 .picard_arguments(&parsed, &draft.flags)
                 .unwrap_or_default();
-            if !stage::streams_with(verb.tool(), &picard) {
+            if materialize_leaves(verb) || !stage::streams_with(verb.tool(), &picard) {
                 segment += 1;
             }
         }
@@ -500,6 +575,8 @@ struct Context<'a> {
     /// The per-file formats of `--also`.
     also: &'a [Format],
     threads: usize,
+    /// The chain's `--tmp-dir`.
+    tmp_dir: Option<&'a Path>,
 }
 
 impl Context<'_> {
@@ -626,7 +703,13 @@ fn tap_names(
     let output = tool.output_name();
     let own_output = draft.parsed.last(Key::Output);
     let mut named = Named::default();
-    let base = match (own_output.map(|given| given.values[0].as_str()), verb.files) {
+    // A materialized tool whose verb writes a BAM next to it names one
+    // file of its own here (`calculate-read-group-checksum`).
+    let files = match verb.files {
+        Files::Bam if is_materialized(verb) => Files::Single,
+        files => files,
+    };
+    let base = match (own_output.map(|given| given.values[0].as_str()), files) {
         (Some("-"), Files::Single) => {
             named.stdout = true;
             return Ok(named);
@@ -646,13 +729,13 @@ fn tap_names(
             cx.base(&position.reads)
         }
     };
-    let table = file_extensions(tool.name).unwrap_or_default();
+    let table = materialize::extensions(tool);
     if table.is_empty() {
         return Err(draft
             .usage(format!("{} has no name under a prefix", verb.class))
             .hint("give the step -o FILE"));
     }
-    for (option, extension) in table {
+    for (option, extension) in &table {
         let main = *option == "OUTPUT";
         let option = if main { output } else { option };
         if main || !sets(own, option) {
@@ -691,10 +774,12 @@ fn reference_arg(cx: &Context, tool: &Tool, own: &[String]) -> Option<String> {
     {
         return (!sets(own, "REFERENCE")).then(|| format!("REFERENCE={reference}"));
     }
-    let reads = tool
-        .option("REFERENCE_SEQUENCE")
-        .is_some_and(|opt| opt.kind == Kind::Value);
-    ((reads || cx.is_cram) && !sets(own, "REFERENCE_SEQUENCE"))
+    let option = tool.option("REFERENCE_SEQUENCE");
+    let reads = option.is_some_and(|opt| opt.kind == Kind::Value);
+    // A tool that refuses the option (`CollectIndexDepthMetrics`) gets
+    // none: its own refusal of a CRAM says why.
+    let takes = option.is_some_and(|opt| opt.kind != Kind::Rejected);
+    ((reads || cx.is_cram) && takes && !sets(own, "REFERENCE_SEQUENCE"))
         .then(|| format!("REFERENCE_SEQUENCE={reference}"))
 }
 
@@ -717,13 +802,13 @@ fn file_kind(tool: &Tool, option: &str) -> &'static str {
 /// True for a tool whose `OUTPUT` (or own output option) is a prefix: it
 /// names its files when it finishes.
 fn output_is_prefix(tool: &Tool) -> bool {
-    matches!(file_extensions(tool.name), Some([(option, "")])
+    matches!(materialize::extensions(tool).as_slice(), [(option, "")]
         if *option == "OUTPUT" || *option == tool.output_name())
 }
 
 /// The files `argv` names as written, each with a sibling per further
 /// format when it is a metrics file.
-fn planned_files(tool: &Tool, argv: &[String], formats: &[Format]) -> Vec<PlannedFile> {
+pub(super) fn planned_files(tool: &Tool, argv: &[String], formats: &[Format]) -> Vec<PlannedFile> {
     let mut files = Vec::new();
     for arg in argv {
         let Some((name, value)) = arg.split_once('=') else {
@@ -810,13 +895,16 @@ fn tool_step(
     verb.check_one_spelling(&draft.parsed, &draft.flags)
         .map_err(|e| draft.error(e))?;
     check_types(&draft)?;
-    draft.parsed.positional.push(cx.source.to_owned());
+    // The stream is the first input; a materialized tool that merges takes
+    // the step's files after it.
+    draft.parsed.positional.insert(0, cx.source.to_owned());
     let picard = verb
         .picard_arguments(&draft.parsed, &draft.flags)
         .map_err(|e| draft.error(e))?;
     let (input, own) = picard.split_first().expect("the source is the first input");
     let named = match role {
         Role::Transform => transform_names(cx, tool, &position, own),
+        Role::Materialize if materialize_leaves(verb) => Named::default(),
         _ => tap_names(cx, &draft, verb, &position, own)?,
     };
     if named.stdout {
@@ -837,6 +925,7 @@ fn tool_step(
     argv.extend(named.args.iter().cloned());
     argv.extend(reference_arg(cx, tool, own));
     argv.extend(own.iter().cloned());
+    let printed = materialize::take_output(tool, &mut argv);
     verb.check_required(&draft.flags, &argv)
         .and_then(|()| verb.check_inputs(&draft.parsed, &argv))
         .map_err(|e| draft.error(e))?;
@@ -844,18 +933,38 @@ fn tool_step(
     inv.threads = cx.threads;
     match role {
         Role::Transform => stage::check_stage_options(tool, &inv),
+        Role::Materialize => materialize::check(
+            tool,
+            &argv,
+            &materialize::Before {
+                source: cx.source,
+                reads_source: position.segment == 1 && position.reads == SOURCE_STREAM,
+                has_reference: cx.reference.is_some(),
+                tmp_dir: cx.tmp_dir,
+            },
+        ),
         _ => inv
             .limits()
             .and_then(|_| bammetrics_core::tap_options::check(tool, &inv)),
     }
     .map_err(|e| draft.core(verb, &e))?;
-    if role == Role::Tap && !position.behind.is_empty() {
+    let tap = role == Role::Tap || (role == Role::Materialize && position.leaves.is_none());
+    if tap && !position.behind.is_empty() {
         inv.command.push_str(&format!(" CHAIN={}", position.behind));
     }
     let late_prefix = inv.output.clone().filter(|_| output_is_prefix(tool));
     let mut files = planned_files(tool, &argv, &formats);
     if let Some(prefix) = &late_prefix {
         files.extend(prefix_files(tool, prefix, &formats));
+    }
+    if role == Role::Materialize {
+        materialize::plan_files(tool, printed.as_ref(), &mut files, &mut formats);
+        files.extend(
+            materialize::program_files(tool, &inv, &formats).map_err(|e| draft.core(verb, &e))?,
+        );
+        // The index a step reads beside its inputs is an input too.
+        inv.inputs
+            .extend(stage::materialize::index_inputs(tool, &argv));
     }
     let planned = Planned {
         number: draft.number,
@@ -871,7 +980,7 @@ fn tool_step(
         stdout: named.stdout,
         command: Some(inv.command),
         argv,
-        output: inv.output,
+        output: printed.or(inv.output),
         notes: inv.notes,
         formats,
         write: None,
@@ -1087,7 +1196,10 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
                 "bammetrics check DIR --format {} reads the files a chain wrote",
                 format.name()
             ))
-            .hint("qc as the last step of a chain is wave W14 of docs/07"));
+            .hint(format!(
+                "a qc step writes the verdict: bammetrics chain BAM + ... + qc --also {}",
+                format.name()
+            )));
         }
         if !formats.contains(&format) {
             formats.push(format);
@@ -1096,9 +1208,20 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
     Ok(formats)
 }
 
-/// Prepare: everything checked and named, nothing read or written.
+/// Prepare: everything checked and named, nothing read or written. The
+/// defaults of [`super::resolve`] are filled in first: the config file,
+/// the BAM `-o` names, a step's dictionary.
 pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
+    let resolved = super::resolve::resolve(spec)?;
+    let spec = &resolved.spec;
     let (source, source_path) = source(spec)?;
+    if spec.resume && source == "-" {
+        return Err(usage(
+            "--resume compares the source's fingerprint, and standard input has none",
+        )
+        .from("--resume")
+        .hint("give the source as a file"));
+    }
     let is_cram = reference(spec, &source_path)?;
     let (prefix, prefix_origin) = prefix(spec, &source)?;
     let formats = chain_formats(spec)?;
@@ -1138,33 +1261,114 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         formats: &formats,
         also: &per_file,
         threads,
+        tmp_dir: spec.tmp_dir.as_deref().map(Path::new),
     };
-    let mut steps = Vec::with_capacity(drafts.len());
+    let mut steps: Vec<Planned> = Vec::with_capacity(drafts.len());
     let mut prefix_used = false;
+    let mut kept: Vec<Kept> = Vec::new();
+    let mut qc: Option<QcPlan> = None;
+    // Every metrics file's formats: the chain's, then those of `--also`.
+    let mut all_formats = formats.clone();
+    for format in &per_file {
+        if !all_formats.contains(format) {
+            all_formats.push(*format);
+        }
+    }
+    let qcx = qc_step::Context {
+        source_path: &source_path,
+        replayable: std::fs::metadata(&source_path).is_ok_and(|m| m.is_file())
+            && !source_path.starts_with("/dev"),
+        reference: spec.reference.as_deref(),
+        prefix: &prefix,
+        formats: &all_formats,
+        threads,
+        sample: spec.sample.as_deref(),
+        source: &source,
+        tmp_dir: spec.tmp_dir.as_deref().map(Path::new),
+    };
     for (draft, position) in drafts.into_iter().zip(positions) {
-        let (step, uses_prefix) = match draft.what {
+        if let Some(plan) = &qc {
+            return Err(draft.usage(format!(
+                "{} is the last step: no step may follow it",
+                steps[plan.index].label
+            )));
+        }
+        let keep = draft.parsed.flag(KEEP);
+        let index = steps.len();
+        let (mut step, uses_prefix) = match draft.what {
             What::Tool(verb, Role::Split) => split::split_step(&cx, draft, verb, position)?,
             What::Tool(verb, role) => tool_step(&cx, draft, (verb, role), position)?,
             What::Write => write_step(&cx, &draft, position)?,
+            What::Qc => {
+                let at = qc_step::At {
+                    number: draft.number,
+                    label: &draft.place(),
+                    reads: &position.reads,
+                    segment: position.segment,
+                    behind: &position.behind,
+                };
+                let (planned, plan) = qc_step::plan(&qcx, &at, &draft.parsed, &steps, &kept)?;
+                steps.extend(planned);
+                qc = Some(plan);
+                prefix_used = true;
+                continue;
+            }
         };
+        if keep {
+            kept.push(keep::plan(&prefix, index, &mut step));
+            prefix_used = true;
+        }
         prefix_used |= uses_prefix;
         steps.push(step);
+    }
+    for (index, note) in resolved.notes {
+        steps[index].notes.push(note);
+    }
+    // Transforms alone that name no file: the run would end with nothing
+    // written (docs/chaining.md section 23).
+    if steps
+        .iter()
+        .all(|step| step.role == Role::Transform && step.files.is_empty())
+        && let Some(last) = steps.last_mut()
+    {
+        last.notes
+            .push("no step writes the records: -o OUT.bam or a write step writes them".to_owned());
     }
     let report = also
         .contains(&Also::Markdown)
         .then(|| with_suffix(&prefix, Also::Markdown.run_suffix()));
     prefix_used |= report.is_some();
+    keep::refuse_a_write_on_the_kept_file(&steps, &kept)?;
     check_one_stdout(&steps)?;
     refuse_unresolved(&steps, report.as_deref())?;
-    let outputs = claim_outputs(&steps, report.as_deref())?;
+    let mut outputs = claim_outputs(&steps, report.as_deref())?;
+    let manifest = (spec.resume || !kept.is_empty() || qc.is_some())
+        .then(|| crate::qc::manifest_path(&prefix));
+    if let Some(path) = &manifest {
+        outputs
+            .claim("the manifest", path)
+            .map_err(|e| VerbError::core(VERB, &e))?;
+        prefix_used = true;
+    }
     let reference = spec.reference.as_ref().map(PathBuf::from);
+    let settings: Vec<PathBuf> = spec.reads.iter().map(PathBuf::from).collect();
     let read = Read {
         source: &source_path,
         reference: reference.as_deref(),
         plan_file: spec.plan_file.as_deref().map(Path::new),
+        settings: &settings,
     };
     let inputs = inputs_of(&read, &steps);
     refuse_overwriting_inputs(&inputs, &steps, report.as_deref())?;
+    if let Some(path) = manifest
+        .as_ref()
+        .filter(|path| inputs.owner(path).is_some())
+    {
+        return Err(usage(format!(
+            "the manifest {} is an input; writing it would destroy it",
+            path.display()
+        )));
+    }
     Ok(Chain {
         source,
         source_path,
@@ -1184,6 +1388,10 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         free_space: spec.free_space,
         steps,
         report,
+        resume: spec.resume,
+        kept,
+        qc,
+        manifest,
         outputs,
         inputs,
     })

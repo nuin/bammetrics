@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+qc
+--preset
+nope
+## exit
+1
+## stdout
+## stderr
+bammetrics chain: step 1 (qc): no preset "nope": not a shipped preset (generic, clinical-panel, wgs, rna-seq) and not a file

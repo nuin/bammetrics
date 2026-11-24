@@ -185,7 +185,15 @@ fn request(parsed: &Parsed) -> Result<Request, VerbError> {
 }
 
 pub fn run(args: &[String]) -> Result<u8, VerbError> {
-    let parsed = grammar::parse(VERB, &flags(), args)?;
+    let (mut args, no_config) = crate::config::strip_no_config(args);
+    let given = grammar::parse(VERB, &flags(), &args)?;
+    if given.last(Key::Own("reference")).is_none()
+        && !given.flag(Key::Help)
+        && let Some(reference) = crate::config::optional_reference_for(VERB, !no_config)?
+    {
+        args.push(format!("--reference={reference}"));
+    }
+    let parsed = grammar::parse(VERB, &flags(), &args)?;
     if parsed.flag(Key::Help) {
         print!("{}", help());
         return Ok(0);

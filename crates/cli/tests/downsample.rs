@@ -291,29 +291,48 @@ fn position_based_refuses_standard_input() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// `position-based-downsample-sam` reads its input twice: in a chain it
+/// is a materialized step (wave W14) that runs on a file of its stream,
+/// here behind `mark-duplicates`, and its BAM equals the staged tool's.
 #[test]
-fn position_based_is_refused_as_a_step() {
+fn position_based_is_a_materialized_step() {
     let dir = fresh_dir("step");
-    let output = bammetrics(&strings(&[
+    let path = |name: &str| dir.join(name).display().to_string();
+    run(&strings(&[
         "chain",
         MARKDUP,
         "-o",
-        &dir.join("c").display().to_string(),
+        &path("c"),
+        "+",
+        "mark-duplicates",
         "+",
         "position-based-downsample-sam",
         "--fraction",
         "0.5",
         "+",
         "write",
-        &dir.join("out.bam").display().to_string(),
+        &path("chained.bam"),
     ]));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(output.status.code(), Some(2), "{stderr}");
-    assert!(
-        stderr.contains("PositionBasedDownsampleSam") && stderr.contains("W14"),
-        "{stderr}"
-    );
-    assert!(!dir.join("out.bam").exists());
+    run(&strings(&[
+        "chain",
+        MARKDUP,
+        "-o",
+        &path("s"),
+        "+",
+        "mark-duplicates",
+        "+",
+        "write",
+        &path("marked.bam"),
+    ]));
+    run(&strings(&[
+        "position-based-downsample-sam",
+        &path("marked.bam"),
+        "-o",
+        &path("staged.bam"),
+        "--fraction",
+        "0.5",
+    ]));
+    assert_eq!(bam(&dir.join("chained.bam")), bam(&dir.join("staged.bam")));
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 

@@ -388,6 +388,16 @@ fn refusal(path: &Path) -> Result<Option<Error>> {
     })
 }
 
+/// The refusal of `path` ([`refusal`], then a BAM with no index beside
+/// it), with no record read: a chain checks the source of a step that
+/// reads it directly before the first read.
+pub fn check_input(path: &Path) -> Result<()> {
+    match refusal(path)? {
+        Some(refused) => Err(refused),
+        None => index_of(path).map(drop),
+    }
+}
+
 /// The index beside `bam`, or the refusal that names how to make one.
 fn index_of(bam: &Path) -> Result<PathBuf> {
     find_index(bam).ok_or_else(|| {

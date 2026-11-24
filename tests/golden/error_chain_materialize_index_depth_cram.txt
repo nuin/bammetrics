@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/insert_size.cram
+-R
+tests/data/ref_100k.fa
+-o
+OUT/s
++
+index-depth
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (index-depth): tests/data/insert_size.cram: a CRAM index (.crai) holds no read counts, so CollectIndexDepthMetrics reads none; samtools idxstats counts a CRAM by reading its containers, and bammetrics sex-check or mt-copy-number read every record

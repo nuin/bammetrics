@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/insert_size.bam
+--recipe=prep
+-o
+OUT/p.bam
+--recipe=qc-only
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: --recipe is given twice: prep and qc-only (from --recipe)
+  a chain runs one recipe

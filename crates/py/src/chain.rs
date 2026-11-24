@@ -122,7 +122,7 @@ pub struct Step {
     /// The verb as the command spells it: `insert-size`, or `write`.
     #[pyo3(get)]
     verb: String,
-    /// `transform`, `tap` or `write`.
+    /// `transform`, `tap`, `write`, `split` or `materialize`.
     #[pyo3(get)]
     role: String,
     /// The options as the command takes them: `["--minimum-pct=0.1"]`.
@@ -222,12 +222,14 @@ impl Step {
 /// class, or write. The keywords are those of the tool's function
 /// (minimum_pct=0.1) without its input, plus output (the step's own file,
 /// or prefix for a tool that writes several), format, panel on hs_metrics
-/// (baits and targets in one file), and as_ on a transform (the name of the
-/// stream it leaves). write takes output, index, md5, compression_level and
-/// output_format ("bam" or "sam").
-/// An unknown verb or keyword raises UsageError here, with the closest
-/// name; so does a float that is NaN or infinite, and a list of texts with
-/// an item that is not a str.
+/// (baits and targets in one file), and as_ and keep on a transform (the
+/// name of the stream it leaves; keep=True writes it as PREFIX.STREAM.bam).
+/// write takes output, index, md5, compression_level and output_format
+/// ("bam" or "sam"). qc, the last step, takes preset, report, also, fail_on,
+/// panel, ref_flat, strand, ribosomal_intervals, sex, all_plots, date,
+/// pdf_font and page_size. An unknown verb or keyword raises UsageError
+/// here, with the closest name; so does a float that is NaN or infinite, and
+/// a list of texts with an item that is not a str.
 //
 // The docstring above is the stub's (tests/python/test_mirror.py compares
 // them).
@@ -245,7 +247,7 @@ pub struct Stage {
     number: usize,
     /// The verb as the command spells it: `insert-size`, or `write`.
     verb: String,
-    /// `transform`, `tap` or `write`.
+    /// `transform`, `tap`, `write`, `split` or `materialize`.
     role: String,
     /// `ok`, `failed`, `stopped` (another step of its segment failed) or
     /// `not_run` (a step in front of it failed).
@@ -370,6 +372,7 @@ fn status_name(status: StepStatus) -> &'static str {
         StepStatus::Failed => "failed",
         StepStatus::Stopped => "stopped",
         StepStatus::NotRun => "not_run",
+        StepStatus::Skipped => "skipped",
     }
 }
 
@@ -380,6 +383,9 @@ struct Finished {
     prefix: String,
     /// Every file written: each step's in step order, then the chain's.
     files: Vec<String>,
+    /// `PREFIX.manifest.json` of a run that resumes, keeps a stream or
+    /// ends in qc.
+    manifest: Option<String>,
     code: u8,
     stages: Vec<Stage>,
     /// `(key, parsed file)` of every metrics file written.
@@ -441,6 +447,7 @@ fn finished(outcome: &Outcome) -> Result<Finished, VerbError> {
         sample: cli::sample_name(chain),
         prefix: chain.prefix.display().to_string(),
         files,
+        manifest: chain.manifest.as_ref().map(|m| m.display().to_string()),
         code: outcome.code,
         stages,
         metrics,
@@ -503,6 +510,18 @@ fn argv<'py>(
     let mut argv = Vec::new();
     for (key, value) in options.into_iter().flat_map(|o| o.iter()) {
         let name: String = key.extract()?;
+        if name == "config" {
+            if !value.is_instance_of::<PyBool>() {
+                return Err(usage_error(format!(
+                    "bammetrics {VERB}: config takes True or False, not {}",
+                    value.get_type().name()?
+                )));
+            }
+            if !value.extract::<bool>()? {
+                argv.push(bammetrics_cli::config::NO_CONFIG.to_owned());
+            }
+            continue;
+        }
         let keyword = table::chain_keyword(&name).map_err(|e| verbs::verb_error(&e))?;
         if !value.is_none() {
             argv.extend(keyword_args("", &keyword, &value)?);
@@ -552,7 +571,8 @@ fn failed_steps(py: Python<'_>, run: Py<Run>, done: &Finished) -> PyErr {
     err
 }
 
-/// The `Run` of a finished chain: no manifest and no verdict.
+/// The `Run` of a finished chain: no verdict; the manifest when the run
+/// wrote one.
 fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
     let errors = PyDict::new(py);
     for stage in done.stages.iter().filter(|stage| stage.error.is_some()) {
@@ -573,7 +593,7 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
             sample: done.sample.clone(),
             prefix: done.prefix.clone(),
             files: done.files.clone(),
-            manifest: None,
+            manifest: done.manifest.clone(),
             exit_code: done.code,
             errors: errors.unbind(),
             metrics: metrics.unbind(),
@@ -595,9 +615,13 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
 /// output_format "sam". plan names a TOML plan file in place of steps; a keyword given
 /// replaces the file's. Returns a Run: files, metrics (keyed by verb,
 /// STREAM.verb in front of a transform) and stages (one Stage per step).
-/// dry_run=True returns the plan text and runs nothing. A failed step raises
+/// dry_run=True returns the plan text and runs nothing. resume=True skips
+/// the steps PREFIX.manifest.json proves done. A failed step raises
 /// InputError after the other steps wrote their files (its .run holds the
-/// Run).
+/// Run). output ending in .bam on a chain with a transform and no write step
+/// adds write OUTPUT with its index and names the metrics files from OUTPUT
+/// without .bam. recipe names a recipe in place of steps. config=False leaves
+/// the user config file unread.
 //
 // Runs `chain::prepare` and `chain::execute` without the GIL. The text
 // signature and the docstring above are the stub's
@@ -608,7 +632,8 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
     signature = (source = None, steps = None, **options),
     text_signature = "(source=None, steps=None, *, output=None, reference=None, threads=None, \
                       tmp_dir=None, format=None, also=None, sample=None, sort_memory=None, \
-                      force_space=None, validation_stringency=None, plan=None, dry_run=False)"
+                      force_space=None, validation_stringency=None, resume=None, plan=None, \
+                      recipe=None, config=True, dry_run=False)"
 )]
 pub fn py_chain<'py>(
     py: Python<'py>,
@@ -625,8 +650,102 @@ pub fn py_chain<'py>(
         Done::Ran(done) => done,
     };
     let run = run_object(py, &done)?;
-    if done.code != 0 {
+    // 10 and 11 are the qc step's verdict, not a failed step: the Run
+    // holds the code.
+    if done.code == 1 {
         return Err(failed_steps(py, run, &done));
     }
     Ok(run.into_any())
+}
+
+/// bammetrics recipe: run the named chain name (prep, qc-only, downsample, or
+/// one of yours; bammetrics recipes lists them) on source, as bammetrics NAME
+/// BAM does. set holds STEP.option values ({"downsample-sam.probability":
+/// 0.1}); each replaces the recipe's value of that option. qc=True or
+/// qc=step("qc", preset=...) adds qc as the last step: the verdict and the
+/// report over the recipe's metrics. The keywords are those of chain()
+/// (resume=True skips the steps the manifest proves done). Returns the Run of
+/// chain(), or the plan text with dry_run=True.
+//
+// The argv of `chain(source, recipe=name, **options)` plus one
+// `STEP.option=value` word per item of `set`, then `+ qc ...` for `qc`.
+#[pyfunction]
+#[pyo3(
+    name = "recipe",
+    signature = (name, source = None, *, set = None, qc = None, **options),
+    text_signature = "(name, source=None, *, set=None, qc=None, config=True, dry_run=False, \
+                      **options)"
+)]
+pub fn py_recipe<'py>(
+    py: Python<'py>,
+    name: &str,
+    source: Option<&Bound<'py, PyAny>>,
+    set: Option<&Bound<'py, PyDict>>,
+    qc: Option<&Bound<'py, PyAny>>,
+    options: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Py<PyAny>> {
+    if options.is_some_and(|o| o.contains("recipe").unwrap_or(false)) {
+        return Err(usage_error(format!(
+            "bammetrics {VERB}: recipe() takes the recipe as name, not as recipe="
+        )));
+    }
+    let mut argv = argv(py, source, None, options)?;
+    argv.push("--recipe".to_owned());
+    argv.push(name.to_owned());
+    for (key, value) in set.into_iter().flat_map(|s| s.iter()) {
+        let target: String = key.extract()?;
+        let text = if value.is_instance_of::<PyBool>() {
+            value.extract::<bool>()?.to_string()
+        } else {
+            value.str()?.to_str()?.to_owned()
+        };
+        argv.push(format!("{target}={text}"));
+    }
+    argv.extend(recipe_qc(py, qc)?);
+    let done = py
+        .detach(|| run(&argv))
+        .map_err(|e| verbs::verb_error(&e))?;
+    let done = match done {
+        Done::Plan(text) => return Ok(PyString::new(py, &text).into_any().unbind()),
+        Done::Ran(done) => done,
+    };
+    let run = run_object(py, &done)?;
+    // 10 and 11 are the qc step's verdict, not a failed step: the Run
+    // holds the code.
+    if done.code == 1 {
+        return Err(failed_steps(py, run, &done));
+    }
+    Ok(run.into_any())
+}
+
+/// The words of `recipe(..., qc=...)`: `+ qc OPTIONS` for `True` or a
+/// `step("qc", ...)`, none for `None` and `False`. Any other step is
+/// refused: a recipe gives its steps.
+fn recipe_qc<'py>(py: Python<'py>, qc: Option<&Bound<'py, PyAny>>) -> PyResult<Vec<String>> {
+    let Some(qc) = qc.filter(|qc| !qc.is_none()) else {
+        return Ok(Vec::new());
+    };
+    let step = if qc.is_instance_of::<PyBool>() {
+        if !qc.extract::<bool>()? {
+            return Ok(Vec::new());
+        }
+        Bound::new(py, Step::build(py, cli::QC, None)?)?
+    } else if let Ok(step) = qc.cast::<Step>() {
+        step.clone()
+    } else {
+        return Err(PyTypeError::new_err(format!(
+            "bammetrics {VERB}: qc takes True or step(\"qc\", ...), not {}",
+            qc.get_type().name()?
+        )));
+    };
+    let step = step.get();
+    if step.verb != cli::QC {
+        return Err(usage_error(format!(
+            "bammetrics {VERB}: qc takes the qc step, not {}: a recipe gives its other steps",
+            step.verb
+        )));
+    }
+    let mut words = vec![cli::STEP.to_owned(), step.verb.clone()];
+    words.extend(step.args.iter().cloned());
+    Ok(words)
 }

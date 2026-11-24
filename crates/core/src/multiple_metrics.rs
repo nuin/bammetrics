@@ -355,6 +355,11 @@ fn file_name(base: &OsString, extension: &str, file_extension: &str) -> PathBuf 
 
 /// The programs to run, each with the command line Picard would give it.
 fn plan(inv: &Invocation) -> Result<Vec<(&'static Program, Invocation)>> {
+    plan_with(inv, true)
+}
+
+/// [`plan`]; `warn` prints the note of a level a program does not take.
+fn plan_with(inv: &Invocation, warn: bool) -> Result<Vec<(&'static Program, Invocation)>> {
     let names = picard_list(DEFAULT_PROGRAMS.to_vec(), inv.all("PROGRAM"), |s| {
         program(s).map(|p| p.name)
     })?;
@@ -428,7 +433,7 @@ fn plan(inv: &Invocation) -> Result<Vec<(&'static Program, Invocation)>> {
                     .iter()
                     .map(|l| format!("METRIC_ACCUMULATION_LEVEL={l}")),
             );
-        } else if !levels.is_empty() {
+        } else if warn && !levels.is_empty() {
             eprintln!(
                 "bammetrics: the {} program does not support a metric accumulation level, but METRIC_ACCUMULATION_LEVEL was overridden in the command line; {} will be run against the entire input",
                 p.name, p.name
@@ -496,6 +501,41 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 /// and tests.
 pub fn program_names(inv: &Invocation) -> Result<Vec<&'static str>> {
     Ok(plan(inv)?.into_iter().map(|(p, _)| p.name).collect())
+}
+
+/// The options of a parsed command line checked as the run checks them,
+/// each program's own among them (`METRIC_ACCUMULATION_LEVEL=NOPE`), with
+/// no file opened and no note printed: a chain step's check before its
+/// first read. The program that names its own files under the prefix
+/// (`CollectSequencingArtifactMetrics`) skips its stand-alone checks here,
+/// as the run skips them.
+pub fn check_options(inv: &Invocation) -> Result<()> {
+    for (p, program_inv) in plan_with(inv, false)? {
+        if !p.prefix {
+            crate::tap_options::check(p.tool, &program_inv)?;
+        }
+    }
+    Ok(())
+}
+
+/// The files the run names before it reads: every file option of each
+/// program whose names the program table gives. The program that names
+/// its own files under the prefix adds none.
+pub fn planned_files(inv: &Invocation) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for (p, program_inv) in plan_with(inv, false)? {
+        if p.prefix {
+            continue;
+        }
+        for (option, _) in p.files {
+            let path = match *option {
+                "OUTPUT" => program_inv.output.clone(),
+                _ => program_inv.get(option).map(PathBuf::from),
+            };
+            files.extend(path);
+        }
+    }
+    Ok(files)
 }
 
 /// Every `SinglePassSamProgram` tool `CollectMultipleMetrics` can run.
@@ -718,5 +758,26 @@ mod tests {
         assert_eq!(parts, ["W=200 "]);
         assert!(split_extra("CollectInsertSizeMetrics::").is_err());
         assert!(split_extra("CollectInsertSizeMetrics::--W 200").is_err());
+    }
+
+    #[test]
+    fn the_files_of_the_programs_are_named_before_the_read() {
+        let inv = parse(&[
+            "INPUT=x.bam",
+            "OUTPUT=p",
+            "PROGRAM=CollectGcBiasMetrics",
+            "R=r.fa",
+        ]);
+        let files = planned_files(&inv).expect("files");
+        for name in [
+            "p.insert_size_metrics",
+            "p.gc_bias.detail_metrics",
+            "p.gc_bias.summary_metrics",
+        ] {
+            assert!(files.contains(&PathBuf::from(name)), "{name}: {files:?}");
+        }
+        check_options(&inv).expect("valid");
+        let bad = parse(&["INPUT=x.bam", "OUTPUT=p", "METRIC_ACCUMULATION_LEVEL=NOPE"]);
+        assert!(check_options(&bad).is_err());
     }
 }

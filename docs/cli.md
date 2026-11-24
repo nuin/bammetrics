@@ -158,7 +158,15 @@ above where a verb has them.
   writes the name `qc` writes, a tap in front of a transform `PREFIX.<stream>.<extension>`
   (`PREFIX.in.insert_size_metrics` on the source), `mark-duplicates`
   `PREFIX.marked.duplication_metrics`, `write` without a path `PREFIX.marked.bam`. A
-  step's own `-o` replaces the name ([docs/chaining.md](chaining.md) section 2.3).
+  step's own `-o` replaces the name ([docs/chaining.md](chaining.md) section 2.3). A
+  materialized step that `qc` does not name takes the extension of docs/chaining.md
+  section 31.2 (`PREFIX.raw_wgs_metrics`, `PREFIX.library_complexity_metrics`). The
+  files of every `multiple-metrics` program are named before the first read, so a tap
+  that writes one of them (`+ multiple-metrics + insert-size` on one prefix) is a usage
+  error (exit 2).
+- In `chain`, the `.bai` or `.csi` that `bam-index-stats`, `index-depth` or
+  `merge-sam-files` reads beside an input is an input: `+ write in.bam.bai` is a usage
+  error, as `bam-index-stats -o in.bam.bai` is on the verb.
 - Run files of `qc`: `PREFIX.manifest.json`, `PREFIX.verdict.json`, `PREFIX.report.html`,
   and `PREFIX.panel.interval_list` for a `--panel` BED. `report` writes
   `OUT/SAMPLE.verdict.json`, `OUT/SAMPLE.report.html` and `OUT/index.html`.
@@ -231,7 +239,8 @@ gate`. `report` exits 0 on any verdict. `check` always gates. A `qc` run with a 
 collector exits 1 after it writes the other files, the verdict and the page. The tool verbs
 and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1. `chain` exits 0, 1 or 2: 2
 for a usage error in any step, found before the first read, and 1 when a step failed, after
-the other steps wrote their files. `compare-metrics` and
+the other steps wrote their files; a chain that ends in `qc --fail-on` exits 10 or 11 as
+`check` does when every step finished. `compare-metrics` and
 `CompareMetrics` exit 1 when the two files are NOT equal, as Picard does;
 `check-duplicate-marking` and `CheckDuplicateMarking` exit 1 when a record's duplicate flag
 differs from the first record of its queryname.
@@ -911,7 +920,9 @@ header of the first (`tests/concordance/test_gather_bam_files.py`).
   header.
 - An `-o` that is an input or a list exits 2. A block copy into an `-o` ending in `.sam`
   or `.cram` exits 2: Picard writes BAM bytes under that name. A failed run leaves no
-  output. Not a chain step: a chain reads one source.
+  output. In a chain the step runs on a file of its stream, the first input, and the
+  files after the verb; its BAM is the stream `gathered` ([docs/chaining.md](chaining.md)
+  section 31).
 
 ### calculate-read-group-checksum
 
@@ -935,7 +946,9 @@ computes it, 32 hex digits with no line end, in `-o` or beside the input as
   `TZ`, as Picard's depends on the JVM's zone.
 - Every header line is checked at `--validation-stringency`: at `STRICT` (the default) an
   `@RG` without `SM`, two values of one key or a `DT` that is no date exits 1.
-- Only the header is read. An `-o` that is the input exits 2. Not a chain step.
+- Only the header is read. An `-o` that is the input exits 2. In a chain the step runs on
+  a file that holds the header of its stream and writes `PREFIX.read_group_md5`
+  ([docs/chaining.md](chaining.md) section 31).
 
 ### quality-yield-s-n-v-q
 
@@ -1001,7 +1014,8 @@ distinct UMIs in each, `numUmis` against `duplicateSets`, with no metrics row
   The distinct UMIs of one set are held in memory, as in Picard, so peak memory grows with
   the largest set: 1,000,000 distinct 16-base UMIs at one position took 176 MiB.
 - `--progress-step-interval 0` exits 1 once a set is found, as Picard's progress logger
-  divides by it. Not a chain step: the tool reads the stream whole before its first set.
+  divides by it. In a chain the step runs on a file of its stream, since the tool reads
+  the stream whole before its first set ([docs/chaining.md](chaining.md) section 31).
 
 ### rrbs
 
@@ -1135,7 +1149,8 @@ circle of area `--fraction` on the tile, or outside one of area `1 - FRACTION` a
 - `--stop-after N` reads N records in each read; 0 or less writes no record.
 - An input whose header has a `PositionBasedDownsampleSam` `@PG` exits 1 unless
   `--allow-multiple-downsampling-despite-warnings`.
-- Not a chain step: it reads its input twice (wave W14).
+- In a chain the step runs on a file of its stream, since it reads its input twice; its
+  BAM is the stream `downsampled` ([docs/chaining.md](chaining.md) section 31).
 
 ### qc
 
@@ -1252,9 +1267,14 @@ other files, the verdict and the page are written.
 ### chain
 
 ```bash
+bammetrics chain BAM STEP [STEP OPTIONS] [STEP ...] [-o OUT] [OPTIONS]
 bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]
 bammetrics chain --plan FILE [OPTIONS] [BAM]
+bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...] [qc [QC OPTIONS]]
 
+bammetrics chain fixed.bam reorder-sam insert-size -o r.bam          # reference from the config file
+bammetrics chain in.bam mark-duplicates insert-size qc -o out/NA12878.bam --resume
+bammetrics prep in.bam -o out.bam qc --fail-on fail                  # a recipe, then the verdict
 bammetrics chain in.bam -R ref.fa -o out/NA12878 \
     + mark-duplicates \
     + alignment-summary + insert-size + quality-yield + duplicate-metrics \
@@ -1264,11 +1284,15 @@ bammetrics chain in.bam -o out/NA12878 --sort-memory 4G \
     + sort-sam --sort-order coordinate + write out/NA12878.bam --index
 samtools view -b in.bam chr20 | bammetrics chain - + mark-duplicates + write - | samtools flagstat -
 bammetrics chain --plan plan.toml -o out/NA12878 --dry-run
+bammetrics chain in.bam -o out/NA12878 --resume + mark-duplicates --keep \
+    + insert-size + write out/NA12878.bam + qc --preset generic --fail-on fail
 ```
 
 Several steps on one BAM in one process. Records move from step to step in memory: no
 shell pipe and no intermediate file. [docs/chaining.md](chaining.md) is the reference; this
-is the short form.
+is the summary. A step starts at a bare word that names a step verb, or at a `+`; the two
+forms run the same chain and write the same files, and every `+` form of 0.31.0 runs as
+before. The rules of the form without `+` follow the list below.
 
 - The chain's options and the source (a BAM, a CRAM with `-R`, `-` for standard input)
   come before the first `+`. Every `+` starts a step.
@@ -1280,7 +1304,11 @@ is the short form.
   `reorder-sam`, `fix-mate-information`, `filter-sam-reads`, `downsample-sam`) changes the
   records later steps see; any number may follow one another. A tap (the 20 one-pass tool verbs) reads the
   records of its position and changes nothing. A split (`split-sam-by-library`,
-  `split-sam-by-number-of-reads`) writes them over BAMs in a directory. `write [PATH]` writes those records as a
+  `split-sam-by-number-of-reads`) writes them over BAMs in a directory. A materialized
+  tool (17 verbs with neither a stage nor a collector, such as `wgs`, `library-complexity`
+  and `merge-sam-files`) runs on a file of the records of its position; three of them
+  write a BAM that is the next stream. So every tool that reads a BAM is a step at any
+  position, 53 of the 71 (docs/chaining.md section 31). `qc` is the last step. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
   --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with
   the wave of docs/07 that adds it.
@@ -1310,6 +1338,24 @@ is the short form.
   sets how a SAM text source is checked.
 - Standard error gets each transform's record counts, each failed step and one summary
   line. `-q` leaves only the errors.
+- `--keep` on a transform also writes the stream it leaves as `PREFIX.<stream>.bam`, with
+  its `.bai` when coordinate sorted (docs/chaining.md section 28).
+- `--resume` reads `PREFIX.manifest.json` (schema `bammetrics.manifest/2`) and skips each
+  step whose record matches (verb, options, the fingerprints of the files it reads and
+  writes) and whose transforms in front are skipped too. The read starts at the last kept
+  stream in front of the first step that runs, or at the BAM a skipped `write` step wrote
+  of that stream (the BAM `-o out.bam` names), else at the source. `plan --resume` prints
+  why each step runs or is skipped. A chain that resumes, keeps a stream or ends in `qc`
+  writes the manifest (docs/chaining.md section 27). Paths are compared resolved, so
+  `./in.bam` and `$PWD/in.bam` name one source. One run per prefix: a second exits 2.
+  A resumed run names each file of the run before it removes, and leaves the BAM of a
+  `write` step it no longer has.
+- `qc` as the last step (`+ qc --preset P --report html,pdf --also junit --fail-on fail`)
+  evaluates the preset over the taps of its stream and writes `PREFIX.verdict.json` and
+  `PREFIX.report.html` as `qc` writes them for the same taps; it adds the taps the preset
+  needs (docs/chaining.md section 29). `CollectWgsMetrics`, which has no collector, reads
+  the source, a kept stream or the BAM a `write` step wrote; with no such file it runs on
+  a copy of the stream, as the `wgs` step does (section 32.5).
 
 Exit 0 when every step finished. Exit 2 for a usage error in any step: it is found before
 the first read, names the step (`step 2 (insert-size): unknown option --minmum-pct`), and
@@ -1318,7 +1364,96 @@ writes its files; a failing transform or `write` stops its segment, and the summ
 which (`failed alone`, `failed and stopped its segment`, `stopped`, `not run`).
 
 A chain without a transform is the pass of `qc`: the same metrics files, byte for byte
-apart from the `Started on` line. It writes no verdict, page or manifest.
+apart from the `Started on` line. Without a qc step it writes no verdict or page.
+
+The form without `+` (docs/chaining.md sections 22 to 25 and 32) runs the same chains:
+
+```bash
+bammetrics chain fixed.bam reorder-sam insert-size -o r.bam   # reference from the config file
+bammetrics chain in.bam mark-duplicates insert-size --level SAMPLE -o out/NA12878.bam
+bammetrics chain in.bam --recipe prep -o out.bam              # or: bammetrics prep in.bam -o out.bam
+bammetrics chain a.bam merge-sam-files b.bam insert-size -o merged.bam
+bammetrics chain in.bam mark-duplicates qc --preset wgs -R ref.fa -o out.bam --resume
+```
+
+- A bare word that names a step verb starts a step; `+` still does, and both mix. An
+  option takes its values with it, so a value that names a verb stays a value. The
+  chain's options may follow the last step; `write` without a path and a split step keep
+  their own `-o` there. A word that is no verb where a step or the source stands, a chain
+  option in the middle, an option of `write` on the last step and `-o` twice each exit 2
+  with the step's number.
+- `qc` is a step word. In last place it keeps `--preset`, `--report`, `--fail-on` and
+  its `--also`; `-o`, `-R`, `--threads` and `--resume` after it are the chain's. A file
+  after `merge-sam-files`, `gather-bam-files` or `jumping-library` is a further input of
+  that step.
+- `-o r.bam` (or `r.sam`, lower case) on a chain with a transform (or a materialized tool
+  that writes a BAM) and no `write` adds `write r.bam --index` as the last step, in front
+  of a `qc` step, and names the metrics files, the manifest and the verdict `r.<extension>`. On
+  a chain of taps alone it exits 2; `r.cram` exits 2 with wave W15; `r.SAM` exits 2, since
+  the write step writes SAM text for a lower-case `.sam` only.
+- `-R`, `--threads`, `--tmp-dir` and `--sort-memory` come from the user config file when
+  not given (`bammetrics config`); `-R` also from `BAMMETRICS_REFERENCE`. `--no-config`
+  leaves the file unread.
+- `reorder-sam --sequence-dictionary` defaults to the reference's `.dict`, else its
+  `.fai`, in a chain; the step's note says which. The `reorder-sam` verb still needs it.
+- `--recipe NAME` runs a named chain; `STEP.option=value` sets an option of one of its
+  steps. One step may follow a recipe: `qc`. `--resume` works on a recipe as on its chain.
+- `--resume` with `-o r.bam`: a second run with another option of a tap reruns that tap
+  alone and reads `r.bam`; the transforms in front do not run again.
+
+### config
+
+```bash
+bammetrics config
+bammetrics config --no-config
+```
+
+Prints the values `chain`, `qc`, `plan`, `collect` and the tool verbs take from the user
+config file and `BAMMETRICS_REFERENCE`, one line each with where it came from (the file
+and line, or the variable), then the recipes directory. The file is
+`$XDG_CONFIG_HOME/bammetrics/config.toml`, else `$HOME/.config/bammetrics/config.toml`:
+the keys `reference`, `threads`, `tmp_dir` and `sort_memory`, at most 64 KiB. An unknown
+key, a value of the wrong type and a file over the cap exit 2 with the line.
+
+| Verb | Takes from the config |
+|---|---|
+| `chain` and the recipes | `reference`, `threads`, `tmp_dir`, `sort_memory` |
+| `qc`, `plan`, `collect` | `reference` |
+| a tool verb | `reference`, when the tool reads one or the input is a CRAM |
+| the Picard face | nothing |
+
+`-R` on the command line replaces the variable and the file; the variable replaces the
+file. `--no-config` (on `config`, `chain`, `qc`, `plan`, `collect` and the tool verbs)
+leaves the file unread. A reference from the file or the variable that is not a file
+exits 1 and names where it came from, on a chain only when a step reads it and on a tool
+verb only when the tool reads it; `qc`, `plan` and `collect` leave it out with a note on
+standard error. A `config.toml` that is a FIFO, a device or a directory exits 2 before a
+byte is read.
+
+### recipes
+
+```bash
+bammetrics recipes
+bammetrics prep in.bam -o out.bam
+bammetrics qc-only in.bam -o out/NA12878
+bammetrics downsample in.bam -o d.bam downsample-sam.probability=0.1
+```
+
+Lists the named chains, one line each with its steps: `prep` (fix mates, mark
+duplicates, sort by coordinate, the BAM indexed, the four metrics files of qc's generic
+preset), `qc-only` (those four files), `downsample` (`downsample-sam` ConstantMemory,
+`downsample-sam.probability` required, the BAM indexed), then the user's from
+`~/.config/bammetrics/recipes/NAME.toml`. `bammetrics NAME BAM [OPTIONS]` is `bammetrics
+chain BAM --recipe NAME [OPTIONS]`. A recipe that writes a BAM needs `-o` to name it.
+`bammetrics prep in.bam -o out.bam qc --preset generic --fail-on fail` adds `qc` as the
+last step: the verdict and the report over the recipe's four metrics files, exit 10 when
+the verdict reaches `--fail-on`. No other step can be added. `--resume` skips the steps
+`out.manifest.json` proves done (`bammetrics prep in.bam -o out.bam --resume
+insert-size.minimum-pct=0.2` reruns `insert-size` alone, from `out.bam`). A user recipe
+and the config file are inputs: a step that would write one exits 2.
+`bammetrics NAME --help` prints the recipe's steps. A user recipe that cannot be read is
+listed as `not usable` with the reason, the others still; one named like a verb is
+marked, since the verb runs first (`chain BAM --recipe NAME` runs it).
 
 ## Prepare verbs
 
@@ -1568,8 +1703,10 @@ Picard's `MergeSamFiles` (`tests/concordance/test_merge_sam_files.py`, inputs fr
   reads each input whole.
 - `--create-index` needs `--sort-order coordinate`. A `--comment` with a line end exits 2.
   At most 1,000 inputs, all open at once.
-- It merges several files, so it is not a step of `chain` (exit 2): merge first, then
-  chain the merged BAM.
+- In a chain the stream is the first input and the files after the verb are the others:
+  `bammetrics chain lane1.bam + merge-sam-files lane2.bam + mark-duplicates + write
+  out.bam`. The step runs on a file of its stream and its BAM is the stream `merged`
+  ([docs/chaining.md](chaining.md) section 31).
 
 ### reorder-sam
 
@@ -2181,7 +2318,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.31.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.32.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -2250,7 +2387,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.31.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.32.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

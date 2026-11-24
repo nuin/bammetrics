@@ -75,6 +75,21 @@ fn a_list_stops_at_the_input_cap() {
 }
 
 #[test]
+fn a_line_longer_than_a_path_is_refused_and_quoted_in_part() {
+    let dir = scratch("long");
+    let list = dir.join("long.list");
+    std::fs::write(&list, "x".repeat(MAX_PATH_BYTES + 1)).expect("list");
+    let message = unroll(&strings(&[&list]))
+        .expect_err("too long")
+        .to_string();
+    assert!(message.contains("a line of 4097 bytes"), "{message}");
+    assert!(message.len() < 600, "{} bytes", message.len());
+    std::fs::write(&list, format!("{}.bam\n", "x".repeat(MAX_PATH_BYTES - 4))).expect("list");
+    assert_eq!(unroll(&strings(&[&list])).expect("at the cap").0.len(), 1);
+    std::fs::remove_dir_all(&dir).expect("scratch");
+}
+
+#[test]
 fn the_lists_of_a_run_stop_at_the_total_budget() {
     let dir = scratch("budget");
     let first = dir.join("first.list");

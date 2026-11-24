@@ -252,6 +252,10 @@ pub enum How {
     SpoolsSource,
     /// It writes its input to a spool and reads that a second time.
     Spools,
+    /// A materialized tool that writes a BAM: its input goes to a file
+    /// (unless it is the source file), the tool writes its BAM to another,
+    /// and that BAM is the next segment's stream.
+    Materializes,
 }
 
 /// One barrier, estimated.
@@ -274,11 +278,25 @@ pub struct Barrier {
     pub memory: Option<u64>,
 }
 
+/// A materialized tool that writes no BAM: the file of its stream.
+pub struct Materialized {
+    /// The step's number.
+    pub number: usize,
+    pub verb: &'static str,
+    /// True when it reads the source file itself: nothing is copied.
+    pub direct: bool,
+    /// Bytes of its copy in the temporary directory; `None` when the
+    /// record count is unknown.
+    pub copy: Option<u64>,
+}
+
 /// The estimate of a chain, before the first read.
 pub struct Estimate {
     pub source: Source,
     pub records: Option<u64>,
     pub barriers: Vec<Barrier>,
+    /// The materialized steps that write no BAM.
+    pub materialized: Vec<Materialized>,
     /// Every file written by `write`, with its estimated bytes.
     pub outputs: Vec<(PathBuf, u64)>,
 }
@@ -287,10 +305,13 @@ impl Estimate {
     /// Bytes in the temporary directory at most: every spill and spool,
     /// as if they were all held at once. `None` when one is unknown.
     pub fn temp(&self) -> Option<u64> {
-        self.barriers
+        let copies: Option<u64> = self.materialized.iter().map(|m| m.copy).sum();
+        let barriers: Option<u64> = self
+            .barriers
             .iter()
             .map(|b| Some(b.spill?.saturating_add(b.spool?)))
-            .sum()
+            .sum();
+        Some(barriers?.saturating_add(copies?))
     }
 
     /// The largest resident memory over the barriers; the base without
@@ -372,9 +393,46 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
     // than any one barrier alone.
     let mut held_before: Option<u64> = Some(0);
     let mut barriers = Vec::new();
+    let mut materialized = Vec::new();
     let mut outputs = Vec::new();
     for (index, step) in chain.steps.iter().enumerate() {
         match (step.role, step.tool.map(|tool| tool.name)) {
+            (Role::Materialize, _) => {
+                let direct = first_stage && chain.replayable();
+                let copy = materialize_copy(step, direct, records, order);
+                if step.leaves.is_none() {
+                    materialized.push(Materialized {
+                        number: step.number,
+                        verb: step.verb,
+                        direct,
+                        copy,
+                    });
+                    continue;
+                }
+                // The BAM it writes: its input's records and every further
+                // input file.
+                let further: u64 = step
+                    .argv
+                    .iter()
+                    .skip(1)
+                    .filter_map(|arg| arg.strip_prefix("INPUT="))
+                    .filter_map(|path| std::fs::metadata(path).ok())
+                    .map(|meta| meta.len())
+                    .sum();
+                let written =
+                    records.map(|n| n.saturating_mul(spill_bytes(order)).saturating_add(further));
+                barriers.push(Barrier {
+                    number: step.number,
+                    verb: step.verb,
+                    how: How::Materializes,
+                    order,
+                    records_in_ram: None,
+                    spill: written,
+                    spool: copy,
+                    memory: held_before.map(|before| BASE_MEMORY + before),
+                });
+                first_stage = false;
+            }
             (Role::Transform, Some(name)) if holds(step, name) => {
                 // A reverting step sorts twice: by name, then in its order.
                 let passes = if sorts_twice(name) { 2 } else { 1 };
@@ -435,7 +493,7 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                     (false, _) => How::Spools,
                 };
                 let spool = match how {
-                    How::Replays | How::Holds => Some(0),
+                    How::Replays | How::Holds | How::Materializes => Some(0),
                     How::SpoolsSource => source.bytes,
                     How::Spools => records.map(|n| n.saturating_mul(spill_bytes(order))),
                 };
@@ -491,13 +549,41 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
             }
             _ => {}
         }
+        // A kept stream is a BAM of every record at its position.
+        if let (Some(kept), Some(n)) = (chain.kept.iter().find(|k| k.index == index), records) {
+            let per_record = match order {
+                Some(SortOrder::Coordinate) => BAM_OUT_COORDINATE,
+                _ => BAM_OUT_QUERYNAME,
+            };
+            outputs.push((kept.path().to_path_buf(), n.saturating_mul(per_record)));
+        }
     }
     Ok(Estimate {
         source,
         records,
         barriers,
+        materialized,
         outputs,
     })
+}
+
+/// Bytes of the file a materialized step writes of its input: none when
+/// it reads the source file itself or the header alone, else a BGZF level
+/// 3 BAM of every record, as a spool takes.
+fn materialize_copy(
+    step: &Planned,
+    direct: bool,
+    records: Option<u64>,
+    order: Option<SortOrder>,
+) -> Option<u64> {
+    let header_only = step
+        .tool
+        .and_then(stage::materialize::row_of)
+        .is_some_and(|row| row.header_only);
+    if direct || header_only {
+        return Some(0);
+    }
+    records.map(|n| n.saturating_mul(spill_bytes(order)))
 }
 
 /// True for a path no disk holds: one under `/dev` (`/dev/null`), or an

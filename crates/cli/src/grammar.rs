@@ -299,6 +299,48 @@ pub fn spelled<'a>(flags: &'a [Flag], spelled: &str) -> Option<&'a Flag> {
     })
 }
 
+/// The flag the option word `arg` names and how many of the words after it
+/// [`parse`] takes as its values: 0 for a value given in the word
+/// (`--x=1`, `X=1`, `-O1`) and for a boolean without a literal `true` or
+/// `false` after it. `None` for a word [`parse`] reads as positional or as
+/// an unknown option. `next` is the word after `arg`.
+pub fn option_of<'a>(
+    flags: &'a [Flag],
+    arg: &str,
+    next: Option<&str>,
+) -> Option<(&'a Flag, usize)> {
+    let dashes = arg.len() - arg.trim_start_matches('-').len();
+    if arg == "-" || arg == "--" || dashes > 2 {
+        return None;
+    }
+    if let Some((short, _)) = attached(flags, dashes, arg) {
+        let flag = flags.iter().find(|f| f.shorts.contains(&short))?;
+        return Some((flag, 0));
+    }
+    let (name, inline) = if dashes > 0 {
+        match arg[dashes..].split_once('=') {
+            Some((n, _)) => (n, true),
+            None => (&arg[dashes..], false),
+        }
+    } else {
+        (option_word(arg)?.0, true)
+    };
+    let flag = find(flags, dashes, name).or_else(|| {
+        let positive = name
+            .strip_prefix("no-")
+            .filter(|_| dashes == 2 && !inline)?;
+        find(flags, 2, positive).filter(|f| f.ty == Ty::Bool)
+    })?;
+    let takes = match (inline, flag.ty) {
+        (true, _) => 0,
+        (false, Ty::Bool) => {
+            usize::from(next.and_then(bool_text).is_some() && !name.starts_with("no-"))
+        }
+        (false, _) => flag.values,
+    };
+    Some((flag, takes))
+}
+
 /// The error for an option no flag has, with the closest spelling.
 fn unknown(verb: &str, flags: &[Flag], spelled: &str, name: &str) -> VerbError {
     let mut error = VerbError::usage(verb, format!("{UNKNOWN_OPTION}{spelled}"));

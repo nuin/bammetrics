@@ -77,6 +77,34 @@ Several steps on one BAM in one process. Records move from step to step in memor
 shell pipe, no intermediate file.
 
 ```bash
+bammetrics chain sample.bam mark-duplicates insert-size -o out/NA12878.bam
+bammetrics prep sample.bam -o out/NA12878.bam      # a recipe: bammetrics recipes lists them
+```
+
+The first line marks duplicates, runs `insert-size` on the marked records and writes
+`out/NA12878.bam` with its `.bai`, `out/NA12878.insert_size_metrics` and
+`out/NA12878.marked.duplication_metrics`. A bare word that names a step verb starts a
+step. `-o` ending in `.bam` names the BAM to write and the prefix of the metrics files.
+The reference comes from `-R`, else `BAMMETRICS_REFERENCE`, else the user config file
+(`~/.config/bammetrics/config.toml`, `reference = "ref.fa"`; `bammetrics config` prints
+it). `prep` is a named chain: mates fixed, duplicates marked, sorted by coordinate, the
+BAM indexed, and the four metrics files of qc's generic preset.
+
+```bash
+bammetrics prep sample.bam -o out/NA12878.bam qc --preset generic --fail-on fail --resume
+bammetrics prep sample.bam -o out/NA12878.bam qc --fail-on fail --resume insert-size.minimum-pct=0.2
+```
+
+`qc` as the last step writes the verdict and the page `qc` writes for the same metrics
+files and exits 10 when the verdict reaches `--fail-on`. `--resume` writes
+`out/NA12878.manifest.json`. The second command reruns `insert-size` and the qc step
+alone: the other seven steps are skipped, and `insert-size` reads the BAM the first run
+wrote.
+
+The long form puts a `+` in front of every step and names each file. Every chain of
+0.31.0 runs as before:
+
+```bash
 bammetrics chain sample.bam -R ref.fa -o out/NA12878 \
     + mark-duplicates \
     + alignment-summary + insert-size + quality-yield + duplicate-metrics \
@@ -90,10 +118,13 @@ reads the marked BAM, and the BAM holds the records `MarkDuplicates` writes. On 
 exome the chain took 16.5 s against 22.2 s for `MarkDuplicates` followed by the four
 collectors on its output.
 
-Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`, the six
-record-editing verbs of wave W09 and the two of wave W10), a tap (20 one-pass tool verbs),
-a split (`split-sam-by-library`, `split-sam-by-number-of-reads`) or `write [PATH]` (`-`
-is standard output). Transforms may follow one another:
+A step is a transform (`mark-duplicates`, `sort-sam` and 12 record-editing
+verbs), a tap (20 one-pass tool verbs), a split (`split-sam-by-library`,
+`split-sam-by-number-of-reads`), a materialized tool (17 verbs such as `wgs`,
+`targeted-pcr`, `library-complexity` and `merge-sam-files`, each run on a file of the
+records of its position), `write [PATH]` (`-` is standard output) or `qc`, the last step.
+Every tool that reads a BAM is a step at any position, 53 of the 71. Transforms may follow
+one another:
 `+ sort-sam --sort-order queryname + mark-duplicates + sort-sam --sort-order coordinate +
 write out.bam --index` sorts, marks and sorts back in one process, a sort holding at most
 `--sort-memory` bytes (default 2G). Each step takes its verb's own options in every
@@ -101,6 +132,18 @@ spelling. A usage error in any step is found before the first read and names the
 `--dry-run` prints the plan with each barrier's spill and memory, a chain short of disk
 space refuses before the first read, and `--plan plan.toml` reads the chain from a file.
 The reference is [docs/chaining.md](docs/chaining.md).
+
+```bash
+bammetrics chain sample.bam -o out/NA12878 --resume \
+    + mark-duplicates --keep + sort-sam --sort-order queryname + insert-size \
+    + qc --preset generic --fail-on fail
+```
+
+`--keep` writes the marked stream as `out/NA12878.marked.bam`. `--resume` writes
+`out/NA12878.manifest.json`; run the command again with another option of `sort-sam` and
+only `sort-sam`, `insert-size` and the qc step run, reading the kept BAM. The qc step
+writes the verdict and the page `qc` writes for the same taps, adds the taps its preset
+needs, and exits 10 when the verdict reaches `--fail-on`.
 
 The same chain from Python ([docs/python.md](docs/python.md)):
 

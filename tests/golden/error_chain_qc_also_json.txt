@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+qc
+--also
+json
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (qc): --also json is a format of every metrics file and belongs to the chain (from --also)
+  give --also json before the first +; qc takes markdown, junit and multiqc

@@ -1,0 +1,20 @@
+## argv
+chain
+tests/data/duplicate_marking.bam
+-o
+OUT/s
++
+check-duplicate-marking
+## exit
+1
+## stdout
+## stderr
+bammetrics chain: step 1 (check-duplicate-marking): failed alone: Found 6 records that do not agree on their duplicate flag.
+bammetrics chain: 0 of 1 step finished, 1 failed; 1 file written
+## file s.duplicate_marking_check
+r2
+r4
+r4
+r5
+r6
+r7

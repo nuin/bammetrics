@@ -1,0 +1,15 @@
+## argv
+config
+--no-config
+## exit
+0
+## stdout
+file         OUT/bammetrics/config.toml (not read (--no-config))
+reference    none (give -R)
+threads      default (the available cores, at most 8)
+tmp_dir      default (the system temporary directory)
+sort_memory  default (2G)
+recipes      OUT/bammetrics/recipes
+## stderr
+## file bammetrics/config.toml
+reference = "ROOT/tests/data/ref_100k.fa"

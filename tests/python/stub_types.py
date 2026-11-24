@@ -46,7 +46,7 @@ def forms(names: list[str]) -> None:
     assert_type(bm.qc("x.bam", also="junit"), bm.Run[bm.Verdict])
     step = bm.step("mark_duplicates", remove_duplicates=True, as_="dedup")
     assert_type(step, bm.Step)
-    assert_type(step.role, Literal["transform", "tap", "write", "split"])
+    assert_type(step.role, Literal["transform", "tap", "write", "split", "materialize", "qc"])
     assert_type(bm.Step("write", output="x.bam", index=True).args, list[str])
     chained = bm.chain("x.bam", [step, "insert_size", bm.step("write")], output="o",
                        reference="r.fa", also=["json", "markdown"], format="picard,json")
@@ -54,11 +54,19 @@ def forms(names: list[str]) -> None:
     assert_type(chained.verdict, None)
     assert_type(chained.stages, list[bm.Stage])
     assert_type(chained.stages[0].records_in, int | None)
-    assert_type(chained.stages[0].status, Literal["ok", "failed", "stopped", "not_run"])
+    assert_type(chained.stages[0].status,
+                Literal["ok", "failed", "stopped", "not_run", "skipped"])
+    assert_type(bm.chain("x.bam", names, resume=True, output="o"), bm.Run[None])
+    assert_type(bm.step("qc", preset="generic", fail_on="warn"), bm.Step)
     assert_type(bm.chain("x.bam", names, threads=2), bm.Run[None])
     assert_type(bm.chain(plan="plan.toml", output="o"), bm.Run[None])
     assert_type(bm.chain("x.bam", "insert_size", dry_run=True), str)
     assert_type(bm.chain("x.bam", step, dry_run=bool(names)), bm.Run[None] | str)
+    assert_type(bm.chain("x.bam", ["mark_duplicates"], output="r.bam", config=False),
+                bm.Run[None])
+    assert_type(bm.chain("x.bam", recipe="qc-only", output="o"), bm.Run[None])
+    assert_type(bm.recipe("downsample", "x.bam", output="d.bam",
+                          set={"downsample-sam.probability": 0.1}), bm.Run[None] | str)
     assert_type(run.stages, list[bm.Stage])
     doctor = bm.doctor("x.bam", reference="r.fa", expect_sex="male", records=100)
     assert_type(doctor, bm.Doctor)

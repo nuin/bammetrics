@@ -159,7 +159,7 @@ impl Level {
 }
 
 #[derive(Clone, Debug)]
-struct Options {
+pub(crate) struct Options {
     mode: Mode,
     /// The highest level printed.
     verbosity: Level,
@@ -172,7 +172,7 @@ struct Options {
 const DEFAULT_RECORDS_IN_RAM: usize = 500_000;
 
 impl Options {
-    fn from_invocation(inv: &Invocation) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation) -> Result<Self> {
         let records: i64 = inv.parse("MAX_RECORDS_IN_RAM", DEFAULT_RECORDS_IN_RAM as i64)?;
         let records_in_ram = usize::try_from(records)
             .ok()

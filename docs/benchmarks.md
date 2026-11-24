@@ -767,6 +767,66 @@ earlier waves, `interval converters on GRCh38, 2,000,000 records` peaks at 489.4
 MiB (461.4 MiB at 0.30.0) and `mark-duplicates slice` at 659.5 / 1024 MiB (660.3 MiB at
 0.30.0).
 
+The materialize rows of wave W14 (2026-11-22, feat/chain-stages, one run each; `make
+memgate` passes 57 fixture rows). The scale row wrote under
+`~/data/bammetrics-scale/waves/w14`, removed after the run:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `chain materialize taps` | fixture | 39.7 / 64 | 0.42 | 0.0 / 16 |
+| `chain materialize merge` | fixture | 11.5 / 64 | 0.02 | 0.0 / 16 |
+| `chain materialize slice` | scale | 53.4 / 1024 | 12.58 | 1,175.0 / 2,048 |
+
+`chain materialize slice` copies the 8,445,233 records of the 573 MB slice twice behind
+`add-comments-to-bam`: once with its `.bai` for `bam-index-stats`, once as the input of
+`merge-sam-files`, whose BAM is the stream of `insert-size`. The two copies peak at
+1,175.0 MiB in the temporary directory, about 588 MiB (1.02 times the input) each; the
+plan estimates 602 MiB per copy and 1.8 GiB in all, the merge's BAM included, since it
+counts every file as held at once. The copy is written by the streaming writer, so RSS
+stays at 53.4 MiB.
+
+The chain rows of 0.32.0 (2026-11-23, release/0.32.0 with the three branches merged, one
+run each; `make memgate` passes 63 fixture rows, `TIER=scale make memgate` passes 34
+scale rows and skips 6: the two chain sort-barrier rows,
+`revert-original-base-qualities-and-add-mate-cigar pairs`, the two `merge-sam-files
+slice` rows and `reorder-sam slice`, whose inputs were removed after earlier runs). Scale
+outputs went under `~/data/bammetrics-scale/waves/w14` and were removed after the run:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `chain short form reorder-sam insert-size -o r.bam` | fixture | 10.6 / 64 | 0.03 | |
+| `recipe prep` | fixture | 12.0 / 64 | 0.09 | |
+| `chain materialize taps` | fixture | 40.8 / 64 | 0.47 | 0.0 / 16 |
+| `chain materialize merge` | fixture | 12.3 / 64 | 0.03 | 0.0 / 16 |
+| `chain keep + qc` | fixture | 12.1 / 64 | 0.13 | |
+| `chain short form resumed from r.bam` | fixture | 10.8 / 64 | 0.08 | |
+| `recipe prep qc` | fixture | 12.7 / 64 | 0.07 | |
+| `chain qc wgs materialized` | fixture | 39.9 / 64 | 0.38 | 0.0 / 16 |
+| `chain materialize slice` | scale | 52.8 / 1024 | 11.37 | 1,175.0 / 2,048 |
+| `chain short form resumed slice` | scale | 680.1 / 2048 | 18.99 | 358.0 / 2,048 |
+
+Every fixture row reads about 3.7 MiB higher than on 2026-11-21 (`merge-sam-files` 11.0
+MiB against 7.3, `position-based-downsample-sam` 9.4 against 5.7). The binary is not the
+cause: `bammetrics --version` peaks at 10.2 MiB with the 0.31.0 binary and 10.3 MiB with
+the 0.32.0 binary on the same day. Of the rows of earlier waves, `mark-duplicates slice`
+peaks at 666.8 / 1024 MiB (659.5 at 0.31.0), `fix-mate-information slice` at 629.0 / 3072
+(646.3) and `downsample-sam HighAccuracy slice` at 1,975.3 / 3072 (1,972.5).
+
+`chain short form resumed slice` is two commands: `chain SLICE mark-duplicates insert-size
+-o s.bam --resume`, then the same with `insert-size --minimum-pct 0.2`. Each alone, on the
+573 MB slice (8,445,233 records), with `/usr/bin/time -l`:
+
+| run | wall s | peak RSS MiB | what ran |
+|---|---:|---:|---|
+| the first run | 17.92 | 677.8 | 3 steps; `s.bam` (584 MB), `s.bai`, two metrics files, the manifest |
+| the same command again | 0.01 | 9.3 | nothing: 3 steps skipped, the source is not read |
+| resumed with `insert-size --minimum-pct 0.2` | 1.80 | 83.0 | `insert-size` alone, reading `s.bam`; `mark-duplicates` and `write` skipped |
+| a fresh run of the changed chain | 17.61 | 676.6 | 3 steps |
+
+The resumed run writes the `insert_size_metrics` the fresh run writes, byte for byte
+after the `StringHeader` lines, in a tenth of its time: the read starts at the BAM the
+`write` step wrote (docs/chaining.md section 32.2).
+
 To add a scale row:
 
 1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing
@@ -898,6 +958,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.30.0 pdf | the same with `--features pdf` | 13,780,656 | 11,728,392 |
 | 0.31.0 | 2026-11-21, release/0.31.0: feat/merge-reorder, feat/fix-mate-filter and feat/downsample merged, then main with wave W21 (Parquet, XLSX, DOCX, SQL dump) and fix/formats-2-review, the version set, rustc 1.100.0, default features (feature `parquet` on) | 11,726,400 | 9,843,200 |
 | 0.31.0 pdf | the same with `--features pdf` | 15,689,568 | 13,188,376 |
+| 0.32.0 | 2026-11-23, release/0.32.0: feat/chain-grammar, feat/chain-manifest and feat/chain-stages merged and reconciled, the version set, rustc 1.100.0, default features (feature `parquet` on) | 12,150,128 | 10,223,776 |
+| 0.32.0 pdf | the same with `--features pdf` | 16,096,304 | 13,552,448 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -961,6 +1023,13 @@ merge): `MergeSamFiles` and the dictionary merge of `header_merge.rs`, `ReorderS
 section "The three W21 formats merged" below measured 1,194,928 on main). With
 `--features pdf` it grew 1,459,984 bytes stripped, and the PDF build is 3,345,176 bytes
 over the default build.
+
+From 0.31.0 to 0.32.0 the default binary grew 380,576 bytes stripped (3.9%), both built
+with rustc 1.100.0, with no new tool: the form without `+` (`chain/bare.rs`), the config
+file and the recipes with their three compiled-in files, manifest 2 with `--resume`,
+`--keep` and the prefix lock, the qc step with its flag table and writers, and the
+materialize fallback with its 17 rows. With `--features pdf` it grew 364,072 bytes
+stripped, and the PDF build is 3,328,672 bytes over the default build.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

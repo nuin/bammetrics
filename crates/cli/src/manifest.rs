@@ -15,6 +15,8 @@ use bammetrics_verdict::json::Json;
 
 use crate::error::{Error, Result};
 
+pub mod v2;
+
 pub const SCHEMA: &str = "bammetrics.manifest/1";
 
 /// Bytes hashed at each end of an input.

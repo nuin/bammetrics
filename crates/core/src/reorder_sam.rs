@@ -136,6 +136,11 @@ const FASTA_EXTENSIONS: [&str; 10] = [
 enum DictionaryKind {
     /// A FASTA: the `.dict` beside it, its extension replaced.
     Fasta(usize),
+    /// A FASTA index (`.fai`): `SN` and `LN` of each line. Picard 3.5.0
+    /// does not know the type; the chain hands one to a step when the
+    /// reference has no `.dict` (docs/chaining.md, "Defaults from the
+    /// reference").
+    Fai,
     Dictionary,
     Cram,
     Sam,
@@ -148,6 +153,9 @@ impl DictionaryKind {
     /// case as written.
     fn of(name: &str) -> Option<Self> {
         let ends = |extensions: &[&str]| extensions.iter().any(|e| name.ends_with(e));
+        if name.ends_with(".fai") {
+            return Some(Self::Fai);
+        }
         if let Some(e) = FASTA_EXTENSIONS.iter().find(|e| name.ends_with(*e)) {
             return Some(Self::Fasta(e.len()));
         }
@@ -207,6 +215,7 @@ fn read_sequences(path: &Path) -> Result<Vec<Sequence>> {
             }
             bed_to_interval_list::read_sequences(&dict)
         }
+        DictionaryKind::Fai => read_fai(path),
         DictionaryKind::Vcf => crate::vcf::read_dictionary(path)?
             .into_iter()
             .map(|contig| {
@@ -229,6 +238,58 @@ fn read_sequences(path: &Path) -> Result<Vec<Sequence>> {
         | DictionaryKind::Sam
         | DictionaryKind::IntervalList => bed_to_interval_list::read_sequences(path),
     }
+}
+
+/// The most bytes of a `.fai` read as a dictionary: 64 MiB. The `.fai` of
+/// GRCh38 with its alt, decoy and HLA contigs holds 3,366 lines in about
+/// 130 KB.
+pub const MAX_FAI_BYTES: u64 = 64 << 20;
+
+/// The sequences of a FASTA index: the name and length of each line, no
+/// other field.
+fn read_fai(path: &Path) -> Result<Vec<Sequence>> {
+    use std::io::Read as _;
+    let input = |kind, message: String| Error::Input {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(kind, message),
+    };
+    let file = std::fs::File::open(path).map_err(|source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let mut bytes = Vec::new();
+    file.take(MAX_FAI_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|source| Error::Input {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if bytes.len() as u64 > MAX_FAI_BYTES {
+        return Err(input(
+            std::io::ErrorKind::FileTooLarge,
+            format!("a FASTA index of more than {} MiB", MAX_FAI_BYTES >> 20),
+        ));
+    }
+    let text = String::from_utf8(bytes)
+        .map_err(|_| input(std::io::ErrorKind::InvalidData, "not UTF-8 text".to_owned()))?;
+    let mut sequences = Vec::new();
+    for (index, line) in text.lines().enumerate().filter(|(_, l)| !l.is_empty()) {
+        let mut fields = line.split('\t');
+        let name = fields.next().unwrap_or_default();
+        let length = fields.next().and_then(|n| n.parse::<i64>().ok());
+        let Some(length) = length.filter(|_| !name.is_empty()) else {
+            return Err(input(
+                std::io::ErrorKind::InvalidData,
+                format!("line {}: expected NAME, a tab and a length", index + 1),
+            ));
+        };
+        sequences.push(Sequence {
+            name: name.to_owned(),
+            length,
+            other_fields: Vec::new(),
+        });
+    }
+    Ok(sequences)
 }
 
 /// The dictionary of `path` as header `@SQ` records, each with the fields

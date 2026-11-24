@@ -13,4 +13,4 @@ OUT/out.bam
 2
 ## stdout
 ## stderr
-bammetrics chain: step 1 (filter-sam-reads): WRITE_READS_FILES: the .reads files sit beside OUTPUT, and a chain step hands its records on (wave W14 of docs/07_full_parity_program.md)
+bammetrics chain: step 1 (filter-sam-reads): WRITE_READS_FILES: the .reads files are named after OUTPUT, and a chain step writes no OUTPUT: run filter-sam-reads on its own for them

@@ -1,0 +1,21 @@
+## argv
+plan
+tests/data/markdup.bam
+-o
+OUT/s
++
+mark-duplicates
+--keep
++
+sort-sam
+-SO
+queryname
+--keep
++
+write
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (sort-sam) --keep and step 3 (write) both write OUT/s.sorted.bam: give write its own path, or drop --keep
+  --keep writes PREFIX.<stream>.bam; write without a path writes the same name

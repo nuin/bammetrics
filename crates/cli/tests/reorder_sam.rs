@@ -273,20 +273,23 @@ fn a_missing_contig_fails_the_step_before_anything_is_written() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// `merge-sam-files` is a materialized step (wave W14): the stream is its
+/// first input, a file after the verb its second; chain_positions.rs
+/// holds it to the staged tool at every position.
 #[test]
-fn merge_sam_files_is_no_step() {
+fn merge_sam_files_is_a_step() {
     let output = bammetrics(&strings(&[
         "chain",
         MARKDUP,
         "+",
         "merge-sam-files",
+        MARKDUP,
         "+",
         "write",
         "/dev/null",
     ]));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(output.status.code(), Some(2), "{stderr}");
-    assert!(stderr.contains("wave W14"), "{stderr}");
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
 }
 
 /// An argument that is not UTF-8 is a usage error, not a panic.

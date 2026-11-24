@@ -31,6 +31,9 @@ needs_cli = pytest.mark.skipif(not CLI.exists(), reason="needs `cargo build --re
 
 # The four collectors of both documented examples, as chain steps and as
 # the extension qc gives each file.
+# The materialized steps that hand a BAM on: like a transform, no output.
+LEAVES = ('merge_sam_files', 'gather_bam_files', 'position_based_downsample_sam')
+
 TAPS = {
     "alignment_summary": ".alignment_summary_metrics",
     "insert_size": ".insert_size_metrics",
@@ -255,6 +258,40 @@ def test_panel_names_the_baits_and_the_targets_of_hs_metrics(tmp_path):
     assert all(copied == step for copied in round_trips(step))
 
 
+def test_a_materialized_step_equals_its_tool_on_the_staged_file(tmp_path):
+    """wgs, merge_sam_files and calculate_read_group_checksum have neither a
+    stage nor a collector: each runs on a file of the stream at its position
+    (docs/chaining.md, "Materialize")."""
+    staged = tmp_path / "staged.bam"
+    bm.chain(MARKDUP, [bm.step("add_comments_to_bam", comment=["c"]),
+                       bm.step("write", output=staged)])
+    bm.collect_wgs_metrics(staged, reference_sequence=REFERENCE,
+                           output=tmp_path / "staged.wgs_metrics")
+    run = bm.chain(MARKDUP, [bm.step("add_comments_to_bam", comment=["c"]),
+                             bm.step("wgs", reference_sequence=REFERENCE),
+                             bm.step("calculate_read_group_checksum",
+                                     output=tmp_path / "chain.md5"),
+                             bm.step("merge_sam_files", input=[MARKDUP]),
+                             "insert_size"],
+                   output=tmp_path / "chain")
+    assert run.exit_code == 0, run.errors
+    assert [(s.verb, s.role, s.leaves) for s in run.stages] == [
+        ("add-comments-to-bam", "transform", "commented"),
+        ("wgs", "materialize", None),
+        ("calculate-read-group-checksum", "materialize", None),
+        ("merge-sam-files", "materialize", "merged"),
+        ("insert-size", "tap", None),
+    ]
+    assert body(tmp_path / "chain.commented.wgs_metrics") == body(
+        tmp_path / "staged.wgs_metrics")
+    assert (tmp_path / "chain.md5").read_text() == bm.calculate_read_group_checksum(
+        staged, output=tmp_path / "staged.md5")[0]["checksum"]
+    inserts = bm.read_metrics(tmp_path / "chain.insert_size_metrics")
+    pairs = inserts["classes"][0]["rows"][0]["READ_PAIRS"]
+    staged_pairs = bm.collect_insert_size_metrics(MARKDUP)[0]["READ_PAIRS"]
+    assert pairs == 2 * staged_pairs
+
+
 def test_stages_hold_each_steps_status_files_and_record_counts(tmp_path):
     run = bm.chain(MARKDUP, ["quality_yield", bm.step("mark_duplicates", as_="dedup",
                                                       remove_duplicates=True),
@@ -369,8 +406,8 @@ def test_a_step_is_checked_when_it_is_made():
      r'chain: unknown step "inser_size"\n  did you mean insert_size\?\n  steps: insert_size, '),
     (lambda: bm.step("inser-size"), bm.UsageError, r"did you mean insert-size\?"),
     (lambda: bm.Step("mark_duplicats"), bm.UsageError, r"did you mean mark_duplicates\?"),
-    (lambda: bm.step("wgs"), bm.UsageError,
-     "step wgs: CollectWgsMetrics has no stage and does not read a BAM in one pass"),
+    (lambda: bm.step("non_n_fasta_size"), bm.UsageError,
+     "step non-n-fasta-size: NonNFastaSize reads a FASTA file and no BAM"),
     # FifoBuffer buffers a pipe, and a chain has none: its own reason, in every spelling.
     (lambda: bm.step("fifo_buffer"), bm.UsageError,
      "step fifo-buffer: FifoBuffer buffers the pipe between two commands and a chain has no "
@@ -439,7 +476,7 @@ def test_a_step_takes_the_keywords_of_its_tools_function():
         function = stub_function("".join(
             "_" + c.lower() if c.isupper() else c for c in steps[verb]).lstrip("_"))
         for keyword in (a.arg for a in function.args.kwonlyargs):
-            if keyword == "output" and role == "transform":
+            if keyword == "output" and (role == "transform" or verb in LEAVES):
                 with pytest.raises(bm.UsageError, match="writes no BAM in a chain"):
                     bm.step(verb, output=None)
             elif keyword == "validation_stringency":
@@ -628,3 +665,162 @@ def test_chain_reads_standard_input_and_a_cram(tmp_path):
     piped = bam(tmp_path / "p.marked.bam")
     bm.chain(MARKDUP, ["mark_duplicates", "write"], output=tmp_path / "f")
     assert piped[1] == bam(tmp_path / "f.marked.bam")[1]
+
+
+def test_output_naming_a_bam_writes_it_indexed_and_names_the_metrics(tmp_path, monkeypatch):
+    # The -o rule of the command: a chain with a transform and no write
+    # step writes OUTPUT with its index, the metrics files named from it.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    run = bm.chain(MARKDUP, ["mark_duplicates", "insert_size"], output=tmp_path / "r.bam",
+                   config=False)
+    assert sorted(Path(f).name for f in run.files) == [
+        "r.bai", "r.bam", "r.insert_size_metrics", "r.marked.duplication_metrics"]
+    assert run.stages[-1].verb == "write"
+    with pytest.raises(bm.UsageError, match="no step of this chain changes the records"):
+        bm.chain(BAM, ["insert_size"], output=tmp_path / "t.bam")
+    with pytest.raises(bm.UsageError, match="config takes True or False"):
+        bm.chain(BAM, ["insert_size"], output=tmp_path / "t", config="no")
+
+
+def test_the_config_reference_is_used_unless_config_is_false(tmp_path, monkeypatch):
+    config = tmp_path / "config" / "bammetrics"
+    config.mkdir(parents=True)
+    (config / "config.toml").write_text(f'reference = "{REFERENCE}"\n')
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.delenv("BAMMETRICS_REFERENCE", raising=False)
+    plan = bm.chain(BAM, ["reorder_sam", "insert_size"], output=tmp_path / "r.bam", dry_run=True)
+    assert str(REFERENCE) in plan
+    with pytest.raises(bm.UsageError, match="missing --sequence-dictionary"):
+        bm.chain(BAM, ["reorder_sam"], output=tmp_path / "r.bam", config=False)
+
+
+def test_a_recipe_runs_its_chain(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    run = bm.recipe("qc-only", BAM, output=tmp_path / "s")
+    assert sorted(Path(f).name for f in run.files) == sorted(f"s{e}" for e in TAPS.values())
+    bm.chain(BAM, ["quality_yield", "alignment_summary", "insert_size", "duplicate_metrics"],
+             output=tmp_path / "h")
+    for extension in TAPS.values():
+        assert body(tmp_path / f"s{extension}") == body(tmp_path / f"h{extension}")
+    down = bm.recipe("downsample", DATA / "oxog.bam", output=tmp_path / "d.bam",
+                     set={"downsample-sam.probability": 0.5})
+    assert down.stages[0].records_out == 60
+    with pytest.raises(bm.UsageError, match="needs downsample-sam.probability=VALUE"):
+        bm.recipe("downsample", DATA / "oxog.bam", output=tmp_path / "e.bam")
+    with pytest.raises(bm.UsageError, match="no recipe \"prp\""):
+        bm.recipe("prp", BAM, output=tmp_path / "x.bam")
+    assert "quality-yield" in bm.recipe("qc-only", BAM, output=tmp_path / "p", dry_run=True)
+
+
+def test_an_unknown_step_in_set_and_an_upper_case_sam_are_usage_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    with pytest.raises(bm.UsageError, match="recipe prep has no step mark-dups"):
+        bm.recipe("prep", DATA / "oxog.bam", output=tmp_path / "x.bam",
+                  set={"mark-dups.remove-duplicates": True})
+    with pytest.raises(bm.UsageError, match="writes SAM text only for a name ending in .sam"):
+        bm.chain(MARKDUP, ["mark_duplicates"], output=tmp_path / "x.SAM")
+    assert not (tmp_path / "x.SAM").exists()
+
+
+def test_resume_skips_what_the_manifest_proves_done(tmp_path):
+    """W14: resume=True skips each step its record in PREFIX.manifest.json
+    proves done; keep=True writes a transform's stream for a later read."""
+    steps = ["quality_yield", bm.step("mark_duplicates", keep=True), "insert_size"]
+    first = bm.chain(MARKDUP, steps, output=tmp_path / "s", resume=True)
+    assert [s.status for s in first.stages] == ["ok"] * 3
+    assert (tmp_path / "s.marked.bam").exists()
+    assert (tmp_path / "s.manifest.json").exists()
+    again = bm.chain(MARKDUP, steps, output=tmp_path / "s", resume=True)
+    assert [s.status for s in again.stages] == ["skipped"] * 3
+    assert list(again.metrics) == list(first.metrics)
+    changed = [steps[0], steps[1], bm.step("insert_size", minimum_pct=0.1)]
+    plan = bm.chain(MARKDUP, changed, output=tmp_path / "s", resume=True, dry_run=True)
+    assert "resume     step 3 insert-size: runs: its options changed" in plan
+    run = bm.chain(MARKDUP, changed, output=tmp_path / "s", resume=True)
+    assert [s.status for s in run.stages] == ["skipped", "skipped", "ok"]
+
+
+def test_qc_is_the_last_step(tmp_path):
+    """W14: a qc step writes the verdict the qc verb writes for the same taps."""
+    date = "2026-01-02 03:04:05 UTC"
+    run = bm.chain(BAM, ["insert_size", bm.step("qc", date=date, also="junit")],
+                   output=tmp_path / "s")
+    assert [s.role for s in run.stages] == ["tap", "qc", "tap", "tap", "tap"]
+    assert [Path(f).name for f in run.stages[1].files] == [
+        "s.verdict.json", "s.report.html", "s.junit.xml"]
+    verdict = bm.qc(BAM, output=tmp_path / "q" / "s", date=date).verdict
+    written = (tmp_path / "s.verdict.json").read_text()
+    assert written.replace(str(tmp_path / "s."), str(tmp_path / "q" / "s.")) == \
+        (tmp_path / "q" / "s.verdict.json").read_text()
+    assert verdict.status == "pass"
+    with pytest.raises(bm.UsageError, match="panel="):
+        bm.step("qc", hs=["a", "b"])
+
+
+def test_a_qc_step_gate_is_the_exit_code_not_an_error(tmp_path):
+    """The qc step's fail_on code (10, 11) is Run.exit_code: no step failed."""
+    run = bm.chain(MARKDUP, ["mark_duplicates", bm.step("qc", fail_on="warn")],
+                   output=tmp_path / "s")
+    assert run.exit_code == 10
+    assert all(s.status == "ok" for s in run.stages)
+    assert run.manifest == str(tmp_path / "s.manifest.json")
+
+
+def test_a_recipe_takes_a_last_qc_step_and_resumes(tmp_path, monkeypatch):
+    """0.32.0: recipe(qc=...) adds qc as the last step, output names the BAM
+    in front of it, and resume=True reads that BAM for the step that changed."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    date = "2026-01-02 03:04:05 UTC"
+    oxog = DATA / "oxog.bam"
+    qc = bm.step("qc", date=date, fail_on="fail")
+    first = bm.recipe("prep", oxog, output=tmp_path / "p.bam", qc=qc, resume=True)
+    assert [s.verb for s in first.stages] == [
+        "fix-mate-information", "mark-duplicates", "sort-sam", "quality-yield",
+        "alignment-summary", "insert-size", "duplicate-metrics", "write", "qc"]
+    assert first.exit_code == 0 and first.manifest == str(tmp_path / "p.manifest.json")
+    assert (tmp_path / "p.bam").exists() and (tmp_path / "p.verdict.json").exists()
+    again = bm.recipe("prep", oxog, output=tmp_path / "p.bam", qc=qc, resume=True,
+                      set={"insert-size.minimum-pct": 0.2})
+    assert [s.status for s in again.stages] == ["skipped"] * 5 + ["ok", "skipped", "skipped", "ok"]
+    # qc=True is the qc step with its defaults; chain(recipe=..., steps=["qc"]) is the same call.
+    plain = bm.recipe("prep", oxog, output=tmp_path / "q.bam", qc=True)
+    assert plain.stages[-1].role == "qc"
+    listed = bm.chain(oxog, ["qc"], recipe="prep", output=tmp_path / "r.bam")
+    assert [s.verb for s in listed.stages] == [s.verb for s in plain.stages]
+    with pytest.raises(bm.UsageError, match="qc takes the qc step, not insert-size"):
+        bm.recipe("prep", oxog, output=tmp_path / "x.bam", qc=bm.step("insert_size"))
+    with pytest.raises(TypeError, match="qc takes True or step"):
+        bm.recipe("prep", oxog, output=tmp_path / "x.bam", qc="generic")
+    with pytest.raises(bm.UsageError, match="a step on the command line cannot be added"):
+        bm.chain(oxog, ["insert_size"], recipe="prep", output=tmp_path / "x.bam")
+    assert not (tmp_path / "x.bam").exists()
+
+
+def test_the_short_output_rule_resumes_from_the_bam_it_wrote(tmp_path, monkeypatch):
+    """0.32.0: output="r.bam" with resume=True; a changed tap reads r.bam."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+
+    def run(pct, **more):
+        steps = ["reorder_sam", bm.step("insert_size", minimum_pct=pct)]
+        return bm.chain(BAM, steps, output=tmp_path / "r.bam", reference=REFERENCE,
+                        resume=True, **more)
+
+    assert [s.status for s in run(0.05).stages] == ["ok"] * 3
+    assert [s.status for s in run(0.05).stages] == ["skipped"] * 3
+    plan = run(0.2, dry_run=True)
+    assert "skipped; the BAM a write step wrote of its stream" in plan
+    assert [s.status for s in run(0.2).stages] == ["skipped", "ok", "skipped"]
+
+
+def test_a_materialized_step_takes_keep_and_feeds_qc(tmp_path, monkeypatch):
+    """0.32.0: keep=True on merge_sam_files, and a wgs step the qc step reads."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    merged = bm.chain(MARKDUP, [bm.step("merge_sam_files", input=[DATA / "oxog.bam"], keep=True),
+                                "insert_size"], output=tmp_path / "m", resume=True)
+    assert (tmp_path / "m.merged.bam").exists()
+    assert [s.role for s in merged.stages] == ["materialize", "tap"]
+    run = bm.chain(MARKDUP, ["mark_duplicates", bm.step("wgs", coverage_cap=10),
+                             bm.step("qc", preset="wgs")],
+                   output=tmp_path / "w", reference=REFERENCE)
+    assert [s.verb for s in run.stages].count("wgs") == 1
+    assert "WgsMetrics" in (tmp_path / "w.verdict.json").read_text()

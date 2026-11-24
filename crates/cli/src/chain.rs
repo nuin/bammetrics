@@ -36,12 +36,19 @@
 //! its keywords, so [`parse`] builds its [`Spec`].
 
 mod args;
+mod bare;
 mod claims;
 mod describe;
+mod keep;
+mod lock;
 mod planfile;
 mod planner;
 mod prepare;
 pub mod python;
+mod qc_step;
+pub mod recipes;
+mod resolve;
+mod resume;
 mod run;
 
 use crate::error::VerbError;
@@ -49,7 +56,9 @@ use crate::error::VerbError;
 pub use args::{Asked, global_flags, help, parse, step_flags, step_help, write_flags};
 pub use describe::text as plan_text;
 pub use planfile::{parse as parse_plan, read as read_plan};
+pub use planner::bytes_or_why;
 pub use prepare::{Chain, Planned, PlannedFile, PrefixOrigin, Role, prepare};
+pub use resolve::DICTIONARY_DEFAULTS;
 pub use run::{Outcome, StepOutcome, StepStatus, Written, execute, sample_name, summary};
 
 /// The verb.
@@ -58,6 +67,8 @@ pub const VERB: &str = "chain";
 pub const STEP: &str = "+";
 /// The step that is not a tool verb.
 pub const WRITE: &str = "write";
+/// The last step that evaluates a preset and writes the report.
+pub const QC: &str = "qc";
 
 /// A chain as asked for: the source, the chain's options and the steps,
 /// each still as text. The command line and a plan file both make one.
@@ -97,6 +108,16 @@ pub struct Spec {
     /// The free bytes the planner assumes in every directory, in place of
     /// the file system's answer (a test hook, not in `--help`).
     pub free_space: Option<u64>,
+    /// `--no-config`: leave the user config file unread
+    /// ([`crate::config`]).
+    pub no_config: bool,
+    /// The recipe whose `-o` must name the BAM it writes.
+    pub recipe_bam: Option<String>,
+    /// The files the chain was read from beside the plan file: the user
+    /// config file and a user recipe. No step may write one.
+    pub reads: Vec<String>,
+    /// `--resume`: skip the steps `PREFIX.manifest.json` proves done.
+    pub resume: bool,
 }
 
 /// One step as asked for: its verb and its own arguments.
@@ -166,8 +187,13 @@ pub(crate) fn read_capped(path: &std::path::Path, cap: u64) -> std::io::Result<S
 /// True when the arguments of `plan` describe a chain: they hold a `+`
 /// step or name a plan file. `plan` with `qc` arguments has neither.
 pub fn is_chain(args: &[String]) -> bool {
-    args.iter()
-        .any(|arg| arg == STEP || arg == "--plan" || arg.starts_with("--plan="))
+    args.iter().any(|arg| {
+        arg == STEP
+            || arg == "--plan"
+            || arg.starts_with("--plan=")
+            || arg == "--recipe"
+            || arg.starts_with("--recipe=")
+    })
 }
 
 /// `bammetrics chain ARGS`: the exit code. 0 when every step finished, 1

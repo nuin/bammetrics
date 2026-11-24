@@ -1,0 +1,37 @@
+## argv
+chain
+tests/data/oxog.bam
+--recipe
+prep
+-o
+OUT/p.bam
+--dry-run
+## exit
+0
+## stdout
+chain plan for tests/data/oxog.bam
+  source    tests/data/oxog.bam (BAM, 5,484 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/p (from -o)
+segment 1  one read of tests/data/oxog.bam
+  step 1  fix-mate-information  transform, first read  takes every record and sorts them by queryname
+segment 2  the records step 1 holds, sorted by coordinate
+  step 1  fix-mate-information  stream fixed           no file
+  step 2  mark-duplicates       transform, first read  takes every record, then finds the duplicate sets
+segment 3  a read of the spool of step 2's input through step 2 (spool: its input is no file)
+  step 2  mark-duplicates       stream marked          OUT/p.marked.duplication_metrics
+  step 3  sort-sam              transform, first read  takes every record and sorts them by coordinate
+segment 4  the records step 3 holds, sorted by coordinate
+  step 3  sort-sam              stream sorted          no file
+  step 4  quality-yield         tap on sorted          OUT/p.quality_yield_metrics
+  step 5  alignment-summary     tap on sorted          OUT/p.alignment_summary_metrics
+  step 6  insert-size           tap on sorted          OUT/p.insert_size_metrics
+  step 7  duplicate-metrics     tap on sorted          OUT/p.duplicate_metrics
+  step 8  write                 BAM of sorted          OUT/p.bam, OUT/p.bai
+barrier    step 1 fix-mate-information: holds its records; about 79 records by the file size, no spill under --sort-memory 2.0 GiB; memory about 100.1 MiB
+barrier    step 2 mark-duplicates: spools its input, about 5.9 KiB; about 79 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.1 MiB
+barrier    step 3 sort-sam: holds its records; about 79 records by the file size, no spill under --sort-memory 2.0 GiB; memory about 100.1 MiB
+temp disk  about 5.9 KiB in the system temporary directory
+output     about 5.4 KiB written by write
+memory     about 100.1 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr

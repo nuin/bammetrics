@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/markdup.bam
+mark-duplicates
+qc
+insert-size
+-o
+OUT/r.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 3 (insert-size): step 2 (qc) is the last step: no step may follow it

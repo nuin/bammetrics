@@ -40,6 +40,7 @@ use crate::sam_text::Stringency;
 use crate::spill::TempDir;
 
 mod exec;
+pub mod materialize;
 mod sinks;
 mod spool;
 #[cfg(test)]
@@ -76,6 +77,10 @@ pub struct Frame {
     pub label: String,
     /// The files the stream is read from. A writer refuses to replace one.
     pub reads: Vec<PathBuf>,
+    /// The regular file that holds exactly this stream: the source, read
+    /// with no stage in front. A materialized step reads it in place of a
+    /// copy ([`materialize`]).
+    pub file: Option<PathBuf>,
 }
 
 impl Frame {
@@ -87,6 +92,7 @@ impl Frame {
             cram: false,
             label,
             reads: Vec::new(),
+            file: None,
         }
     }
 
@@ -99,6 +105,7 @@ impl Frame {
             cram: self.cram,
             label: format!("{} + {step}", self.label),
             reads: self.reads.clone(),
+            file: None,
         }
     }
 }
@@ -153,6 +160,9 @@ pub struct FileSource {
     /// The path as the user gave it, when `path` is a spooled copy.
     label: String,
     stringency: Stringency,
+    /// The records were decoded from a CRAM before this file held them
+    /// (a stream a chain kept): the frame says CRAM.
+    from_cram: bool,
 }
 
 impl FileSource {
@@ -162,7 +172,17 @@ impl FileSource {
             reference: reference.map(Path::to_path_buf),
             label: path.display().to_string(),
             stringency: Stringency::Strict,
+            from_cram: false,
         }
+    }
+
+    /// The source of a stream a chain kept as a BAM after reading a CRAM:
+    /// its frame says CRAM, so the stages after it rebuild `MD` and `NM`
+    /// as they did when the stream came from the CRAM itself.
+    #[must_use]
+    pub fn decoded_from_cram(mut self, from_cram: bool) -> Self {
+        self.from_cram = from_cram;
+        self
     }
 
     /// The source with SAM text checked at `stringency`
@@ -193,11 +213,12 @@ impl Source for FileSource {
             bytes,
             |header, reader, cram| {
                 let mut frame = Frame::new(header.clone(), self.label.clone());
-                frame.cram = cram;
+                frame.cram = cram || self.from_cram;
                 frame.reads = std::iter::once(&self.path)
                     .chain(&self.reference)
                     .cloned()
                     .collect();
+                frame.file = self.replayable().then(|| self.path.clone());
                 consume(
                     frame,
                     &mut StreamRecords {
@@ -222,6 +243,7 @@ impl Source for FileSource {
             reference: self.reference.clone(),
             label: self.label.clone(),
             stringency: self.stringency,
+            from_cram: self.from_cram,
         }))
     }
 
@@ -305,6 +327,9 @@ pub struct Products {
     /// Lines for standard error: what the step did not do and why (an
     /// index asked for on a stream that is not coordinate sorted).
     pub notes: Vec<String>,
+    /// The step wrote its files and still fails, as its tool exits 1
+    /// (`CheckDuplicateMarking` on records that disagree).
+    pub failure: Option<String>,
 }
 
 impl Products {
@@ -344,6 +369,13 @@ pub trait Transform {
 /// A stage that takes the whole stream before any record goes on.
 pub trait Barrier<'t> {
     fn push(&mut self, batch: &[RawRecord]) -> Result<()>;
+
+    /// False for a barrier that needs no record of its input (a
+    /// materialized tool that reads the source file itself): the segment
+    /// stops reading once nothing else in it needs a record.
+    fn takes_records(&self) -> bool {
+        true
+    }
 
     /// After the last batch: the header and the stream of the next segment.
     fn seal(self: Box<Self>) -> Result<Sealed<'t>>;
@@ -625,6 +657,9 @@ pub enum StepKind {
     },
     /// A sink whose failure stops its segment (a writer).
     Sink(BuildSink),
+    /// A sink that fails alone, as a tap does: a tool run on a file of the
+    /// records of its position ([`materialize`]).
+    Alone(BuildSink),
     Stage(Box<dyn StageBuilder>),
 }
 

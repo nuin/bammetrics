@@ -20,6 +20,8 @@ pub(super) struct Read<'a> {
     pub reference: Option<&'a Path>,
     /// The plan file of `--plan`.
     pub plan_file: Option<&'a Path>,
+    /// The user config file and a user recipe, when the chain read them.
+    pub settings: &'a [PathBuf],
 }
 
 /// Every planned file is claimed by its step: two steps that name one
@@ -46,7 +48,8 @@ pub(super) fn claim_outputs(
 }
 
 /// The files a chain reads: the source, the reference with its index, the
-/// plan file, and every file a step reads by name. The same file through a
+/// plan file, the user config file and recipe, and every file a step reads
+/// by name. The same file through a
 /// link or `..` counts as one.
 pub(super) fn inputs_of(read: &Read, steps: &[Planned]) -> Outputs {
     let mut inputs = Outputs::default();
@@ -57,6 +60,7 @@ pub(super) fn inputs_of(read: &Read, steps: &[Planned]) -> Outputs {
         .chain(read.reference)
         .chain(fai.as_deref())
         .chain(read.plan_file)
+        .chain(read.settings.iter().map(PathBuf::as_path))
         .chain(
             steps
                 .iter()

@@ -125,6 +125,36 @@ impl TempDir {
         Ok(path)
     }
 
+    /// A new file name in the directory ending in `.extension`
+    /// (`stem.3.bam`), recorded for removal: a tool that tells a file by
+    /// its name, or finds its index beside it, gets the name it expects.
+    pub fn file_with_extension(&self, stem: &str, extension: &str) -> Result<PathBuf> {
+        let dir = self.create()?;
+        let n = self.next.fetch_add(1, AtomicOrdering::Relaxed);
+        let path = dir.join(format!("{stem}.{n}.{extension}"));
+        self.register(&path)?;
+        Ok(path)
+    }
+
+    /// Record `path`, a file a tool writes in the directory (the index
+    /// beside a file of [`TempDir::file_with_extension`]), for removal. A
+    /// path outside the directory is refused: nothing else is removed.
+    pub fn register(&self, path: &Path) -> Result<()> {
+        let dir = self.create()?;
+        if path.parent() != Some(dir) {
+            return Err(Error::Metric(format!(
+                "{} is not in the temporary directory {}",
+                path.display(),
+                dir.display()
+            )));
+        }
+        crate::cleanup::register(path);
+        if let Ok(mut files) = self.files.lock() {
+            files.push(path.to_path_buf());
+        }
+        Ok(())
+    }
+
     /// A new file in the directory, created for writing and readable by
     /// this user only (mode 0600): spilled read ends and spooled inputs hold
     /// read data, and `TMP_DIR` is often shared.
@@ -703,6 +733,24 @@ impl Spill for u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A named file and the index a tool writes beside it are removed with
+    /// the directory; a path outside it is refused, so nothing else is.
+    #[test]
+    fn a_named_file_and_its_index_go_with_the_directory() {
+        let dir = TempDir::new(None, "test");
+        let bam = dir.file_with_extension("copy", "bam").expect("name");
+        assert!(bam.to_string_lossy().ends_with(".bam"));
+        let index = bam.with_extension("bai");
+        dir.register(&index).expect("inside");
+        fs::write(&bam, b"x").expect("bam");
+        fs::write(&index, b"x").expect("bai");
+        let outside = std::env::temp_dir().join("bammetrics-not-mine.bai");
+        assert!(dir.register(&outside).is_err());
+        let root = dir.path().expect("made").to_path_buf();
+        drop(dir);
+        assert!(!bam.exists() && !index.exists() && !root.exists());
+    }
 
     #[test]
     fn runs_merge_into_one_sorted_stream_and_are_removed() {

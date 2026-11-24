@@ -83,7 +83,7 @@ pub struct Options {
 }
 
 impl Options {
-    fn from_invocation(inv: &Invocation) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation) -> Result<Self> {
         let tag = |name: &str| -> Result<Option<Tag>> {
             match inv.get(name) {
                 None | Some("null") => Ok(None),

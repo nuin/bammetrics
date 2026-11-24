@@ -1,0 +1,11 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+qc
+tests/data/orientation.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (qc): qc takes no input: it reads the metrics files of the taps on its stream (from tests/data/orientation.bam)

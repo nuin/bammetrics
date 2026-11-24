@@ -1,0 +1,11 @@
+## argv
+qc-only
+tests/data/insert_size.bam
+insert-size.minimum-pt=0.1
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: insert-size has no option minimum-pt (from insert-size.minimum-pt=0.1)
+  did you mean insert-size.minimum-pct (Picard MINIMUM_PCT)?
+  every option: bammetrics chain BAM + insert-size --help

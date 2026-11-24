@@ -12,6 +12,7 @@ pub mod also;
 pub mod chain;
 pub mod check;
 pub mod collect;
+pub mod config;
 pub mod convert;
 pub mod discover;
 pub mod doctor;
@@ -234,6 +235,8 @@ pub fn run() -> error::Result<u8> {
                 return Ok(chain::run_plan(&rest[1..])?);
             }
             "plan" if chain::is_chain(rest) => return Ok(chain::run_plan(rest)?),
+            config::VERB => return Ok(config::run(rest)?),
+            chain::recipes::LIST_VERB => return Ok(chain::recipes::run_list(rest)?),
             "tools" => {
                 print!("{}", info::tools(&Cli::command()));
                 return Ok(0);
@@ -250,14 +253,26 @@ pub fn run() -> error::Result<u8> {
                 info::completions(Cli::command(), rest)?;
                 return Ok(0);
             }
+            // After every verb, a recipe's name runs it: `bammetrics prep BAM -o out.bam`.
+            other if !info::CLAP_VERBS.contains(&other) && chain::recipes::exists(other) => {
+                return Ok(chain::recipes::run_shorthand(other, rest)?);
+            }
             other if !other.starts_with('-') && !info::CLAP_VERBS.contains(&other) => {
                 return Err(info::unknown_verb(other).into());
             }
             _ => {}
         }
     }
+    // `qc` and `plan` take `--no-config`, which clap does not list.
+    let (clap_args, no_config) = match args.first().map(String::as_str) {
+        Some("qc" | "plan") => config::strip_no_config(&args),
+        _ => (args.clone(), false),
+    };
+    let program = std::env::args_os()
+        .next()
+        .unwrap_or_else(|| "bammetrics".into());
     let matches = info::command(Cli::command())
-        .try_get_matches_from(std::env::args_os())
+        .try_get_matches_from(std::iter::once(program).chain(clap_args.into_iter().map(Into::into)))
         .and_then(|m| Cli::from_arg_matches(&m));
     let cli = match matches {
         Ok(cli) => cli,
@@ -279,8 +294,14 @@ pub fn run() -> error::Result<u8> {
     match cli.command {
         Command::Report(args) => report::run(args),
         Command::Check(args) => check::run(args),
-        Command::Qc(args) => Ok(engine::run(&args)),
-        Command::Plan(args) => Ok(plan::run(&args)),
+        Command::Qc(mut args) => {
+            qc::reference_from_config(&mut args, "qc", no_config)?;
+            Ok(engine::run(&args))
+        }
+        Command::Plan(mut args) => {
+            qc::reference_from_config(&mut args, "plan", no_config)?;
+            Ok(plan::run(&args))
+        }
         Command::Convert(args) => convert::run(&args),
         Command::Doctor(args) => doctor::run(&args),
     }

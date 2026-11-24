@@ -22,6 +22,14 @@ const OTHER_VERBS: &[(&str, &str)] = &[
         chain::VERB,
         "Several steps on one BAM in one process: BAM + STEP [+ STEP ...], or --plan FILE.",
     ),
+    (
+        "recipes",
+        "List the named chains bammetrics NAME BAM -o OUT runs (prep, qc-only, downsample).",
+    ),
+    (
+        "config",
+        "Print the reference, threads and directories taken from the user config file.",
+    ),
     ("tools", "List the verbs and the Picard class each runs."),
     (
         "presets",
@@ -159,6 +167,8 @@ pub fn command(base: Command) -> Command {
             &chain::global_flags(),
         ));
     command
+        .subcommand(Command::new("recipes").about(about("recipes")))
+        .subcommand(Command::new("config").about(about("config")))
         .subcommand(Command::new("tools").about(about("tools")))
         .subcommand(Command::new("presets").about(about("presets")))
         .subcommand(

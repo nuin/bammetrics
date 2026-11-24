@@ -5,7 +5,7 @@ use bammetrics_core::pass;
 use bammetrics_core::registry::Ty;
 use bammetrics_core::stage;
 
-use super::{STEP, Spec, StepSpec, VERB, WRITE, planfile, usage};
+use super::{STEP, Spec, StepSpec, VERB, WRITE, bare, planfile, recipes, usage};
 use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key, Parsed};
 use crate::verbs::{self, Files, VERBS, Verb, option_lines};
@@ -19,10 +19,14 @@ pub(crate) const DRY_RUN: Key = Key::Own("dry-run");
 pub(crate) const SORT_MEMORY: Key = Key::Own("sort-memory");
 pub(crate) const FORCE_SPACE: Key = Key::Own("force-space");
 pub(crate) const STRINGENCY: Key = Key::Own("validation-stringency");
+pub(crate) const RECIPE: Key = Key::Own("recipe");
+pub(crate) const RESUME: Key = Key::Own("resume");
 const LOWER: Key = Key::Own("lower");
 const FREE_SPACE: Key = Key::Own("free-space");
 /// A transform's `--as NAME`.
 pub(crate) const AS: Key = Key::Own("as");
+/// A transform's `--keep`: its stream as `PREFIX.<stream>.bam`.
+pub(crate) const KEEP: Key = Key::Own("keep");
 /// The options of `write`.
 pub(crate) const INDEX: Key = Key::Own("index");
 pub(crate) const MD5: Key = Key::Own("md5");
@@ -155,6 +159,16 @@ pub fn global_flags() -> Vec<Flag> {
         .names(&["VALIDATION_STRINGENCY"])
         .placeholder("LEVEL"),
         Flag::new(
+            RESUME,
+            "resume",
+            &[],
+            Ty::Bool,
+            "Skip each step whose record in PREFIX.manifest.json matches (verb, options, input \
+             and output fingerprints) and whose upstream steps are skipped too; the read \
+             starts at a kept stream (--keep) or at the BAM a skipped write step wrote (-o \
+             out.bam), in place of the source. Writes the manifest.",
+        ),
+        Flag::new(
             PLAN,
             "plan",
             &[],
@@ -163,6 +177,16 @@ pub fn global_flags() -> Vec<Flag> {
              (docs/chaining.md). An option given here replaces the file's.",
         )
         .placeholder("FILE"),
+        Flag::new(
+            RECIPE,
+            "recipe",
+            &[],
+            Ty::Text,
+            "Run a named chain (bammetrics recipes lists them): its steps in place of the \
+             command line's. STEP.option=value sets an option of one of its steps; a last qc \
+             step may follow.",
+        )
+        .placeholder("NAME"),
         Flag::new(
             DRY_RUN,
             "dry-run",
@@ -192,7 +216,7 @@ pub fn global_flags() -> Vec<Flag> {
 /// The flags the parser takes in front of the first `+`: the documented
 /// ones, `--no-lower`, which the measurements of docs/chaining.md use, and
 /// `--free-space`, which the tests of the free-space refusal use.
-fn parser_flags() -> Vec<Flag> {
+pub(crate) fn parser_flags() -> Vec<Flag> {
     let mut flags = global_flags();
     flags.push(
         Flag::new(
@@ -268,10 +292,35 @@ pub(crate) fn is_transform(verb: &Verb) -> bool {
     stage::stage_of(verb.tool()).is_some()
 }
 
-/// True for a verb that can be a step: a transform, a split or a one-pass
-/// tool.
+/// True for a verb that can be a step: a transform, a split, a one-pass
+/// tool, or a tool that runs on a file of its stream (materialize).
 pub(crate) fn is_step(verb: &Verb) -> bool {
-    is_transform(verb) || is_split(verb) || verb.tool().collector.is_some()
+    is_transform(verb) || is_split(verb) || verb.tool().collector.is_some() || is_materialized(verb)
+}
+
+/// True for a verb whose tool runs on a file holding the stream at its
+/// position (docs/07 section 2.3, the materialize fallback).
+pub(crate) fn is_materialized(verb: &Verb) -> bool {
+    stage::materialize::materializes(verb.tool())
+}
+
+/// True for a materialized verb that takes files after the stream:
+/// `--input FILE` (or a file after the verb) is a further `INPUT`
+/// (`merge-sam-files`, `gather-bam-files`, `jumping-library`).
+pub(crate) fn takes_further_inputs(verb: &Verb) -> bool {
+    stage::materialize::row_of(verb.tool()).is_some_and(|row| row.several_inputs)
+}
+
+/// True when `key`, given on a step of `verb`, belongs to the chain. The
+/// input of a step that takes further inputs is its own.
+pub(crate) fn is_chain_key(verb: Option<&Verb>, key: Key) -> bool {
+    CHAIN_KEYS.contains(&key) && !(key == Key::Input && verb.is_some_and(takes_further_inputs))
+}
+
+/// True for a materialized verb that writes a BAM, which is the next
+/// stream (`merge-sam-files`).
+pub(crate) fn materialize_leaves(verb: &Verb) -> bool {
+    stage::materialize::leaves(verb.tool()).is_some()
 }
 
 /// True for a split tool: a step that writes the records of its position
@@ -285,8 +334,7 @@ pub(crate) fn is_split(verb: &Verb) -> bool {
 /// hint, the one that lists the steps.
 ///
 /// `build-bam-index` names the `write --index` that does its work in a
-/// chain, `view-sam` the `write - --output-format sam` that prints the
-/// stream. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
+/// chain. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
 /// two commands, and the steps of a chain hand records on in memory, so no
 /// later wave makes it a step.
 pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
@@ -311,28 +359,6 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
              ... + write out.bam --index",
         );
     }
-    if verb.class == bammetrics_core::view_sam::TOOL.name {
-        return usage(format!(
-            "{place}: {} prints the records of a file as SAM text and a chain hands records to \
-             write: it cannot be a step",
-            verb.class
-        ))
-        .hint(
-            "write - --output-format sam prints the stream as SAM text: bammetrics chain BAM + \
-             ... + write - --output-format sam",
-        );
-    }
-    if verb.class == bammetrics_core::merge_sam_files::TOOL.name {
-        return usage(format!(
-            "{place}: {} merges several INPUT files and a chain reads one source: it cannot be \
-             a step",
-            verb.class
-        ))
-        .hint(
-            "merge the files first, then chain the merged BAM; wave W14 of docs/07 adds steps \
-             that read more than the stream",
-        );
-    }
     if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {
         return usage(format!(
             "{place}: {} reads a {} file and no BAM, and a chain hands on the records of a BAM: \
@@ -345,10 +371,14 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
         ));
     }
     usage(format!(
-        "{place}: {} has no stage and does not read a BAM in one pass: it cannot be a step",
+        "{place}: {} reads no BAM, and a chain hands on the records of a BAM: it cannot be a \
+         step",
         verb.class
     ))
-    .hint("wave W14 of docs/07 runs such a tool on a spooled copy of the stream")
+    .hint(format!(
+        "run it on its own: bammetrics {} --help",
+        verb.name
+    ))
 }
 
 /// The flags the parser takes for a step of `verb`: the verb's own, plus
@@ -356,8 +386,10 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
 /// one given on a step says where it belongs.
 pub(crate) fn step_parser_flags(verb: &Verb) -> Vec<Flag> {
     let mut flags = verb.flags();
-    if is_transform(verb) {
-        let default = stage::label_of(verb.tool()).unwrap_or_default();
+    if is_transform(verb) || materialize_leaves(verb) {
+        let default = stage::label_of(verb.tool())
+            .or_else(|| stage::materialize::leaves(verb.tool()))
+            .unwrap_or_default();
         flags.push(
             Flag::new(
                 AS,
@@ -371,6 +403,15 @@ pub(crate) fn step_parser_flags(verb: &Verb) -> Vec<Flag> {
             )
             .placeholder("NAME"),
         );
+        flags.push(Flag::new(
+            KEEP,
+            "keep",
+            &[],
+            Ty::Bool,
+            "Also write the stream this step leaves as PREFIX.<stream>.bam, with its .bai when \
+             coordinate sorted, and record it in PREFIX.manifest.json: chain --resume reads it \
+             in place of the source.",
+        ));
     }
     flags
 }
@@ -422,16 +463,23 @@ pub(crate) fn chain_option_on_step(error: &VerbError, place: &str) -> Option<Ver
 pub fn step_flags(verb: &Verb) -> Vec<Flag> {
     let mut flags: Vec<Flag> = step_parser_flags(verb)
         .into_iter()
-        .filter(|flag| !CHAIN_KEYS.contains(&flag.key))
-        .filter(|flag| !(verb.files == Files::Bam && flag.key == Key::Output && !is_split(verb)))
+        .filter(|flag| !is_chain_key(Some(verb), flag.key))
+        .filter(|flag| {
+            let own_file = is_split(verb) || (is_materialized(verb) && !materialize_leaves(verb));
+            !(verb.files == Files::Bam && flag.key == Key::Output && !own_file)
+        })
         .collect();
     for flag in &mut flags {
         match (flag.key, verb.files) {
+            (Key::Input, _) => {
+                "A further input after the stream, the first INPUT; repeat for more."
+                    .clone_into(&mut flag.help);
+            }
             (Key::Output, _) if is_split(verb) => {
                 "The directory this step writes its files into; made when missing."
                     .clone_into(&mut flag.help);
             }
-            (Key::Output, Files::Single) => {
+            (Key::Output, Files::Single) | (Key::Output, Files::Bam) => {
                 flag.help = format!(
                     "The {} of this step; - writes standard output. Without one the chain's \
                      prefix names it.",
@@ -465,32 +513,67 @@ fn step_names(wanted: fn(&Verb) -> bool) -> String {
 
 /// `bammetrics chain --help`.
 pub fn help() -> String {
-    let taps = |verb: &Verb| is_step(verb) && !is_transform(verb) && !is_split(verb);
+    let taps = |verb: &Verb| {
+        is_step(verb) && !is_transform(verb) && !is_split(verb) && !is_materialized(verb)
+    };
     let mut text = format!(
         "bammetrics chain: several steps on one BAM in one process. Records move from step \
          to step in memory: no pipe, no intermediate file.\n\n\
          Usage: {USAGE}\n       \
-         bammetrics chain --plan FILE [OPTIONS] [BAM]\n\n\
-         Every + starts a step. A step sees the records the step before it emits.\n  \
+         bammetrics chain [OPTIONS] BAM STEP [STEP OPTIONS] [STEP ...] [OPTIONS]\n       \
+         bammetrics chain --plan FILE [OPTIONS] [BAM]\n       \
+         bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...] [qc [QC \
+         OPTIONS]]\n\n\
+         Every + starts a step; so does a bare word that names a step verb (bammetrics \
+         chain BAM mark-duplicates insert-size -o out.bam). The chain's options go in front \
+         of the first step or after the last. After the last bare step, -o, -R, --threads, \
+         --format and --tmp-dir are the chain's (write without a path and a split keep their \
+         -o; qc keeps --preset, --report and its --also); in the middle, a step's own -o, -R \
+         and --format are its own. A file after merge-sam-files, gather-bam-files or \
+         jumping-library is a further input of that step. A step sees the records the step \
+         before it emits.\n  \
          transform  changes the records later steps see: {}\n  \
          tap        reads the records of its position, changes nothing: {}\n  \
          write      write [PATH] writes the records of its position as a BAM\n  \
-         split      writes the records of its position over BAMs in its -o DIR: {}\n\n\
+         split      writes the records of its position over BAMs in its -o DIR: {}\n  \
+         materialize runs on a file of the records of its position (the source itself, or a \
+         copy in the temporary directory): {}\n  \
+         qc         the last step: the verdict and report over the taps of its stream, \
+         as bammetrics qc writes them; it adds the taps its --preset needs\n\n\
          A step takes its verb's own options in every spelling (--minimum-pct 0.1, \
          --MINIMUM_PCT 0.1, MINIMUM_PCT=0.1); bammetrics chain BAM + VERB --help lists them. \
          A value that is a lone + is written --option=+.\n\n\
          Files: a tap on the last stream writes PREFIX.<extension>, the names qc writes; a \
          tap in front of a transform writes PREFIX.<stream>.<extension> (PREFIX.in.* on the \
          source); mark-duplicates writes PREFIX.marked.duplication_metrics; write without a \
-         path writes PREFIX.<stream>.bam. A step's own -o replaces the name.\n\n\
+         path writes PREFIX.<stream>.bam. A step's own -o replaces the name. -o out.bam on \
+         a chain that changes the records (a transform, merge-sam-files) and has no write \
+         adds write out.bam --index as the last step, in front of qc, and names the metrics \
+         out.<extension>. --keep on such a step writes PREFIX.<stream>.bam; --resume reads \
+         PREFIX.manifest.json, skips the steps it proves done, and starts its read at a kept \
+         stream or at the BAM a skipped write step wrote.\n\n\
+         Defaults: -R, --threads, --tmp-dir and --sort-memory come from the user config file \
+         when not given, -R also from BAMMETRICS_REFERENCE (bammetrics config prints them); \
+         reorder-sam's dictionary from the reference's .dict, else its .fai.\n\n\
          Exit 0 when every step finished; 1 when a step failed (a tap fails alone, a \
          transform or write stops its segment; the summary says which); 2 for a usage \
          error, found before the first read.\n\nOptions:\n",
         step_names(is_transform),
         step_names(taps),
         step_names(is_split),
+        step_names(is_materialized),
     );
-    text.push_str(&option_lines(&global_flags()));
+    // `--no-config` is taken out before the parser sees the arguments
+    // (`crate::config::strip_no_config`); it is listed with the others.
+    let mut listed = global_flags();
+    listed.push(Flag::new(
+        Key::Own("no-config"),
+        "no-config",
+        &[],
+        Ty::Bool,
+        "Leave the user config file unread (bammetrics config prints what it gives).",
+    ));
+    text.push_str(&option_lines(&listed));
     text.push_str("\nOptions of write:\n");
     text.push_str(&option_lines(&write_flags()));
     text
@@ -499,6 +582,9 @@ pub fn help() -> String {
 /// The help of step `number`: `write`, or a tool verb as a step. A verb
 /// that cannot be a step gets the refusal a run gives it.
 pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
+    if name == super::QC {
+        return Ok(super::qc_step::help());
+    }
     if name == WRITE {
         return Ok(format!(
             "bammetrics chain ... + write [PATH] [OPTIONS]: the records of its position as a \
@@ -515,6 +601,12 @@ pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
     let tool = verb.tool();
     let kind = if is_transform(verb) {
         "a transform: later steps see the records it emits"
+    } else if materialize_leaves(verb) {
+        "materialize: it runs on a file of the records of its position, and later steps see \
+         the BAM it writes"
+    } else if is_materialized(verb) {
+        "materialize: it runs on a file of the records of its position (the source itself, \
+         or a copy in the temporary directory) and changes nothing"
     } else if is_split(verb) {
         "a split: it writes the records of its position over BAMs in its -o DIR, renamed \
          into place when the stream ends"
@@ -548,7 +640,7 @@ pub(crate) fn unknown_step(name: &str, label: Option<&str>) -> VerbError {
     let candidates = VERBS
         .iter()
         .flat_map(|verb| [verb.name, verb.class])
-        .chain([WRITE]);
+        .chain([WRITE, super::QC]);
     let mut error = usage(what);
     if let Some(best) = bammetrics_core::registry::did_you_mean(name, candidates) {
         error = error.hint(format!("did you mean {best}?"));
@@ -611,6 +703,7 @@ fn apply_globals(parsed: &Parsed, spec: &mut Spec) -> Result<(), VerbError> {
         (Key::Verbose, &mut spec.verbose, true),
         (LOWER, &mut spec.stage_executor, false),
         (FORCE_SPACE, &mut spec.force_space, true),
+        (RESUME, &mut spec.resume, true),
     ];
     for (key, slot, when) in flags {
         if parsed.last(key).is_some() {
@@ -642,27 +735,110 @@ fn steps(segments: &[&[String]]) -> Result<Vec<StepSpec>, VerbError> {
         .collect()
 }
 
-/// The report options of `report` and `qc`. A chain has no verdict and no
-/// report step until wave W14 of docs/07 (`chain ... + qc`).
+/// The report options of `report` and `qc`. A chain writes its verdict
+/// and report in its last step, `qc` (docs/chaining.md section 29).
 const REPORT_OPTIONS: [&str; 5] = ["report", "pdf", "pdf-only", "pdf-font", "page-size"];
 
 /// An unknown chain option that is one of [`REPORT_OPTIONS`]: the refusal
-/// that says why and what writes the report. Any other error as it is.
+/// that names the qc step; `--keep`: the refusal that names the transform
+/// step. Any other error as it is.
 fn no_report_step(error: VerbError) -> VerbError {
     let Some(spelled) = grammar::unknown_option(&error) else {
         return error;
     };
     let name = spelled.trim_start_matches('-').split('=').next();
+    if name.is_some_and(|name| name.eq_ignore_ascii_case("keep")) {
+        return usage("--keep belongs to a transform step: give it after the verb")
+            .from(spelled)
+            .hint("bammetrics chain BAM -o PREFIX + mark-duplicates --keep + insert-size");
+    }
     if !name.is_some_and(|name| REPORT_OPTIONS.contains(&name)) {
         return error;
     }
-    usage("a chain writes no verdict or report; its report step comes with wave W14 of docs/07")
+    usage("a chain writes its verdict and report in its last step, qc: give the option there")
         .from(spelled)
+        .hint("bammetrics chain BAM + STEP ... + qc --report html,pdf")
         .hint("bammetrics report DIR --pdf writes them for the metrics files a chain wrote to DIR")
+}
+
+/// The recipe `--recipe NAME` names, with the `STEP.option=value` words
+/// applied: its name, whether `-o` must name its BAM, and its chain. A
+/// recipe gives the steps, so it takes no `--plan` and no step on the
+/// command line but a last `qc`, which is added to its steps; a
+/// `STEP.option=value` word without a recipe is refused.
+fn recipe_spec(
+    parsed: &Parsed,
+    steps: &[StepSpec],
+    overrides: &[(String, recipes::Override)],
+) -> Result<Option<(String, bool, Spec)>, VerbError> {
+    let Some(given) = parsed.last(RECIPE) else {
+        if let Some((word, _)) = overrides.first() {
+            return Err(usage(format!(
+                "{word} sets an option of a recipe's step, and no recipe is named"
+            ))
+            .from(word.clone())
+            .hint("bammetrics chain BAM --recipe NAME STEP.option=value; on a step: STEP --option VALUE"));
+        }
+        return Ok(None);
+    };
+    let named: Vec<&str> = parsed
+        .all(RECIPE)
+        .map(|given| given.values[0].as_str())
+        .collect();
+    if let [first, .., last] = named.as_slice() {
+        return Err(
+            usage(format!("--recipe is given twice: {first} and {last}"))
+                .from(given.spelled.clone())
+                .hint("a chain runs one recipe"),
+        );
+    }
+    if let Some(plan) = parsed.last(PLAN) {
+        return Err(
+            usage(format!("{} and --recipe both give the steps", plan.spelled))
+                .from(plan.spelled.clone()),
+        );
+    }
+    // One step may follow a recipe: `qc`, the last step of any chain, which
+    // reads the metrics files the recipe's taps write.
+    let added = match steps {
+        [] => None,
+        [qc] if qc.verb == super::QC => Some(qc),
+        _ => {
+            return Err(usage(format!(
+                "--recipe {} gives the steps: a step on the command line cannot be added",
+                given.values[0]
+            ))
+            .from(given.spelled.clone())
+            .hint(
+                "STEP.option=value sets an option of a recipe's step: bammetrics recipes lists \
+                 them",
+            )
+            .hint("a last qc step may follow a recipe: bammetrics NAME BAM -o OUT qc --preset P"));
+        }
+    };
+    let (recipe, mut spec) = recipes::load(&given.values[0], overrides)?;
+    if let Some(qc) = added {
+        if spec.steps.last().is_some_and(|last| last.verb == super::QC) {
+            return Err(usage(format!(
+                "recipe {} ends in a qc step: a second one cannot follow it",
+                recipe.name
+            ))
+            .from(super::QC)
+            .hint(format!(
+                "qc.option=value sets an option of the recipe's qc step: bammetrics {} --help",
+                recipe.name
+            )));
+        }
+        spec.steps.push(qc.clone());
+    }
+    Ok(Some((recipe.name.clone(), recipe.output_bam, spec)))
 }
 
 /// Parse the arguments after `chain`.
 pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
+    let (args, no_config) = crate::config::strip_no_config(args);
+    let (args, overrides) = recipes::take_overrides(&args)?;
+    let args = bare::with_plus(&args)?;
     let mut segments = args.split(|arg| arg == STEP);
     let head = segments.next().unwrap_or_default();
     let rest: Vec<&[String]> = segments.collect();
@@ -675,6 +851,7 @@ pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
     if let Some(index) = steps.iter().position(wants_help) {
         return step_help(&steps[index].verb, index + 1).map(Asked::Help);
     }
+    let recipe = recipe_spec(&parsed, &steps, &overrides)?;
     let mut spec = match parsed.last(PLAN) {
         None => Spec::default(),
         Some(given) if !steps.is_empty() => {
@@ -690,7 +867,12 @@ pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
     if parsed.last(PLAN).is_none() {
         spec.steps = steps;
     }
+    if let Some((name, output_bam, recipe)) = recipe {
+        spec = recipe;
+        spec.recipe_bam = output_bam.then_some(name);
+    }
     apply_globals(&parsed, &mut spec)?;
+    spec.no_config = no_config;
     Ok(Asked::Chain {
         spec: Box::new(spec),
         dry_run: parsed.flag(DRY_RUN),

@@ -1,0 +1,12 @@
+## argv
+prep
+tests/data/oxog.bam
+-o
+OUT/x.bam
+mark-duplicates.remove-duplicates
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: mark-duplicates.remove-duplicates sets an option: it needs =VALUE (from mark-duplicates.remove-duplicates)
+  mark-duplicates.remove-duplicates=VALUE

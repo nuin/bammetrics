@@ -1115,3 +1115,122 @@ argv = [
 needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
 max_rss_mib = 1024
 max_seconds = 600
+
+[[command]]
+name = "chain short form reorder-sam insert-size -o r.bam"
+argv = [
+    "{bin}", "chain", "tests/data/insert_size.bam", "reorder-sam", "insert-size",
+    "-R", "tests/data/ref_100k.fa", "--no-config", "-o", "{out}/r.bam",
+]
+needs = ["tests/data/insert_size.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "recipe prep"
+argv = ["{bin}", "prep", "tests/data/oxog.bam", "--no-config", "-o", "{out}/p.bam"]
+needs = ["tests/data/oxog.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+# Wave W14, the materialize fallback (docs/chaining.md section 31): a tool with neither a
+# stage nor a collector runs on a copy of its stream in the chain's temporary directory
+# (the spill_dir), then on the source itself; a tool that writes a BAM hands it on.
+[[command]]
+name = "chain materialize taps"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/s", "--tmp-dir", "{out}/tmp",
+    "+", "add-comments-to-bam", "--comment", "c", "+", "wgs", "-R", "tests/data/ref_100k.fa",
+    "+", "library-complexity", "+", "bam-index-stats", "+", "umi-prevalence",
+]
+needs = ["tests/data/markdup.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+max_spill_mib = 16
+
+[[command]]
+name = "chain materialize merge"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/s", "--tmp-dir", "{out}/tmp",
+    "+", "add-comments-to-bam", "--comment", "c", "+", "merge-sam-files",
+    "tests/data/oxog.bam", "+", "insert-size", "+", "write", "{out}/merged.bam", "--index",
+]
+needs = ["tests/data/markdup.bam", "tests/data/oxog.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+max_spill_mib = 16
+
+[[command]]
+name = "chain materialize slice"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o", "{out}/s",
+    "--tmp-dir", "{out}/tmp", "+", "add-comments-to-bam", "--comment", "c", "+",
+    "bam-index-stats", "+", "merge-sam-files", "+", "insert-size",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+max_seconds = 600
+spill_dir = "{out}/tmp"
+max_spill_mib = 2048
+
+# 0.32.0, manifest 2 and the three branches together (docs/chaining.md sections 27 to 30
+# and 32): a chain that keeps a stream and ends in qc; the short form run, then resumed
+# with another option of its tap, which reads the BAM the first run wrote; the prep
+# recipe with a last qc step; the qc step's CollectWgsMetrics on a copy of the stream.
+[[command]]
+name = "chain keep + qc"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "--no-config", "-o", "{out}/s", "--resume",
+    "+", "mark-duplicates", "--keep", "+", "insert-size", "+", "qc", "--preset", "generic",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "chain short form resumed from r.bam"
+argv = [
+    "sh", "-c",
+    "{bin} chain tests/data/insert_size.bam reorder-sam insert-size -R tests/data/ref_100k.fa --no-config -q -o {out}/r.bam --resume && {bin} chain tests/data/insert_size.bam reorder-sam insert-size --minimum-pct 0.2 -R tests/data/ref_100k.fa --no-config -o {out}/r.bam --resume",
+]
+needs = ["tests/data/insert_size.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "recipe prep qc"
+argv = [
+    "{bin}", "prep", "tests/data/oxog.bam", "--no-config", "-o", "{out}/p.bam",
+    "qc", "--preset", "generic", "--fail-on", "fail",
+]
+needs = ["tests/data/oxog.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "chain qc wgs materialized"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-R", "tests/data/ref_100k.fa", "--no-config",
+    "--tmp-dir", "{out}/tmp", "mark-duplicates", "qc", "--preset", "wgs", "-o", "{out}/w",
+]
+needs = ["tests/data/markdup.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+max_spill_mib = 16
+
+[[command]]
+name = "chain short form resumed slice"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "{bin} chain ~/data/bammetrics-scale/waves/w03/chr20_21_22.bam mark-duplicates insert-size --no-config -q --tmp-dir {out}/tmp -o {out}/s.bam --resume && {bin} chain ~/data/bammetrics-scale/waves/w03/chr20_21_22.bam mark-duplicates insert-size --minimum-pct 0.2 --no-config --tmp-dir {out}/tmp -o {out}/s.bam --resume",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 2048
+max_seconds = 600
+spill_dir = "{out}/tmp"
+max_spill_mib = 2048

@@ -1,0 +1,12 @@
+## argv
+chain
+--plan
+tests/data/chain_keep_on_tap.toml
+-o
+OUT/s
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: tests/data/chain_keep_on_tap.toml:8: step 1 (insert-size): --keep writes the stream a transform leaves, and insert-size leaves none
+  write [PATH] writes the records at its position as a BAM

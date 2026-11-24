@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
+mark-duplicates
+qc
+--index
+-o
+OUT/r.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (qc): --index is an option of write (from --index)
+  -o OUT.bam adds write OUT.bam --index in front of qc; for --index, name the step there: ... write OUT.bam --index qc

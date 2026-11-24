@@ -1,0 +1,15 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+multiple-metrics
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (multiple-metrics) and step 2 (insert-size) both write OUT/s.insert_size_metrics: every output of a chain needs its own file
+  a step's own -o names another file (bammetrics chain --help)

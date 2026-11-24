@@ -1,0 +1,22 @@
+## argv
+prep
+--help
+## exit
+0
+## stdout
+bammetrics prep: fix mates, mark duplicates, sort by coordinate, the BAM indexed, qc's generic metrics (recipe, shipped)
+
+Usage: bammetrics prep BAM -o OUT.bam [OPTIONS] [STEP.option=value ...] [qc [QC OPTIONS]]
+       bammetrics chain BAM --recipe prep -o OUT.bam [OPTIONS] [STEP.option=value ...] [qc [QC OPTIONS]]
+
+Steps:
+   1  fix-mate-information
+   2  mark-duplicates
+   3  sort-sam --sort-order=coordinate
+   4  quality-yield
+   5  alignment-summary
+   6  insert-size
+   7  duplicate-metrics
+
+STEP.option=value sets an option of a step, replacing the recipe's value. A last qc step adds the verdict and the report over the recipe's metrics (qc --preset generic --fail-on fail); no other step can be added. --resume skips the steps PREFIX.manifest.json proves done. The chain's options (-R, --threads, --format, --also, --dry-run, ...): bammetrics chain --help. docs/chaining.md, "Recipes".
+## stderr

@@ -53,6 +53,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("PLAN_TAPS", "tests/data/chain_taps.toml"),
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
     ("PLAN_SELF", "tests/data/chain_writes_plan.toml"),
+    ("PLAN_KEEP_TAP", "tests/data/chain_keep_on_tap.toml"),
     ("MD_SAM", "tests/data/markdup.sam"),
     ("MT", "tests/data/mt_copy_number.bam"),
     ("MT_TARGETS", "tests/data/mt_targets.bed"),
@@ -120,23 +121,33 @@ struct Case {
     /// Run with `TZ=UTC`: for a tool that prints dates in the zone of the
     /// process.
     utc: bool,
+    /// The text of `OUT/bammetrics/config.toml`, the user config file of
+    /// the run (`ROOT/` reads the repository root).
+    config: Option<&'static str>,
 }
 
 macro_rules! case {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: false }
+        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: false, config: None }
+    };
+}
+
+/// A case run with a user config file of the given text.
+macro_rules! case_config {
+    ($name:literal, $config:expr, $($arg:expr),+ $(,)?) => {
+        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: false, config: Some($config) }
     };
 }
 
 macro_rules! case_in_out {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+], in_out: true, utc: false }
+        Case { name: $name, argv: &[$($arg),+], in_out: true, utc: false, config: None }
     };
 }
 
 macro_rules! case_utc {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: true }
+        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: true, config: None }
     };
 }
 
@@ -613,10 +624,9 @@ const CHAIN_CASES: &[Case] = &[
     case!("chain_two_mark_duplicates", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "quality-yield", "+", "mark-duplicates"),
     case!("error_chain_one_file_twice", "chain", "IS", "-o", "OUT/s", "+", "insert-size", "+", "insert-size"),
     case!("error_chain_overwrites_input", "chain", "MD", "+", "mark-duplicates", "+", "write", "MD"),
-    case!("error_chain_not_a_step", "chain", "IS", "+", "wgs"),
+    case!("error_chain_not_a_step", "chain", "IS", "+", "non-n-fasta-size"),
     case!("error_chain_fifo_buffer", "chain", "MD", "+", "mark-duplicates", "+", "fifo-buffer", "--buffer-size", "1024", "+", "write", "-"),
     case!("error_chain_build_bam_index", "chain", "MD", "+", "mark-duplicates", "+", "build-bam-index", "+", "write", "OUT/marked.bam"),
-    case!("error_chain_view_sam", "chain", "MD", "+", "sort-sam", "--sort-order", "queryname", "+", "view-sam"),
     case!("error_chain_bad_number", "chain", "IS", "+", "insert-size", "--minimum-pct", "abc"),
     case!("error_chain_step_input", "chain", "IS", "+", "insert-size", "OR"),
     case!("error_chain_step_threads", "chain", "IS", "+", "insert-size", "--threads", "2"),
@@ -684,6 +694,84 @@ const CHAIN_CASES: &[Case] = &[
     case!("chain_two_barriers", "chain", "MD", "-o", "OUT/s", "+", "sort-sam", "--sort-order", "queryname", "+", "mark-duplicates", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "sort-sam", "--sort-order", "coordinate", "+", "write", "OUT/out.bam", "--index"),
     case!("chain_dry_run_two_barriers", "chain", "MD", "-o", "OUT/s", "--sort-memory", "4K", "--dry-run", "+", "sort-sam", "--sort-order", "queryname", "+", "mark-duplicates", "+", "sort-sam", "--sort-order", "coordinate", "+", "write", "OUT/out.bam", "--index"),
     case!("error_chain_free_space", "chain", "MD", "-o", "OUT/s", "--free-space", "100", "+", "sort-sam", "-SO", "queryname", "+", "write"),
+];
+
+/// Manifest 2, kept streams and qc as the last step (W14, docs/chaining.md
+/// sections 27 to 29): single runs, the plan text and every new error.
+#[rustfmt::skip]
+const CHAIN_MANIFEST_CASES: &[Case] = &[
+    case!("chain_keep", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--keep", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "insert-size"),
+    case!("chain_keep_queryname", "chain", "MD", "-o", "OUT/s", "+", "sort-sam", "--sort-order", "queryname", "--keep", "+", "quality-yield"),
+    case!("chain_resume_first_run", "chain", "MD", "-o", "OUT/s", "--resume", "+", "quality-yield", "+", "mark-duplicates", "+", "insert-size"),
+    case!("chain_qc_step", "chain", "IS", "-o", "OUT/sample", "+", "insert-size", "+", "qc", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("chain_qc_step_transform", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "qc", "--date", "2026-01-01 00:00:00 UTC", "--also", "junit,markdown", "--fail-on", "warn"),
+    case!("chain_qc_step_wgs", "chain", "IS", "-R", "REF", "-o", "OUT/s", "+", "qc", "--preset", "wgs", "--date", "2026-01-01 00:00:00 UTC"),
+    case!("chain_qc_step_wgs_kept", "chain", "MD", "-R", "REF", "-o", "OUT/s", "+", "mark-duplicates", "--keep", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "qc", "--preset", "wgs", "--date", "2026-01-01 00:00:00 UTC"),
+    case!("chain_dry_run_qc", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "mark-duplicates", "+", "insert-size", "+", "qc", "--preset", "wgs"),
+    case!("plan_chain_keep", "plan", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--keep", "+", "sort-sam", "-SO", "queryname", "--keep", "+", "write"),
+    case!("chain_qc_step_help", "chain", "IS", "+", "qc", "--help"),
+    case!("error_chain_resume_stdin", "chain", "-", "--resume", "+", "insert-size"),
+    case!("error_chain_keep_on_tap", "chain", "MD", "+", "insert-size", "--keep"),
+    case!("error_chain_keep_and_write", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--keep", "+", "write"),
+    case!("error_chain_keep_on_chain", "chain", "MD", "-o", "OUT/s", "--keep", "+", "mark-duplicates"),
+    case!("error_chain_plan_keep_on_tap", "chain", "--plan", "PLAN_KEEP_TAP", "-o", "OUT/s"),
+    case!("chain_dry_run_qc_hs", "chain", "IS", "-R", "REF", "-o", "OUT/s", "--dry-run", "+", "hs-metrics", "--bait-intervals", "IL", "--target-intervals", "IL", "+", "qc", "--preset", "clinical-panel"),
+    case!("error_chain_qc_not_last", "chain", "IS", "+", "qc", "+", "insert-size"),
+    case!("error_chain_qc_also_json", "chain", "IS", "+", "qc", "--also", "json"),
+    case!("error_chain_qc_preset", "chain", "IS", "+", "qc", "--preset", "nope"),
+    case!("error_chain_qc_output", "chain", "IS", "+", "qc", "-o", "OUT/s"),
+    case!("error_chain_qc_input", "chain", "IS", "+", "qc", "OR"),
+    case!("error_chain_qc_strand", "chain", "IS", "+", "qc", "--strand", "NONE"),
+];
+
+/// Commands recorded after earlier commands ran in the same output
+/// directory: `chain --resume` against the manifest of the run before.
+struct Sequence {
+    name: &'static str,
+    /// The commands run first, unrecorded.
+    before: &'static [&'static [&'static str]],
+    argv: &'static [&'static str],
+}
+
+/// The gate of docs/07 W14: five steps, step 2 keeps its stream; the same
+/// chain again skips every step; a changed option of step 3 reruns steps
+/// 3, 4 and 5 and reads the kept stream of step 2.
+const RESUME_FIRST: &[&str] = &[
+    "chain",
+    "MD",
+    "-o",
+    "OUT/s",
+    "--resume",
+    "+",
+    "quality-yield",
+    "+",
+    "mark-duplicates",
+    "--keep",
+    "--program-group-command-line",
+    "pinned",
+    "--program-group-version",
+    "pinned",
+    "+",
+    "sort-sam",
+    "-SO",
+    "queryname",
+    "--max-records-in-ram",
+    "5",
+    "+",
+    "insert-size",
+    "+",
+    "write",
+];
+
+#[rustfmt::skip]
+const RESUME_CASES: &[Sequence] = &[
+    Sequence { name: "chain_resume_skips", before: &[RESUME_FIRST], argv: RESUME_FIRST },
+    Sequence { name: "chain_resume_option_change", before: &[RESUME_FIRST], argv: &["chain", "MD", "-o", "OUT/s", "--resume", "+", "quality-yield", "+", "mark-duplicates", "--keep", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "sort-sam", "-SO", "queryname", "--max-records-in-ram", "7", "+", "insert-size", "+", "write"] },
+    Sequence { name: "plan_chain_resume_option_change", before: &[RESUME_FIRST], argv: &["plan", "MD", "-o", "OUT/s", "--resume", "+", "quality-yield", "+", "mark-duplicates", "--keep", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "sort-sam", "-SO", "queryname", "--max-records-in-ram", "7", "+", "insert-size", "+", "write"] },
+    Sequence { name: "chain_resume_qc", before: &[&["chain", "IS", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "qc", "--date", "2026-01-01 00:00:00 UTC"]], argv: &["chain", "IS", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "qc", "--date", "2026-01-01 00:00:00 UTC"] },
+    Sequence { name: "chain_resume_removes_stale", before: &[&["chain", "MD", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "quality-yield", "+", "write", "OUT/out.bam", "--index"]], argv: &["chain", "MD", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "write", "OUT/out.bam"] },
+    Sequence { name: "chain_resume_leaves_a_write", before: &[&["chain", "MD", "-o", "OUT/s", "--resume", "+", "mark-duplicates", "+", "write", "OUT/deliver/final.bam", "--index", "+", "insert-size"]], argv: &["chain", "MD", "-o", "OUT/s", "--resume", "+", "mark-duplicates", "+", "insert-size"] },
+    Sequence { name: "chain_resume_qc_manifest", before: &[&["qc", "IS", "-o", "OUT/s", "--date", "2026-01-01 00:00:00 UTC"]], argv: &["chain", "IS", "-o", "OUT/s", "--resume", "+", "insert-size"] },
 ];
 
 /// The record-editing tools (`crates/core/src/record_edit.rs`): the Picard
@@ -827,8 +915,6 @@ const GATHER_CHECKSUM_CASES: &[Case] = &[
     case!("verb_calculate_read_group_checksum_sam", "calculate-read-group-checksum", "MD_SAM", "-o", "OUT/markdup.md5", "--validation-stringency", "SILENT"),
     case!("error_calculate_read_group_checksum_input_output", "CalculateReadGroupChecksum", "I=OXOG", "O=OXOG"),
     case!("error_calculate_read_group_checksum_missing", "CalculateReadGroupChecksum", "I=tests/data/nope.bam", "O=OUT/x.md5"),
-    case!("error_chain_gather_bam_files", "chain", "MD", "-o", "OUT/s", "+", "gather-bam-files"),
-    case!("error_chain_calculate_read_group_checksum", "chain", "MD", "-o", "OUT/s", "+", "calculate-read-group-checksum"),
 ];
 
 /// `CollectQualityYieldMetricsSNVQ` and `CollectUmiPrevalenceMetrics`
@@ -848,7 +934,6 @@ const SNVQ_UMI_CASES: &[Case] = &[
     case!("picard_umi_prevalence_no_umis", "CollectUmiPrevalenceMetrics", "I=MD", "O=OUT/umi.txt", "BARCODE_TAG=ZZ"),
     case!("error_umi_prevalence_assume_sorted", "CollectUmiPrevalenceMetrics", "I=UMI", "O=OUT/umi.txt", "ASSUME_SORTED=true"),
     case!("error_verb_umi_prevalence_progress", "umi-prevalence", "UMI", "-o", "OUT/umi.txt", "--progress-step-interval", "0"),
-    case!("error_chain_umi_prevalence", "chain", "UMI", "-o", "OUT/s", "+", "umi-prevalence"),
 ];
 
 /// Wave W11: `CollectRrbsMetrics` on the bisulfite fixture of
@@ -1057,15 +1142,6 @@ const MERGE_REORDER_CASES: &[Case] = &[
         "INTERVALS=IL"
     ),
     case!(
-        "error_chain_merge_sam_files",
-        "chain",
-        "MD",
-        "-o",
-        "OUT/s",
-        "+",
-        "merge-sam-files"
-    ),
-    case!(
         "picard_reorder_sam",
         "ReorderSam",
         "I=MD",
@@ -1188,7 +1264,6 @@ const DOWNSAMPLE_CASES: &[Case] = &[
     case!("error_position_based_downsample_sam_again", "PositionBasedDownsampleSam", "I=DS", "O=OUT/pb.bam", "F=0.5"),
     case!("error_position_based_downsample_sam_fraction", "PositionBasedDownsampleSam", "I=MD", "O=OUT/pb.bam", "F=2"),
     case!("error_verb_position_based_downsample_sam_stdin", "position-based-downsample-sam", "-", "--fraction", "0.5", "-o", "OUT/pb.bam"),
-    case!("error_chain_position_based_downsample_sam", "chain", "MD", "-o", "OUT/s", "+", "position-based-downsample-sam", "--fraction", "0.5"),
 ];
 
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
@@ -1336,8 +1411,9 @@ fn resolve(arg: &str, out: &str, base: &str) -> String {
     }
 }
 
-/// Run one case and render its record.
-fn record(case: &Case) -> String {
+/// Run the commands `before` (unrecorded), then `case`, in one output
+/// directory, and render the record of `case`.
+fn record_after(case: &Case, before: &[&[&str]]) -> String {
     let out_dir = std::env::temp_dir().join(format!(
         "bammetrics-golden-{}-{}",
         std::process::id(),
@@ -1351,9 +1427,32 @@ fn record(case: &Case) -> String {
     } else {
         (root(), String::new())
     };
+    // The user config file is OUT/bammetrics/config.toml, absent unless the
+    // case writes it, so no record depends on the machine's config.
+    if let Some(text) = case.config {
+        let dir = out_dir.join("bammetrics");
+        fs::create_dir_all(dir.join("recipes")).expect("config directory");
+        let text = text.replace("ROOT/", &format!("{}/", root().display()));
+        fs::write(dir.join("config.toml"), text).expect("config file");
+    }
+    for earlier in before {
+        let argv: Vec<String> = earlier.iter().map(|a| resolve(a, out, &base)).collect();
+        let status = Command::new(binary())
+            .args(&argv)
+            .current_dir(&cwd)
+            .env("XDG_CONFIG_HOME", &out_dir)
+            .env_remove("BAMMETRICS_REFERENCE")
+            .output()
+            .expect("run bammetrics");
+        assert!(status.status.code().is_some(), "{}: a signal", case.name);
+    }
     let argv: Vec<String> = case.argv.iter().map(|a| resolve(a, out, &base)).collect();
     let mut command = Command::new(binary());
-    command.args(&argv).current_dir(cwd);
+    command
+        .args(&argv)
+        .current_dir(cwd)
+        .env("XDG_CONFIG_HOME", &out_dir)
+        .env_remove("BAMMETRICS_REFERENCE");
     if case.utc {
         command.env("TZ", "UTC");
     }
@@ -1608,7 +1707,33 @@ fn normalize(text: &str, out: &str) -> String {
         .replace(&root, "ROOT/")
         .replace(name, "bammetrics");
     let mut normalized = String::with_capacity(text.len());
+    // A chain manifest (schema 2) carries the clock, the run's time and
+    // the fingerprints of files whose `INPUT=` and `OUTPUT=` lines name
+    // `OUT`, so their size and hash follow the path's length.
+    let mut chain_manifest = false;
     for line in text.lines() {
+        if line.starts_with("## ") {
+            chain_manifest = false;
+        } else if line.contains("\"schema\": \"bammetrics.manifest/2\"") {
+            chain_manifest = true;
+        }
+        let trimmed = line.trim_start();
+        let volatile = [
+            "directory",
+            "started",
+            "seconds",
+            "size",
+            "edges_hash",
+            "options_hash",
+        ]
+        .into_iter()
+        .find(|key| chain_manifest && trimmed.starts_with(&format!("\"{key}\": ")));
+        if let Some(key) = volatile {
+            let indent = &line[..line.len() - trimmed.len()];
+            let comma = if trimmed.ends_with(',') { "," } else { "" };
+            normalized.push_str(&format!("{indent}\"{key}\": \"<{key}>\"{comma}\n"));
+            continue;
+        }
         if line.starts_with("# Started on: ") {
             normalized.push_str("# Started on: <time>");
         } else if line.starts_with("header Started on: ") {
@@ -1643,11 +1768,17 @@ fn normalize(text: &str, out: &str) -> String {
 /// Compare (or rewrite) every case's record; one failure message per case
 /// that differs.
 fn check(cases: &[Case]) {
+    let runs: Vec<(&Case, &[&[&str]])> = cases.iter().map(|case| (case, &[][..])).collect();
+    check_runs(&runs);
+}
+
+/// [`check`] for cases that run after earlier commands.
+fn check_runs(cases: &[(&Case, &[&[&str]])]) {
     let golden_dir = root().join("tests/golden");
     let update = std::env::var_os("UPDATE_GOLDEN").is_some();
     let mut failures = Vec::new();
-    for case in cases {
-        let actual = record(case);
+    for (case, before) in cases {
+        let actual = record_after(case, before);
         let path = golden_dir.join(format!("{}.txt", case.name));
         if update {
             fs::write(&path, &actual).expect("write golden");
@@ -1798,6 +1929,41 @@ fn documented_downsample_commands_on_the_fixtures() {
     check(DOWNSAMPLE_CASES);
 }
 
+/// The W14 chain records: kept streams, qc as the last step, resume. The
+/// qc step writes the verdict and report the `qc` verb writes for the same
+/// taps; a resume that skips every step reads nothing.
+#[test]
+fn documented_chain_manifest_commands_on_the_fixtures() {
+    check(CHAIN_MANIFEST_CASES);
+    check_sequences(RESUME_CASES);
+    // The qc step and the qc verb: one prefix, one date, the same taps.
+    let (chain, qc) = (recorded("chain_qc_step"), recorded("qc_generic"));
+    for extension in [
+        "quality_yield_metrics",
+        "alignment_summary_metrics",
+        "insert_size_metrics",
+        "duplicate_metrics",
+        "verdict.json",
+    ] {
+        let name = format!("sample.{extension}");
+        assert_eq!(file_in(&chain, &name), file_in(&qc, &name), "{name}");
+    }
+    let skipped = recorded("chain_resume_skips");
+    assert!(skipped.contains("5 steps finished, 5 of them skipped by --resume"));
+    let changed = recorded("chain_resume_option_change");
+    for (step, verb) in [(1, "quality-yield"), (2, "mark-duplicates")] {
+        assert!(
+            changed.contains(&format!("step {step} ({verb}): skipped")),
+            "{verb}"
+        );
+    }
+}
+
+#[test]
+fn documented_materialize_commands_on_the_fixtures() {
+    check(MATERIALIZE_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1900,6 +2066,7 @@ fn case_names_are_unique() {
         .chain(FORMAT_CASES)
         .chain(PARQUET_CASES)
         .chain(CHAIN_CASES)
+        .chain(CHAIN_GRAMMAR_CASES)
         .chain(T1_CASES)
         .chain(PDF_OPTION_CASES)
         .chain(DOCTOR_CASES)
@@ -1918,11 +2085,214 @@ fn case_names_are_unique() {
         .chain(MERGE_REORDER_CASES)
         .chain(MATE_FILTER_CASES)
         .chain(DOWNSAMPLE_CASES)
+        .chain(CHAIN_MANIFEST_CASES)
+        .chain(MATERIALIZE_CASES)
+        .chain(CHAIN_COMBINED_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
+        .chain(RESUME_CASES.iter().map(|s| s.name))
+        .chain(COMBINED_RESUME_CASES.iter().map(|s| s.name))
         .collect();
     let count = names.len();
     names.sort_unstable();
     names.dedup();
     assert_eq!(count, names.len(), "case names repeat");
+}
+
+/// The config file of the grammar cases: the fixture reference.
+const REFERENCE_CONFIG: &str = "reference = \"ROOT/tests/data/ref_100k.fa\"\n";
+
+/// The simpler chain grammar (docs/chaining.md sections 22 to 26): steps
+/// without `+`, `-o` naming the result BAM, the config file, the
+/// dictionary default, the recipes, and the error of each rule.
+#[rustfmt::skip]
+const CHAIN_GRAMMAR_CASES: &[Case] = &[
+    // The owner's example, new form and old form: the same files.
+    case_config!("chain_short_form", REFERENCE_CONFIG, "chain", "IS", "reorder-sam", "insert-size", "-o", "OUT/r.bam"),
+    case!("chain_short_form_long", "chain", "IS", "-R", "REF", "-o", "OUT/r", "+", "reorder-sam", "--sequence-dictionary", "tests/data/ref_100k.fa.fai", "+", "insert-size", "+", "write", "OUT/r.bam", "--index"),
+    case!("chain_bare_steps", "chain", "MD", "mark-duplicates", "--as", "insert-size", "quality-yield", "write", "OUT/m.bam", "--index", "-o", "OUT/s"),
+    case!("chain_bare_and_plus", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--as", "insert-size", "+", "quality-yield", "+", "write", "OUT/m.bam", "--index"),
+    case!("chain_result_sam", "chain", "MD", "sort-sam", "--sort-order", "queryname", "insert-size", "-o", "OUT/q.sam"),
+    case!("error_chain_bare_misspelled", "chain", "IS", "insert-size", "quality-yeld"),
+    case!("error_chain_result_taps_only", "chain", "IS", "insert-size", "-o", "OUT/r.bam"),
+    case!("error_chain_result_cram", "chain", "IS", "mark-duplicates", "-o", "OUT/r.cram"),
+    case!("error_chain_override_without_recipe", "chain", "IS", "insert-size", "insert-size.minimum-pct=0.1"),
+    // The config file: printed, its errors, its reference on a tool verb.
+    case_config!("config_print", "reference = \"ROOT/tests/data/ref_100k.fa\"\nthreads = 2\ntmp_dir = \"tmp\"\nsort_memory = \"4G\"\n", "config"),
+    case_config!("config_print_no_config", REFERENCE_CONFIG, "config", "--no-config"),
+    case!("config_print_none", "config"),
+    case_config!("error_config_unknown_key", "refernce = \"x.fa\"\n", "config"),
+    case_config!("error_config_missing_reference", "reference = \"/nowhere/ref.fa\"\n", "chain", "IS", "reorder-sam", "-o", "OUT/r.bam"),
+    case_config!("verb_config_reference", REFERENCE_CONFIG, "alignment-summary", "IS", "-o", "OUT/a.txt"),
+    case!("error_reorder_sam_no_reference", "chain", "IS", "reorder-sam", "-o", "OUT/r.bam"),
+    // Recipes: the list, a plan, each recipe run, their errors.
+    case!("recipes_list", "recipes"),
+    case!("chain_recipe_plan", "chain", "OXOG", "--recipe", "prep", "-o", "OUT/p.bam", "--dry-run"),
+    case!("recipe_prep", "prep", "OXOG", "-o", "OUT/p.bam"),
+    case!("recipe_prep_long", "chain", "OXOG", "fix-mate-information", "mark-duplicates", "sort-sam", "--sort-order", "coordinate", "quality-yield", "alignment-summary", "insert-size", "duplicate-metrics", "-o", "OUT/p.bam"),
+    case!("recipe_qc_only", "qc-only", "IS", "-o", "OUT/sample"),
+    case!("recipe_downsample", "downsample", "OXOG", "-o", "OUT/d.bam", "downsample-sam.probability=0.5"),
+    case!("error_recipe_unknown", "chain", "IS", "--recipe", "prp", "-o", "OUT/r.bam"),
+    case!("error_recipe_requires", "downsample", "OXOG", "-o", "OUT/d.bam"),
+    case!("error_recipe_needs_bam", "prep", "OXOG", "-o", "OUT/s"),
+    case!("error_recipe_and_steps", "chain", "IS", "--recipe", "qc-only", "insert-size"),
+    case!("error_recipe_bad_override", "qc-only", "IS", "insert-size.minimum-pt=0.1"),
+    // The review of the grammar: write and split keep their -o in last
+    // place, the errors of the bare form, a stale config reference.
+    case!("chain_bare_write_output", "chain", "OXOG", "-o", "OUT/p", "mark-duplicates", "write", "-o", "OUT/x.bam"),
+    case!("chain_bare_split_output", "chain", "OXOG", "split-sam-by-library", "-o", "OUT/split", "-v"),
+    case!("error_chain_result_sam_upper", "chain", "MD", "mark-duplicates", "-o", "OUT/s.SAM"),
+    case!("error_chain_bare_not_a_verb", "chain", "IS", "insert-size", "mark", "-o", "OUT/x"),
+    case!("error_chain_bare_source_is_step", "chain", "insert-size", "IS"),
+    case!("error_chain_bare_middle_option", "chain", "IS", "insert-size", "-q", "alignment-summary"),
+    case!("error_chain_bare_write_option", "chain", "MD", "mark-duplicates", "-o", "OUT/y.bam", "--md5"),
+    case!("error_chain_bare_output_twice", "chain", "-o", "OUT/a", "IS", "insert-size", "-o", "OUT/b"),
+    case!("chain_transforms_only_note", "chain", "OXOG", "reorder-sam", "-R", "REF", "-o", "OUT/t"),
+    case_config!("chain_stale_config_reference", "reference = \"/nowhere/ref.fa\"\n", "chain", "IS", "insert-size", "-o", "OUT/s"),
+    case!("recipe_help", "prep", "--help"),
+    case!("error_recipe_unknown_override_step", "prep", "OXOG", "-o", "OUT/x.bam", "mark-dups.remove-duplicates=true"),
+    case!("error_recipe_override_without_value", "prep", "OXOG", "-o", "OUT/x.bam", "mark-duplicates.remove-duplicates"),
+    case!("error_recipe_twice", "chain", "IS", "--recipe=prep", "-o", "OUT/p.bam", "--recipe=qc-only"),
+];
+
+/// What the grammar records prove: each new form writes the files of the
+/// old form it stands for, byte for byte (the stderr notes aside).
+#[test]
+fn documented_chain_grammar_commands_on_the_fixtures() {
+    check(CHAIN_GRAMMAR_CASES);
+    let files_of = |record: &str| -> Vec<(String, String)> {
+        let mut files = Vec::new();
+        for part in record.split("\n## file ").skip(1) {
+            let (name, body) = part.split_once('\n').unwrap_or((part, ""));
+            if !name.starts_with("bammetrics/") {
+                files.push((name.to_owned(), body.to_owned()));
+            }
+        }
+        files
+    };
+    for (short, long) in [
+        ("chain_short_form", "chain_short_form_long"),
+        ("chain_bare_steps", "chain_bare_and_plus"),
+        ("recipe_prep", "recipe_prep_long"),
+        ("recipe_qc_only", "chain_taps"),
+    ] {
+        let (a, b) = (recorded(short), recorded(long));
+        assert!(result_of(&a).starts_with("## exit\n0\n"), "{short}");
+        assert_eq!(files_of(&a), files_of(&b), "{short} against {long}");
+    }
+}
+
+/// Wave W14, the materialize fallback (docs/chaining.md, "Materialize"): a
+/// tool with neither a stage nor a collector runs on a file of the stream
+/// at its position. Metrics tools, the tools that read an index, a tool
+/// that writes its own file, SAM text on standard output, a tool that
+/// fails after its file, several inputs, the tools that write a BAM, the
+/// plan with its disk cost, and the usage errors of a step that hands its
+/// BAM on.
+#[rustfmt::skip]
+const MATERIALIZE_CASES: &[Case] = &[
+    case!("chain_materialize_metrics", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "wgs", "-R", "REF", "--coverage-cap", "10", "+", "raw-wgs", "-R", "REF", "--coverage-cap", "10", "+", "library-complexity", "+", "targeted-pcr", "--amplicon-intervals", "IL", "--target-intervals", "IL"),
+    case!("chain_materialize_index", "chain", "IS", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "bam-index-stats", "+", "index-depth"),
+    case!("chain_multiple_metrics", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "multiple-metrics", "--program", "CollectQualityYieldMetrics"),
+    case!("chain_calculate_read_group_checksum", "chain", "ART", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "calculate-read-group-checksum"),
+    case!("chain_view_sam", "chain", "MD", "+", "sort-sam", "--sort-order", "queryname", "+", "view-sam", "-o", "-"),
+    case!("chain_check_duplicate_marking", "chain", "DM", "-o", "OUT/s", "+", "check-duplicate-marking"),
+    case!("chain_umi_prevalence", "chain", "UMI", "-o", "OUT/s", "+", "umi-prevalence", "--minimum-mq", "10"),
+    case!("chain_jumping_library_inputs", "chain", "OR", "-o", "OUT/s", "+", "jumping-library", "IS", "--tail-limit", "100"),
+    case!("chain_merge_sam_files", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "MD", "+", "insert-size"),
+    case!("chain_gather_bam_files", "chain", "IS", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "gather-bam-files", "NO_READS", "+", "write", "OUT/gathered.bam"),
+    case!("chain_position_based_downsample_sam", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "position-based-downsample-sam", "--fraction", "0.5", "+", "write", "OUT/pb.bam"),
+    case!("plan_chain_materialize", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "raw-wgs", "-R", "REF", "+", "add-comments-to-bam", "--comment", "c", "+", "raw-wgs", "-R", "REF", "+", "merge-sam-files", "MD", "+", "insert-size"),
+    case!("error_chain_materialize_write_option", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "--create-index"),
+    case!("error_chain_materialize_output", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "-o", "OUT/m.bam"),
+    case!("error_chain_materialize_input", "chain", "MD", "-o", "OUT/s", "+", "wgs", "-R", "REF", "MD"),
+    case!("error_chain_materialize_value", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "check-duplicate-marking", "--mode", "NOPE"),
+    case!("error_chain_materialize_no_index", "chain", "MD", "-o", "OUT/s", "+", "bam-index-stats"),
+    case!("error_chain_materialize_index_depth_cram", "chain", "IS_CRAM", "-R", "REF", "-o", "OUT/s", "+", "index-depth"),
+    case!("error_chain_materialize_further_input", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "REF", "+", "insert-size"),
+    case!("error_chain_materialize_index_is_input", "chain", "IS", "-o", "OUT/s", "+", "bam-index-stats", "+", "write", "IS_BAI"),
+    case!("error_chain_multiple_metrics_clash", "chain", "MD", "-o", "OUT/s", "+", "multiple-metrics", "+", "insert-size"),
+];
+
+/// The pieces of 0.32.0 together (docs/chaining.md section 32): the short
+/// form with `qc`, a recipe with a last qc step, a merge with its further
+/// input in the short form, the plans that say how the qc step reads
+/// `CollectWgsMetrics`, and the errors.
+#[rustfmt::skip]
+const CHAIN_COMBINED_CASES: &[Case] = &[
+    case!("chain_short_form_qc", "chain", "MD", "mark-duplicates", "insert-size", "qc", "--date", "2026-01-01 00:00:00 UTC", "-o", "OUT/r.bam"),
+    case!("recipe_prep_qc", "prep", "OXOG", "-o", "OUT/p.bam", "qc", "--date", "2026-01-01 00:00:00 UTC", "--fail-on", "fail"),
+    case!("chain_short_form_merge", "chain", "MD", "merge-sam-files", "OXOG", "insert-size", "-o", "OUT/m.bam"),
+    case!("chain_plan_qc_wgs_materialized", "chain", "MD", "-R", "REF", "mark-duplicates", "qc", "--preset", "wgs", "-o", "OUT/w", "--dry-run"),
+    case!("chain_plan_qc_wgs_written_bam", "chain", "MD", "-R", "REF", "mark-duplicates", "qc", "--preset", "wgs", "-o", "OUT/w.bam", "--dry-run"),
+    case!("error_chain_short_form_step_after_qc", "chain", "MD", "mark-duplicates", "qc", "insert-size", "-o", "OUT/r.bam"),
+    case!("error_chain_short_form_qc_write_option", "chain", "MD", "mark-duplicates", "qc", "--index", "-o", "OUT/r.bam"),
+    case!("error_chain_short_form_resume_stdin", "chain", "-", "mark-duplicates", "-o", "OUT/r.bam", "--resume"),
+    case_config!("error_chain_writes_config", "threads = 2\n", "chain", "IS", "+", "insert-size", "-o", "OUT/bammetrics/config.toml"),
+];
+
+/// The owner's example with `--resume`, then with an option of
+/// `insert-size` changed, and the prep recipe resumed after an option
+/// change: the read starts at the BAM `-o` names.
+const SHORT_RESUME_FIRST: &[&str] = &[
+    "chain",
+    "IS",
+    "-R",
+    "REF",
+    "reorder-sam",
+    "insert-size",
+    "-o",
+    "OUT/r.bam",
+    "--resume",
+];
+
+#[rustfmt::skip]
+const COMBINED_RESUME_CASES: &[Sequence] = &[
+    Sequence { name: "chain_short_form_resume_skips", before: &[SHORT_RESUME_FIRST], argv: SHORT_RESUME_FIRST },
+    Sequence { name: "chain_short_form_resume_option_change", before: &[SHORT_RESUME_FIRST], argv: &["chain", "IS", "-R", "REF", "reorder-sam", "insert-size", "--minimum-pct", "0.2", "-o", "OUT/r.bam", "--resume"] },
+    Sequence { name: "chain_plan_short_form_resume_option_change", before: &[SHORT_RESUME_FIRST], argv: &["chain", "IS", "-R", "REF", "reorder-sam", "insert-size", "--minimum-pct", "0.2", "-o", "OUT/r.bam", "--resume", "--dry-run"] },
+    Sequence { name: "recipe_prep_resume_option_change", before: &[&["prep", "OXOG", "-o", "OUT/p.bam", "--resume"]], argv: &["prep", "OXOG", "-o", "OUT/p.bam", "--resume", "insert-size.minimum-pct=0.2"] },
+];
+
+/// The cases of `sequences`, each with the commands it runs first.
+fn check_sequences(sequences: &[Sequence]) {
+    let cases: Vec<Case> = sequences
+        .iter()
+        .map(|s| Case {
+            name: s.name,
+            argv: s.argv,
+            in_out: false,
+            utc: false,
+            config: None,
+        })
+        .collect();
+    let runs: Vec<(&Case, &[&[&str]])> = cases
+        .iter()
+        .zip(sequences)
+        .map(|(case, s)| (case, s.before))
+        .collect();
+    check_runs(&runs);
+}
+
+#[test]
+fn documented_combined_chain_commands_on_the_fixtures() {
+    check(CHAIN_COMBINED_CASES);
+    check_sequences(COMBINED_RESUME_CASES);
+    // The short form with qc and the recipe with qc hold the verdict of
+    // their taps; the resumed short form skips every step, then all but
+    // the changed one.
+    assert!(recorded("chain_short_form_qc").contains("step 4 (qc): verdict"));
+    assert!(recorded("recipe_prep_qc").contains("step 9 (qc): verdict pass"));
+    assert!(
+        recorded("chain_short_form_resume_skips")
+            .contains("3 steps finished, 3 of them skipped by --resume")
+    );
+    let changed = recorded("chain_short_form_resume_option_change");
+    for step in ["step 1 (reorder-sam): skipped", "step 3 (write): skipped"] {
+        assert!(changed.contains(step), "{step}");
+    }
+    assert!(
+        recorded("recipe_prep_resume_option_change")
+            .contains("8 steps finished, 7 of them skipped by --resume")
+    );
 }

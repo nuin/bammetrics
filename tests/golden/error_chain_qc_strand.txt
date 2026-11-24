@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+qc
+--strand
+NONE
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (qc): --strand needs --ref-flat (from --strand)

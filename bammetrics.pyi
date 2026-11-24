@@ -169,11 +169,11 @@ class Step:
     unknown verb or keyword raises UsageError here.
 
     verb is the verb as the command spells it (insert-size, write); role is
-    "transform", "tap", "write" or "split"; options holds the keywords given, without those
-    that were None; args is what they spell for the command (["--minimum-pct=0.1"]).
-    Two steps with the same verb and args are equal."""
+    "transform", "tap", "write", "split", "materialize" or "qc"; options holds the
+    keywords given, without those that were None; args is what they spell for the
+    command (["--minimum-pct=0.1"]). Two steps with the same verb and args are equal."""
     verb: str
-    role: Literal["transform", "tap", "write", "split"]
+    role: Literal["transform", "tap", "write", "split", "materialize", "qc"]
     options: dict[str, Any]
     args: list[str]
     def __init__(self, verb: _StepVerb | str, /, **options: Any) -> None: ...
@@ -184,15 +184,16 @@ class Stage:
     """One step of a chain after the run, in Run.stages.
 
     status is "ok", "failed", "stopped" (another step of its segment failed while it
-    ran) or "not_run" (a step in front of it failed); error says why for a status that
-    is not "ok". reads is the stream the step read ("in", or the name a transform in
+    ran), "not_run" (a step in front of it failed) or "skipped" (resume=True found it
+    done in PREFIX.manifest.json, its files kept); error says why for a status that is
+    not "ok". reads is the stream the step read ("in", or the name a transform in
     front left); leaves is the stream a transform leaves ("marked"), None otherwise.
     records_in, records_out and changed are a transform's record counts, None for a
     tap and for write."""
     number: int
     verb: str
-    role: Literal["transform", "tap", "write", "split"]
-    status: Literal["ok", "failed", "stopped", "not_run"]
+    role: Literal["transform", "tap", "write", "split", "materialize", "qc"]
+    status: Literal["ok", "failed", "stopped", "not_run", "skipped"]
     error: str | None
     reads: str
     leaves: str | None
@@ -1922,17 +1923,29 @@ _StepVerb = Literal[
     "mean_quality_by_cycle",
     "base_distribution_by_cycle",
     "duplicate_metrics",
+    "library_complexity",
+    "multiple_metrics",
+    "wgs",
+    "raw_wgs",
+    "wgs_with_non_zero_coverage",
+    "targeted_pcr",
     "rna_seq",
     "mark_duplicates",
     "sequencing_artifact",
+    "oxo_g",
     "coverage_gaps",
     "sex_check",
+    "bam_index_stats",
+    "check_duplicate_marking",
+    "jumping_library",
+    "view_sam",
     "sort_sam",
     "mt_copy_number",
     "exon_coverage",
     "adapter_content",
     "duplicate_by_tile",
     "telomere",
+    "index_depth",
     "add_comments_to_bam",
     "replace_sam_header",
     "add_o_a_tag",
@@ -1943,24 +1956,33 @@ _StepVerb = Literal[
     "revert_original_base_qualities_and_add_mate_cigar",
     "split_sam_by_library",
     "split_sam_by_number_of_reads",
+    "gather_bam_files",
+    "calculate_read_group_checksum",
     "quality_yield_s_n_v_q",
+    "umi_prevalence",
     "rrbs",
+    "merge_sam_files",
     "reorder_sam",
     "fix_mate_information",
     "filter_sam_reads",
     "downsample_sam",
+    "position_based_downsample_sam",
     "write",
+    "qc",
 ]
 
 def step(verb: _StepVerb | str, /, **options: Any) -> Step:
     """One step of chain(): a tool verb in snake case (insert_size), its Picard class, or
     write. The keywords are those of the tool's function (minimum_pct=0.1) without its
     input, plus output (the step's own file, or prefix for a tool that writes several),
-    format, panel on hs_metrics (baits and targets in one file), and as_ on a transform
-    (the name of the stream it leaves). write takes output, index, md5,
-    compression_level and output_format ("bam" or "sam"). An unknown verb or keyword
-    raises UsageError here, with the closest name; so does a float that is NaN or
-    infinite, and a list of texts with an item that is not a str."""
+    format, panel on hs_metrics (baits and targets in one file), and as_ and keep on a
+    transform (the name of the stream it leaves; keep=True writes it as
+    PREFIX.STREAM.bam). write takes output, index, md5, compression_level and
+    output_format ("bam" or "sam"). qc, the last step, takes preset, report, also,
+    fail_on, panel, ref_flat, strand, ribosomal_intervals, sex, all_plots, date,
+    pdf_font and page_size. An unknown verb or keyword raises UsageError here, with the
+    closest name; so does a float that is NaN or infinite, and a list of texts with an
+    item that is not a str."""
 
 @overload
 def chain(
@@ -1977,7 +1999,10 @@ def chain(
     sort_memory: str | None = None,
     force_space: bool | None = None,
     validation_stringency: str | None = None,
+    resume: bool | None = None,
     plan: _Path | None = None,
+    recipe: str | None = None,
+    config: bool = True,
     dry_run: Literal[False] = False,
 ) -> Run[None]:
     """bammetrics chain: several steps on one BAM in one process, the records handed from
@@ -1987,8 +2012,12 @@ def chain(
     name or output_format "sam". plan names a TOML plan file in place of steps; a
     keyword given replaces the file's. Returns a Run: files, metrics (keyed by verb,
     STREAM.verb in front of a transform) and stages (one Stage per step). dry_run=True
-    returns the plan text and runs nothing. A failed step raises InputError after the
-    other steps wrote their files (its .run holds the Run)."""
+    returns the plan text and runs nothing. resume=True skips the steps
+    PREFIX.manifest.json proves done. A failed step raises InputError after the other
+    steps wrote their files (its .run holds the Run). output ending in .bam on a chain
+    with a transform and no write step adds write OUTPUT with its index and names the
+    metrics files from OUTPUT without .bam. recipe names a recipe in place of steps.
+    config=False leaves the user config file unread."""
 @overload
 def chain(
     source: _Path | None = None,
@@ -2004,7 +2033,10 @@ def chain(
     sort_memory: str | None = None,
     force_space: bool | None = None,
     validation_stringency: str | None = None,
+    resume: bool | None = None,
     plan: _Path | None = None,
+    recipe: str | None = None,
+    config: bool = True,
     dry_run: Literal[True],
 ) -> str: ...
 @overload
@@ -2022,8 +2054,29 @@ def chain(
     sort_memory: str | None = None,
     force_space: bool | None = None,
     validation_stringency: str | None = None,
+    resume: bool | None = None,
     plan: _Path | None = None,
+    recipe: str | None = None,
+    config: bool = True,
     dry_run: bool,
 ) -> Run[None] | str: ...
+
+def recipe(
+    name: str,
+    source: _Path | None = None,
+    *,
+    set: dict[str, Any] | None = None,
+    qc: Step | bool | None = None,
+    config: bool = True,
+    dry_run: bool = False,
+    **options: Any,
+) -> Run[None] | str:
+    """bammetrics recipe: run the named chain name (prep, qc-only, downsample, or one of
+    yours; bammetrics recipes lists them) on source, as bammetrics NAME BAM does. set
+    holds STEP.option values ({"downsample-sam.probability": 0.1}); each replaces the
+    recipe's value of that option. qc=True or qc=step("qc", preset=...) adds qc as the
+    last step: the verdict and the report over the recipe's metrics. The keywords are
+    those of chain() (resume=True skips the steps the manifest proves done). Returns the
+    Run of chain(), or the plan text with dry_run=True."""
 
 # END verbs

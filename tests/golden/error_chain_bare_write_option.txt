@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/markdup.bam
+mark-duplicates
+-o
+OUT/y.bam
+--md5
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (mark-duplicates): --md5 is an option of write (from --md5)
+  -o OUT.bam adds write OUT.bam --index; for --md5, name the step: mark-duplicates ... write OUT.bam --md5

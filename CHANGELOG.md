@@ -2,8 +2,190 @@
 
 ## Unreleased
 
+## 0.32.0
+
+Chain 2 (wave W14 of docs/07) and the simpler chain command, 71 tools and no new one: steps without `+` and `-o` naming the BAM (`bammetrics chain fixed.bam reorder-sam insert-size -o r.bam`), a user config file, the recipes (`bammetrics prep in.bam -o out.bam`), manifest 2 with `--resume` per step and `--keep`, `qc` as the last step, and every tool that reads a BAM as a step at any position (53 of the 71); every `+` form of 0.31.0 runs as before.
+
+### Added
+
+- The short chain form, the manifest and the materialized steps work as one design
+  (docs/chaining.md section 32, docs/07 D199 to D205). `bammetrics chain fixed.bam
+  reorder-sam insert-size -o r.bam --resume` writes `r.bam`, `r.bai`,
+  `r.insert_size_metrics` and `r.manifest.json`; the same command again reads nothing; with
+  another option of `insert-size` it reruns that step alone.
+- `chain --resume` starts its read at the BAM a skipped `write` step wrote of a
+  transform's stream, as it does at a kept stream: `-o r.bam` is a place to resume from
+  without `--keep`, and the transforms in front do not run again. A BAM whose fingerprint
+  changed starts no read.
+- `qc` is a step word in the form without `+`. In last place it keeps `--preset`,
+  `--report`, `--fail-on` and its `--also`, and hands `-o`, `-R`, `--threads` and
+  `--resume` to the chain. `-o r.bam` on a chain that ends in `qc` adds `write r.bam
+  --index` in front of the qc step.
+- One step may follow a recipe: `qc`. `bammetrics prep in.bam -o out.bam qc --preset
+  generic --fail-on fail` adds the verdict and the report over the recipe's metrics. A
+  recipe file may end in a `qc` step, and `qc.option=value` sets its options. `--resume`
+  works on a recipe as on its chain: `prep in.bam -o out.bam --resume
+  insert-size.minimum-pct=0.2` skips seven of eight steps.
+- A materialized tool that writes a BAM (`merge-sam-files`, `gather-bam-files`,
+  `position-based-downsample-sam`) takes `--keep`, starts a resumed read, counts as a
+  change for `-o out.bam` and is upstream of the steps behind it in the manifest. In the
+  form without `+` a file after `merge-sam-files`, `gather-bam-files` or `jumping-library`
+  is a further input of that step.
+- The qc step measures a class whose tool has no collector behind a transform:
+  `CollectWgsMetrics` reads the source, the last kept stream or the BAM a `write` step
+  wrote, else it runs on a copy of the stream as a materialized step (`materialize on
+  STREAM, for qc`). A `wgs` step the chain already runs is not added twice and the verdict
+  reads its file.
+- The user config file and a user recipe are inputs of the chain: a step that would write
+  one exits 2 before the first read.
+- Python: `recipe(name, source, qc=True)` or `qc=step("qc", ...)` adds the qc step;
+  `chain(recipe=..., steps=["qc"])` is the same call. The qc step's exit codes 10 and 11
+  raise nothing from `recipe`.
+- `crates/cli/tests/chain_combined.rs` (8 tests) and 13 golden records
+  (`CHAIN_COMBINED_CASES`, `COMBINED_RESUME_CASES`): the owner's example with `--resume`, a
+  recipe resumed after an option change, `qc` as the last step of the prep recipe, a merge
+  in the short form with `--keep`, the five ways the qc step reads `CollectWgsMetrics`,
+  and the usage errors.
+- `bammetrics chain` takes steps without `+`: a bare word that names a step verb starts a
+  step, an option takes its values with it, and the chain's options may follow the last
+  step. `bammetrics chain fixed.bam reorder-sam insert-size -o r.bam` runs what `chain
+  fixed.bam -R ref.fa -o r + reorder-sam --sequence-dictionary ref.dict + insert-size +
+  write r.bam --index` runs, byte for byte. Every `+` form runs as before
+  (docs/chaining.md section 22).
+- `-o r.bam` (or `r.sam`) on a chain with a transform and no `write` step adds `write
+  r.bam --index` as the last step and names the metrics files `r.<extension>`. A chain of
+  taps alone exits 2 on such a name, `r.cram` exits 2 with wave W15 (section 23).
+- The user config file `$XDG_CONFIG_HOME/bammetrics/config.toml` (else
+  `~/.config/bammetrics/config.toml`, 64 KiB cap): `reference`, `threads`, `tmp_dir`,
+  `sort_memory`. `BAMMETRICS_REFERENCE` replaces its reference, `-R` both, `--no-config`
+  leaves it unread. `chain` takes all four; `qc`, `plan`, `collect` and the tool verbs
+  that read a reference take `reference`; the Picard face takes none. `bammetrics config`
+  prints each value and where it came from (section 24).
+- `reorder-sam` in a chain defaults its `--sequence-dictionary` to the reference's
+  `.dict`, else its `.fai`, with a note that says which. `ReorderSam` reads a `.fai` as a
+  dictionary of names and lengths (KNOWN_DIFFERENCES.md).
+- Recipes: named chains in the plan file format. `prep`, `qc-only` and `downsample` are
+  compiled in (`crates/cli/recipes/`); the user's come from
+  `~/.config/bammetrics/recipes/NAME.toml`. `bammetrics recipes` lists them; `bammetrics
+  NAME BAM -o OUT` and `chain BAM --recipe NAME` run one; `STEP.option=value` sets an
+  option of a recipe's step (section 25).
+- Python: `chain(output="r.bam")` follows the same rule, `chain(recipe=..., config=False)`,
+  and `bammetrics.recipe(name, source, output=..., set={...})` (docs/python.md).
+- The review of the grammar (docs/07 D171 to D174): `write -o out.bam` and
+  `split-sam-by-library -o DIR` in last place keep their `-o`; `-o r.SAM` exits 2; a
+  stale config or variable reference fails only a chain step that reads it, and `qc`,
+  `plan` and `collect` leave it out with a note; a FIFO `config.toml` is refused without
+  a wait; the bare form's errors name the source, a stray word with the closest verb
+  (`ins` is `insert-size`), a chain option in the middle and an option of `write` on the
+  last step; `-o` or `--recipe` twice exits 2; a `STEP.option=value` with an unknown
+  step gets the closest step; `bammetrics recipes` lists past a broken user recipe and
+  marks one named like a verb; `bammetrics NAME --help` prints the recipe. Golden record
+  `error_reorder_sam_no_reference` changes: its hint names `--from-bam` and `--dict`.
+
+- Manifest 2 (wave W14 of docs/07, docs/chaining.md section 27): a chain that resumes,
+  keeps a stream or ends in `qc` writes `PREFIX.manifest.json` with schema
+  `bammetrics.manifest/2` (docs/schema/manifest-2.json): the source's fingerprint, one
+  record per step (id, verb, canonical argv, options hash, the fingerprints of the files it
+  reads and writes, status, timing, the ids of the transforms in front) and the kept
+  streams. `qc` keeps writing schema 1. `manifest::v2::read_any` reads either schema under a
+  16 MiB cap.
+- `chain --resume` (Python `chain(..., resume=True)`, plan file `resume = true`): a step is
+  skipped when its record matches and every transform in front of it is skipped too; the
+  read starts at the last kept stream in front of the first step that runs, else at the
+  source, and the transforms in between run again to feed it. Change one option of step 3
+  of five and steps 3, 4 and 5 run. `plan --resume` and `--dry-run --resume` print why each
+  step runs or is skipped. After a resumed run that finished, a file the run before wrote
+  and this run does not is removed, only while it holds the fingerprint recorded.
+  Standard input as the source is a usage error. Python `Stage.status` gains `skipped`;
+  `Run.manifest` names the manifest.
+- `--keep` on a transform (Python `step(..., keep=True)`, plan file `keep = true`) writes
+  the stream it leaves as `PREFIX.<stream>.bam`, byte for byte the BAM `write` writes
+  there, with its `.bai` when coordinate sorted. The plan counts its bytes.
+- `qc` as the last step of a chain (docs/chaining.md section 29): `+ qc --preset P
+  --report html,pdf --also markdown,junit,multiqc --fail-on warn|fail` and the capture,
+  RNA and sex options of `qc`. It evaluates the preset over the taps of its stream, adds
+  the taps the preset needs (numbered after it), and writes the verdict, the page and the
+  verdict forms `qc` writes for the same taps on the same records. Its `--fail-on` code
+  (10, 11) is the chain's when every step finished. `CollectWgsMetrics` reads the source,
+  or the last transform's kept stream. Python `step("qc", ...)`.
+- `chain --resume` compares paths resolved against the working directory the manifest
+  records (member `directory` of manifest 2): `./m.bam`, `$PWD/m.bam`, a link and
+  `../m.bam` from a subdirectory name one source. The source and the reference are
+  fingerprinted before the first read and each output as soon as it is written, so a
+  source replaced during a run makes the next `--resume` rerun every step. A chain that
+  writes a manifest holds a lock on `PREFIX.manifest.json.lock`; a second run on the same
+  prefix exits 2 before it reads. A resumed run removes only `PREFIX.*` files and the
+  `.bai` or `.md5` of a BAM the same step rewrote, names each file it removes, and leaves
+  (and names) the files of a dropped `write` step, a file outside the prefix and a file
+  edited since; the stale `.bai` of a kept stream no longer coordinate sorted goes. A
+  killed run's temporary files are named. A manifest directory that takes no new file
+  fails before the read, naming the directory.
+- Frozen JSON schemas (docs/formats.md, Frozen schemas): `docs/schema/verdict-1.json`,
+  `manifest-1.json`, `manifest-2.json` and `events-1.json` beside `metrics-1.json`, every
+  object closed. `crates/cli/tests/schemas.rs` validates what `qc`, `check` and `chain`
+  write and fails on a member a schema lacks.
+
+- Chain: every registered tool that reads a BAM runs at any position, 53 of the 71 tools
+  (wave W14 of docs/07). The 17 tools with neither a stage nor a collector are
+  materialized: each runs through its own `run` on a file that holds the records of its
+  position, the source itself when it reads the source with no stage in front, else a
+  BGZF level 3 BAM in the chain's temporary directory (with its `.bai` for
+  `bam-index-stats` and `index-depth`, the header alone for
+  `calculate-read-group-checksum`). `merge-sam-files`, `gather-bam-files` and
+  `position-based-downsample-sam` are barriers whose BAM is the next stream (`merged`,
+  `gathered`, `downsampled`); the stream is the first `INPUT` and the files after the
+  verb, `--input`, a plan file's `input` and Python's `input=` are the further ones.
+  `wgs`, `raw-wgs`, `wgs-with-non-zero-coverage`, `targeted-pcr`, `library-complexity`,
+  `multiple-metrics`, `oxo-g`, `bam-index-stats`, `index-depth`,
+  `check-duplicate-marking` (fails after its file when a record disagrees),
+  `jumping-library`, `view-sam` (to `-o FILE` or `-o -`), `calculate-read-group-checksum`
+  and `umi-prevalence` fail alone, as taps do. The plan lists each materialized step and
+  its disk, and the free-space refusal counts it (docs/chaining.md section 31, decisions
+  D190 to D197).
+- `crates/cli/tests/chain_positions.rs`: each of the 53 steps first, in the middle and
+  last of a chain equals the staged run; a tool with no step row and no refusal row fails
+  the test.
+- 21 golden forms (`MATERIALIZE_CASES`): the runs, a plan and nine usage errors.
+- Chain: a materialized step is checked before the first read (exit 2): its tool's own
+  option parser on every value, each further input (a directory, a file that is no BAM,
+  CRAM or SAM, a CRAM without `-R`), at most 1,000 inputs of `merge-sam-files`, the
+  `.bai` or `.csi` of a source that `bam-index-stats` or `index-depth` reads itself, the
+  files of every `multiple-metrics` program against the other steps' files, and
+  `--tmp-dir`. The index a step reads beside its inputs is an input no step may write.
+- Chain: a materialized tool that spills (`check-duplicate-marking`, `umi-prevalence`,
+  `merge-sam-files`) spills under `--tmp-dir` unless the step names its own (D198).
+- `gather-bam-files`: a list line over 4,096 bytes is refused, quoting 200 characters of
+  it.
+
 ### Changed
 
+- Golden records `recipe_help` and `error_recipe_and_steps` name the qc step a recipe
+  takes; `chain_qc_step_help` says how the qc step reads `CollectWgsMetrics` and where
+  the chain's options go in the form without `+`. The help of `chain` lists the qc step
+  beside a recipe and the further inputs of a merge.
+- `bammetrics tools` lists the verbs `recipes` and `config` (golden record
+  `verb_tools`, two lines).
+- Three golden records change because their hint named wave W14: `chain --report`,
+  `chain --pdf-font` and `chain --also junit` now name the qc step
+  (`error_chain_report_pdf`, `error_chain_pdf_font`, `error_chain_also_junit`).
+- `docs/schema/metrics-1.json` closes its top object, its histogram and `more_classes`
+  (`additionalProperties: false`); every fixture stays valid.
+- Golden records: `error_chain_not_a_step` names `non-n-fasta-size` (wgs is a step now);
+  `error_chain_filter_sam_reads_reads_files` gives the new reason. The six refusals of
+  `error_chain_view_sam`, `error_chain_merge_sam_files`, `error_chain_gather_bam_files`,
+  `error_chain_calculate_read_group_checksum`, `error_chain_umi_prevalence` and
+  `error_chain_position_based_downsample_sam` are gone: those tools are steps.
+- The refusal of a tool that reads no BAM says so and names its verb; the refusals that
+  named wave W14 are gone. A second `INPUT` of `fix-mate-information` names
+  `merge-sam-files`.
+- Python: `Step.role` and `Stage.role` may be `"materialize"` or `"qc"`; `_StepVerb` holds 55 names.
+- Chain: `index-depth` on a CRAM source with `-R` gets no `REFERENCE_SEQUENCE` (it
+  refuses the option) and gives its own CRAM refusal. An error of a materialized step's
+  copy names the stream in place of the temporary file. `bam-index-stats` and
+  `index-depth` on a stream that is not coordinate sorted fail when the stream starts,
+  naming `sort-sam --sort-order coordinate`.
+- Golden record `chain_materialize_metrics`: `wgs` and `raw-wgs` take `--coverage-cap
+  10`, so the record holds 241 lines in place of 100,467.
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
 
 ## 0.31.0

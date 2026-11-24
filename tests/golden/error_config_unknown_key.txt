@@ -1,0 +1,11 @@
+## argv
+config
+## exit
+2
+## stdout
+## stderr
+bammetrics config: OUT/bammetrics/config.toml:1: unknown key refernce
+  did you mean reference?
+  keys: reference, threads, tmp_dir, sort_memory
+## file bammetrics/config.toml
+refernce = "x.fa"

@@ -1,0 +1,18 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+add-comments-to-bam
+--comment
+c
++
+check-duplicate-marking
+--mode
+NOPE
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (check-duplicate-marking): 'NOPE' is not a valid value for Mode.

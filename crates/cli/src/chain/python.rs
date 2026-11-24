@@ -14,11 +14,11 @@ use std::path::Path;
 use bammetrics_core::registry::{Ty, did_you_mean, python_keywords, snake_case, wrap};
 
 use super::args::{
-    ALSO, AS, find_step, global_flags, is_split, is_step, is_transform, not_a_step, step_flags,
-    write_flags,
+    ALSO, AS, KEEP, find_step, global_flags, is_materialized, is_split, is_step, is_transform,
+    materialize_leaves, not_a_step, step_flags, takes_further_inputs, write_flags,
 };
 use super::prepare::{Chain, Planned, Role};
-use super::{WRITE, usage};
+use super::{QC, WRITE, qc_step, usage};
 use crate::error::VerbError;
 use crate::grammar::{Flag, Key};
 use crate::verbs::{Files, VERBS, Verb};
@@ -161,13 +161,14 @@ impl StepTable {
 }
 
 /// The verbs `step` takes, as Python spells them: every tool verb that
-/// can be a step in snake case, in `bammetrics tools` order, then `write`.
+/// can be a step in snake case, in `bammetrics tools` order, then `write`
+/// and `qc`.
 pub fn step_names() -> Vec<String> {
     VERBS
         .iter()
         .filter(|verb| is_step(verb))
         .map(|verb| verb.name.replace('-', "_"))
-        .chain([WRITE.to_owned()])
+        .chain([WRITE.to_owned(), QC.to_owned()])
         .collect()
 }
 
@@ -208,7 +209,13 @@ const PANEL: Key = Key::Own("panel");
 fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
     let flags = step_flags(verb);
     let tool = verb.tool();
-    let mut refused = vec![("input", "the chain's source feeds every step".to_owned())];
+    let further = takes_further_inputs(verb);
+    // A materialized tool that writes no BAM names its own file.
+    let own_file = is_materialized(verb) && !materialize_leaves(verb);
+    let mut refused = Vec::new();
+    if !further {
+        refused.push(("input", "the chain's source feeds every step".to_owned()));
+    }
     let mut keywords = Vec::new();
     for keyword in python_keywords(tool) {
         if keyword.picard == "VALIDATION_STRINGENCY" {
@@ -221,7 +228,7 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
         // A split's `output` is its directory, the step's own `-o`.
         let split_output = is_split(verb) && keyword.picard == "OUTPUT";
         // A transform that writes a BAM as a tool writes none in a chain.
-        if verb.files == Files::Bam && keyword.picard == "OUTPUT" && !split_output {
+        if verb.files == Files::Bam && keyword.picard == "OUTPUT" && !split_output && !own_file {
             refused.push((
                 "output",
                 format!(
@@ -231,7 +238,8 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
             ));
             continue;
         }
-        let key = if (keyword.output && verb.files != Files::Bam) || split_output {
+        let named_output = own_file && keyword.picard == "OUTPUT";
+        let key = if (keyword.output && verb.files != Files::Bam) || split_output || named_output {
             Key::Output
         } else {
             Key::Picard(keyword.picard)
@@ -243,7 +251,20 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
     // `--panel` of `hs-metrics` is no row of the tool's table, so its
     // function has no such keyword; the verb's missing-intervals error
     // names it, and `qc` takes `panel=` too.
-    let own = [(PANEL, "panel"), (Key::Format, "format"), (AS, "as_")];
+    let mut own = vec![
+        (PANEL, "panel"),
+        (Key::Format, "format"),
+        (AS, "as_"),
+        (KEEP, "keep"),
+    ];
+    // The further inputs, and the file of a tool that has no `OUTPUT` of
+    // its own (`bam_index_stats`, `view_sam`).
+    if further {
+        own.push((Key::Input, "input"));
+    }
+    if own_file && !keywords.iter().any(|k: &Keyword| k.name == "output") {
+        own.push((Key::Output, "output"));
+    }
     for (key, name) in own {
         if let Some(flag) = flags.iter().find(|flag| flag.key == key) {
             keywords.push(Keyword::of(name, flag));
@@ -268,6 +289,24 @@ pub fn step_table(name: &str) -> Result<StepTable, VerbError> {
             refused: Vec::new(),
         });
     }
+    if name == QC {
+        // `hs` takes two values per run, which no keyword spells: `panel`
+        // or an hs_metrics step in front gives the capture metrics.
+        let keywords = qc_step::flags()
+            .iter()
+            .filter(|flag| flag.key != Key::Help && flag.values == 1)
+            .map(|flag| Keyword::of(&flag.long.replace('-', "_"), flag))
+            .collect();
+        return Ok(StepTable {
+            verb: QC,
+            role: Role::Qc,
+            keywords,
+            refused: vec![(
+                "hs",
+                "give panel=..., or a hs_metrics step in front of qc".to_owned(),
+            )],
+        });
+    }
     let verb = find_verb(name).ok_or_else(|| unknown_step(name))?;
     if !is_step(verb) {
         return Err(not_a_step(verb, &format!("step {}", verb.name))
@@ -277,6 +316,8 @@ pub fn step_table(name: &str) -> Result<StepTable, VerbError> {
         Role::Transform
     } else if is_split(verb) {
         Role::Split
+    } else if is_materialized(verb) {
+        Role::Materialize
     } else {
         Role::Tap
     };
@@ -327,11 +368,13 @@ pub fn metric_key(chain: &Chain, step: &Planned, path: &Path) -> String {
 pub const STEP_DOC: &str = "One step of chain(): a tool verb in snake case (insert_size), its \
      Picard class, or write. The keywords are those of the tool's function (minimum_pct=0.1) \
      without its input, plus output (the step's own file, or prefix for a tool that writes \
-     several), format, panel on hs_metrics (baits and targets in one file), and as_ on a \
-     transform (the name of the stream it leaves). write takes output, index, md5, \
-     compression_level and output_format (\"bam\" or \"sam\"). An unknown verb or keyword raises UsageError here, with the closest \
-     name; so does a float that is NaN or infinite, and a list of texts with an item that \
-     is not a str.";
+     several), format, panel on hs_metrics (baits and targets in one file), and as_ and keep \
+     on a transform (the name of the stream it leaves; keep=True writes it as \
+     PREFIX.STREAM.bam). write takes output, index, md5, compression_level and output_format \
+     (\"bam\" or \"sam\"). qc, the last step, takes preset, report, also, fail_on, panel, \
+     ref_flat, strand, ribosomal_intervals, sex, all_plots, date, pdf_font and page_size. \
+     An unknown verb or keyword raises UsageError here, with the closest name; so does a \
+     float that is NaN or infinite, and a list of texts with an item that is not a str.";
 
 /// The docstring of `chain`.
 pub const CHAIN_DOC: &str = "bammetrics chain: several steps on one BAM in one process, the \
@@ -341,8 +384,21 @@ pub const CHAIN_DOC: &str = "bammetrics chain: several steps on one BAM in one p
      for a .sam name or output_format \"sam\". plan names a TOML plan file in \
      place of steps; a keyword given replaces the file's. Returns a Run: files, metrics (keyed \
      by verb, STREAM.verb in front of a transform) and stages (one Stage per step). \
-     dry_run=True returns the plan text and runs nothing. A failed step raises InputError \
-     after the other steps wrote their files (its .run holds the Run).";
+     dry_run=True returns the plan text and runs nothing. resume=True skips the steps \
+     PREFIX.manifest.json proves done. A failed step raises InputError after the other \
+     steps wrote their files (its .run holds the Run). output ending in .bam on a chain \
+     with a transform and no write step adds write OUTPUT with its index and names the \
+     metrics files from OUTPUT without .bam. recipe names a recipe in place of steps. \
+     config=False leaves the user config file unread.";
+
+/// The docstring of `recipe`.
+pub const RECIPE_DOC: &str = "bammetrics recipe: run the named chain name (prep, qc-only, \
+     downsample, or one of yours; bammetrics recipes lists them) on source, as bammetrics \
+     NAME BAM does. set holds STEP.option values ({\"downsample-sam.probability\": 0.1}); each \
+     replaces the recipe's value of that option. qc=True or qc=step(\"qc\", preset=...) adds \
+     qc as the last step: the verdict and the report over the recipe's metrics. The keywords \
+     are those of chain() (resume=True skips the steps the manifest proves done). Returns the \
+     Run of chain(), or the plan text with dry_run=True.";
 
 /// A docstring as `.pyi` lines under a `def`.
 fn doc_lines(doc: &str) -> String {
@@ -365,6 +421,7 @@ fn chain_overload(dry_run: &str, returns: &str, doc: Option<&str>) -> String {
     );
     for keyword in chain_keywords() {
         if keyword.name == "dry_run" {
+            text.push_str("    config: bool = True,\n");
             text.push_str(&format!("    dry_run: {dry_run},\n"));
         } else {
             text.push_str(&format!(
@@ -401,6 +458,13 @@ pub fn stubs() -> String {
     ));
     text.push_str(&chain_overload("Literal[True]", "str", None));
     text.push_str(&chain_overload("bool", "Run[None] | str", None));
+    text.push_str(
+        "\ndef recipe(\n    name: str,\n    source: _Path | None = None,\n    *,\n    \
+         set: dict[str, Any] | None = None,\n    qc: Step | bool | None = None,\n    \
+         config: bool = True,\n    dry_run: bool = False,\n    **options: Any,\n\
+         ) -> Run[None] | str:\n",
+    );
+    text.push_str(&doc_lines(RECIPE_DOC));
     text
 }
 
@@ -427,7 +491,9 @@ mod tests {
                 "sort_memory",
                 "force_space",
                 "validation_stringency",
+                "resume",
                 "plan",
+                "recipe",
                 "dry_run"
             ]
         );
@@ -506,7 +572,12 @@ mod tests {
         for verb in VERBS.iter().filter(|verb| is_step(verb)) {
             let table = step_table(verb.name).expect(verb.name);
             for keyword in python_keywords(verb.tool()) {
-                let bam = verb.files == Files::Bam && keyword.picard == "OUTPUT" && !is_split(verb);
+                // A materialized tool that writes no BAM names its own file.
+                let own_file = is_materialized(verb) && !materialize_leaves(verb);
+                let bam = verb.files == Files::Bam
+                    && keyword.picard == "OUTPUT"
+                    && !is_split(verb)
+                    && !own_file;
                 let chain_s = keyword.picard == "VALIDATION_STRINGENCY";
                 assert_eq!(
                     table.keywords.iter().any(|k| k.name == keyword.name),
@@ -540,9 +611,10 @@ mod tests {
                 "bammetrics chain: unknown step \"inser-size\"\n  did you mean insert-size?",
             ),
             (
-                "wgs",
-                "bammetrics chain: step wgs: CollectWgsMetrics has no stage and does not read a \
-                 BAM in one pass: it cannot be a step\n  wave W14 of docs/07",
+                "non_n_fasta_size",
+                "bammetrics chain: step non-n-fasta-size: NonNFastaSize reads a FASTA file and \
+                 no BAM, and a chain hands on the records of a BAM: it cannot be a step\n  run \
+                 it on its own: bammetrics non-n-fasta-size --help",
             ),
             (
                 "fifo_buffer",
@@ -557,7 +629,18 @@ mod tests {
             assert_eq!(error.code, 2);
             assert!(error.to_string().starts_with(start), "{error}");
         }
-        assert!(step_names().ends_with(&[WRITE.to_owned()]));
+        assert!(step_names().ends_with(&[WRITE.to_owned(), QC.to_owned()]));
+        let qc = step_table("qc").expect("a step");
+        assert_eq!(qc.role, Role::Qc);
+        assert!(qc.keyword("preset").is_ok() && qc.keyword("fail_on").is_ok());
+        assert!(
+            qc.keyword("hs")
+                .expect_err("refused")
+                .to_string()
+                .contains("panel=")
+        );
+        let marked = step_table("mark_duplicates").expect("a step");
+        assert_eq!(marked.keyword("keep").expect("keep").ty, Ty::Bool);
     }
 
     #[test]
@@ -589,7 +672,7 @@ mod tests {
     fn the_stub_lists_the_steps_and_the_chain_overloads() {
         let text = stubs();
         assert!(text.contains("    \"mark_duplicates\",\n"));
-        assert!(text.contains("    \"write\",\n]\n"));
+        assert!(text.contains("    \"write\",\n    \"qc\",\n]\n"));
         assert!(text.contains("def step(verb: _StepVerb | str, /, **options: Any) -> Step:\n"));
         assert!(text.contains("    dry_run: Literal[False] = False,\n) -> Run[None]:\n"));
         assert!(text.contains("    dry_run: Literal[True],\n) -> str: ...\n"));

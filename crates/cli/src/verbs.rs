@@ -1048,9 +1048,52 @@ impl Verb {
         text
     }
 
+    /// `args` with the reference of the user config file or
+    /// `BAMMETRICS_REFERENCE` ([`crate::config`]) added as the tool's
+    /// reference option, when the tool reads a reference (or the input is a
+    /// CRAM) and the command line names none. Arguments that do not parse
+    /// come back as they are: the run reports them.
+    fn with_config_reference(
+        &self,
+        mut args: Vec<String>,
+        use_file: bool,
+    ) -> Result<Vec<String>, VerbError> {
+        let tool = self.tool();
+        let flags = self.flags();
+        let Ok(parsed) = grammar::parse(self.name, &flags, &args) else {
+            return Ok(args);
+        };
+        let reads = |name| tool.option(name).is_some_and(|opt| opt.kind == Kind::Value);
+        let option = if reads("REFERENCE") && !reads("REFERENCE_SEQUENCE") {
+            "REFERENCE"
+        } else {
+            "REFERENCE_SEQUENCE"
+        };
+        let given = ["REFERENCE", "REFERENCE_SEQUENCE"]
+            .iter()
+            .any(|name| parsed.last(Key::Picard(name)).is_some());
+        let Some(flag) = flags.iter().find(|f| f.key == Key::Picard(option)) else {
+            return Ok(args);
+        };
+        let input = parsed
+            .positional
+            .first()
+            .or_else(|| parsed.last(Key::Input).map(|g| &g.values[0]));
+        let is_cram = input.is_some_and(|path| cram::is_cram(Path::new(path)));
+        if given || parsed.flag(Key::Help) || !(reads(option) || is_cram) {
+            return Ok(args);
+        }
+        if let Some(reference) = crate::config::reference_for(self.name, use_file)? {
+            args.push(format!("--{}={reference}", flag.long));
+        }
+        Ok(args)
+    }
+
     /// Parse `args` and run the tool. The exit code is 0; errors carry
     /// theirs (2 for usage, 1 for inputs and failed tools).
     pub fn run(&self, args: &[String]) -> Result<u8, VerbError> {
+        let (args, no_config) = crate::config::strip_no_config(args);
+        let args = &self.with_config_reference(args, !no_config)?;
         let flags = self.flags();
         let parsed = grammar::parse(self.name, &flags, args)
             .map_err(|e| self.file_option_error(args).unwrap_or(e))?;
