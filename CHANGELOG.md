@@ -127,6 +127,12 @@ Wave W15 of docs/07, 74 tools: CRAM output for every `OUTPUT` and chain `write` 
 
 ### Changed
 
+- `CompareSAMs` compares the header values of a CRAM as the UTF-8 htsjdk decodes, as it
+  did before the CRAM header was held one byte per character (`cram::read_header_decoded`):
+  `café` against `cafè`, CJK and emoji values print as Picard prints them. A CRAM header
+  line is cut at its line feeds before each character becomes its low byte, and a
+  character above U+00FF whose low byte is a tab or a line end is held as `?`, as for SAM
+  text. 22 cases of `test_header_values_beyond_ascii` failed on the merged branch.
 - Chain, fitted to 0.32.0: `-o r.cram` on a chain with a transform and no `write` adds
   `write r.cram` (no `--index`) as the last step, against `-R`, `BAMMETRICS_REFERENCE` or
   the config file's `reference`, and names the metrics `r.<extension>`; without a

@@ -1329,7 +1329,8 @@ below. bammetrics differs here:
   character whose low byte is a tab or a colon (U+0109, U+013A) stays inside its value.
   Where that low byte is a tab or a line end (U+0109, U+010A, U+010D and the like),
   bammetrics holds `?` for it. htsjdk writes the byte itself into a BAM header, which
-  then has a field or a line more than the SAM text had.
+  then has a field or a line more than the SAM text had. The header of a CRAM is read the
+  same way.
 - `VALIDATION_STRINGENCY` is carried by every tool on the Picard face, every verb, every
   Python function (`validation_stringency=`), `chain --validation-stringency` for its
   source and `qc --validation-stringency`. A step of a chain refuses it: the chain reads

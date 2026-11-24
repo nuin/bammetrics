@@ -266,7 +266,7 @@ fn utf16_units(text: &[u8]) -> usize {
 /// U+00FF whose low byte is a tab or a line end is held as `?`: htsjdk
 /// writes that byte into the BAM, where it ends the field or the line
 /// (KNOWN_DIFFERENCES.md).
-fn held_bytes(line: &[u8]) -> Vec<u8> {
+pub(crate) fn held_bytes(line: &[u8]) -> Vec<u8> {
     if line.is_ascii() {
         return line.to_vec();
     }

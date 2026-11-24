@@ -49,8 +49,8 @@ mod read;
 mod write;
 
 pub use parse::{LineParser, parse_cigar};
-pub(crate) use read::clean_header_line;
 pub use read::{Reader, RecordStream, Records, WideNames};
+pub(crate) use read::{clean_header_line, held_bytes};
 pub use write::{SamWriter, header_text, write_record};
 
 use std::io;

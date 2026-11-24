@@ -161,11 +161,22 @@ fn not_bam_or_cram() -> io::Error {
 /// The SAM header of a CRAM, read from the start of the file as htsjdk's
 /// `CramIO.readSAMFileHeader` reads it: the text decoded as UTF-8, each
 /// character held as the low byte of its UTF-16 code unit
-/// ([`crate::java::decode_utf8`]), the one-byte-per-character form a BAM
+/// ([`crate::java::decode_utf8`]; `?` for one above U+00FF whose low byte is
+/// a tab or a line end), the one-byte-per-character form a BAM
 /// or SAM header is held in. `café` stored as UTF-8 is held as `caf\xE9`,
 /// which a SAM or BAM writer writes back as htsjdk's does. The text is read
 /// whole, at most [`crate::doctor::input::MAX_HEADER_BYTES`] bytes.
 pub(crate) fn read_header<R: Read>(reader: &mut cram::io::Reader<R>) -> io::Result<sam::Header> {
+    read_header_decoded(reader).map(|(held, _)| held)
+}
+
+/// [`read_header`], and the header with its values as the UTF-8 of the
+/// characters htsjdk holds when the text is not ASCII, for a tool that
+/// compares header values as htsjdk's strings (`CompareSAMs`): two
+/// characters that share their low byte stay apart there.
+pub(crate) fn read_header_decoded<R: Read>(
+    reader: &mut cram::io::Reader<R>,
+) -> io::Result<(sam::Header, Option<sam::Header>)> {
     let cap = crate::doctor::input::MAX_HEADER_BYTES;
     let mut definition = reader.header_reader();
     definition.read_magic_number()?;
@@ -185,14 +196,33 @@ pub(crate) fn read_header<R: Read>(reader: &mut cram::io::Reader<R>) -> io::Resu
         raw.discard_to_end()?;
     }
     container.discard_to_end()?;
+    let mut decoded = None;
     if !text.is_ascii() {
-        let decoded = crate::java::decode_utf8(&text);
-        text = decoded.encode_utf16().map(|unit| unit as u8).collect();
+        let utf8 = crate::java::decode_utf8(&text).into_owned();
+        // Cut into lines before each character becomes its low byte, as
+        // htsjdk splits the decoded text: a character whose low byte is a
+        // tab or a line end is held as `?` (sam_text::held_bytes).
+        text = Vec::with_capacity(utf8.len());
+        for line in utf8.split_inclusive('\n') {
+            let (body, end) = match line.strip_suffix('\n') {
+                Some(body) => (body, "\n"),
+                None => (line, ""),
+            };
+            text.extend_from_slice(&crate::sam_text::held_bytes(body.as_bytes()));
+            text.extend_from_slice(end.as_bytes());
+        }
+        // Only `CompareSAMs` reads it; a line noodles refuses here leaves
+        // that tool the held header, and no other tool fails on it.
+        decoded = parse_header_lines(utf8.as_bytes()).ok();
     }
+    Ok((parse_header_lines(&text)?, decoded))
+}
+
+/// The header of `text`, cut into lines as noodles' `read_sam_header` cuts
+/// them: at each line feed, with a carriage return before it dropped.
+fn parse_header_lines(text: &[u8]) -> io::Result<sam::Header> {
     let mut parser = sam::header::Parser::default();
-    // Lines as noodles' `read_sam_header` cuts them: at each line feed,
-    // with a carriage return before it dropped.
-    let mut rest: &[u8] = &text;
+    let mut rest: &[u8] = text;
     while !rest.is_empty() {
         let end = rest.iter().position(|&b| b == b'\n');
         let (mut line, after) = match end {
