@@ -794,6 +794,14 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("SORT_ORDER", "queryname")),
             picard_outputs: sorted_sam,
         },
+        Case {
+            verb: "sam-format-converter",
+            class: "SamFormatConverter",
+            verb_args: strings(&[MD]),
+            picard_args: strings(&[&format!("I={MD}")]),
+            option: Some(("COMPRESSION_LEVEL", "1")),
+            picard_outputs: sorted_sam,
+        },
     ]
 }
 
@@ -821,7 +829,8 @@ fn named_output(verb: &str) -> Option<&'static str> {
         | "add-or-replace-read-groups"
         | "revert-original-base-qualities-and-add-mate-cigar"
         | "fix-mate-information"
-        | "filter-sam-reads" => Some("sam"),
+        | "filter-sam-reads"
+        | "sam-format-converter" => Some("sam"),
         "add-comments-to-bam" | "gather-bam-files" | "merge-sam-files" | "reorder-sam" => {
             Some("bam")
         }
@@ -936,7 +945,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 71);
+    assert_eq!(classes.len(), 72);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

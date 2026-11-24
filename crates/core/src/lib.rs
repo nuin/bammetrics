@@ -95,6 +95,7 @@ pub mod replace_sam_header;
 pub mod revert_original_base_qualities_and_add_mate_cigar;
 pub mod rna_seq_metrics;
 pub mod rrbs_metrics;
+pub mod sam_format_converter;
 pub mod sam_order;
 pub mod sam_sort;
 pub mod sam_text;

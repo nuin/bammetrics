@@ -1,0 +1,10 @@
+## argv
+SamFormatConverter
+I=tests/data/duplicate_marking.bam
+O=OUT/converted.bam
+CREATE_INDEX=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: Can't CREATE_INDEX unless sort order is coordinate

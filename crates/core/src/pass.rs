@@ -234,9 +234,10 @@ pub fn read_header_at(path: &Path, stringency: Stringency) -> Result<sam::Header
     };
     let sniffed = cram::sniff(File::open(path).map_err(input)?).map_err(input)?;
     match sniffed.kind {
-        Kind::Cram => noodles::cram::io::Reader::new(BufReader::new(sniffed.reader))
-            .read_header()
-            .map_err(|e| input(cram::truncated(e, true))),
+        Kind::Cram => cram::read_header(&mut noodles::cram::io::Reader::new(BufReader::new(
+            sniffed.reader,
+        )))
+        .map_err(|e| input(cram::truncated(e, true))),
         Kind::Bam => bam::io::Reader::new(sniffed.reader)
             .read_header()
             .map_err(|e| input(cram::bam_header_error(e))),
@@ -364,9 +365,8 @@ fn with_stream_of_kind<T>(
         Kind::Cram => {
             let mut reader =
                 noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
-            let header = reader
-                .read_header()
-                .map_err(|e| input(cram::truncated(e, true)))?;
+            let header =
+                cram::read_header(&mut reader).map_err(|e| input(cram::truncated(e, true)))?;
             cram::decode(reader, &header, reference, workers, |records| {
                 consume(&header, records.get_mut(), Kind::Cram, &[])
             })
@@ -457,9 +457,8 @@ where
         Kind::Cram => {
             let mut reader =
                 noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
-            let header = reader
-                .read_header()
-                .map_err(|e| input(cram::truncated(e, true)))?;
+            let header =
+                cram::read_header(&mut reader).map_err(|e| input(cram::truncated(e, true)))?;
             cram::decode(reader, &header, reference, workers, |records| {
                 pass.drive(records, &header, build)
             })

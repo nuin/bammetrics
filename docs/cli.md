@@ -352,6 +352,7 @@ table.
 | `filter-sam-reads` | FilterSamReads (a SAM, BAM or CRAM; `--filter` required, `--read-list-file`, `--interval-list`, `--tag`, `--tag-value`, `--sort-order`, `--write-reads-files`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); `.reads` files beside it with `--write-reads-files` |
 | `downsample-sam` | DownsampleSam (a SAM, BAM or CRAM; `--probability`, `--strategy`, `--random-seed`, `--accuracy`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); `--metrics-file` the QualityYieldMetrics of the records kept |
 | `position-based-downsample-sam` | PositionBasedDownsampleSam (a SAM, BAM or CRAM file, read twice; `--fraction` required) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `sam-format-converter` | SamFormatConverter (a SAM, BAM or CRAM; every record unchanged; not `convert`, which converts metrics files) | `-o` SAM text for a name ending in `.sam`, a CRAM for one ending in `.cram` (with `-R`), a BAM for any other name |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -1156,6 +1157,41 @@ circle of area `--fraction` on the tile, or outside one of area `1 - FRACTION` a
   `--allow-multiple-downsampling-despite-warnings`.
 - In a chain the step runs on a file of its stream, since it reads its input twice; its
   BAM is the stream `downsampled` ([docs/chaining.md](chaining.md) section 31).
+
+### sam-format-converter
+
+```bash
+bammetrics sam-format-converter in.bam -o out.sam
+bammetrics sam-format-converter in.sam -o out.cram -R ref.fa --create-md5-file
+bammetrics SamFormatConverter I=in.cram R=ref.fa O=out.bam CREATE_INDEX=true
+```
+
+Picard's `SamFormatConverter` (wave W15, `tests/concordance/test_sam_format_converter.py`).
+It reads SAM text, a BAM or a CRAM and writes every record unchanged in the format the
+name of `-o` gives. It converts reads. `bammetrics convert` converts metrics files.
+
+- The name decides, lower case, as in htsjdk: `.sam` is SAM text, `.cram` a CRAM 3.0
+  against `-R`, and any other name a BAM (`out.BAM`, `out.sam.gz`, `out.txt`). Picard
+  writes a BAM for those names too.
+- The header is the input's as htsjdk's writer writes it: `@HD VN:1.6`, `SO:unsorted`
+  added to an `@HD` without one. No `@PG` line is added.
+- Each record keeps its fields and tags in their order. A record read from a CRAM gets
+  `MD` and `NM` as htsjdk decodes it. A BAM gets the `bin` htsjdk computes.
+- The records are written in input order, and the writer checks the header's order: a
+  record out of `SO:coordinate` or `SO:queryname` order exits 1, as in Picard.
+- `--create-index` writes `out.bai` beside a BAM. An input whose `SO` is not
+  `coordinate` exits 1 with Picard's `Can't CREATE_INDEX unless sort order is
+  coordinate`, before any file is written (Picard leaves an empty file). SAM text gets
+  no index. With a CRAM it exits 2 (1 on the Picard face) before the first read: no
+  index is written beside a CRAM (Picard writes a `.cram.bai`).
+- A CRAM input or output needs `-R`. Without it a placed record exits 1 with htsjdk's
+  `A reference must be supplied` and no file is left (Picard leaves an empty one).
+- `-o` naming the input exits 2 (1 on the Picard face) before the first read. Picard
+  truncates the input: a BAM read in place fails and is left empty.
+- `--compression-level` sets the BGZF level of a BAM and the gzip level of a CRAM's
+  blocks (Picard ignores it for a CRAM). `--max-records-in-ram` changes nothing.
+- Not a chain step: the chain's `write` step writes SAM text, a BAM or a CRAM by its
+  name (`+ write out.sam`).
 
 ### qc
 
@@ -2230,7 +2266,7 @@ above, with `--fail-on fail` by default, whatever the format.
 bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--sample NAME]
 ```
 
-`convert` reads one metrics file and writes it in another format. The input is Picard text,
+`convert` reads one metrics file and writes it in another format. It does not convert reads: `sam-format-converter` writes SAM, BAM or CRAM. The input is Picard text,
 the JSON of `--format json` (schema `bammetrics.metrics/1`) or the main file of `--format
 parquet`, told apart by its first bytes (`PAR1` is Parquet; `{` or `[` is JSON, a byte
 order mark before it dropped); `-` reads standard input. A Parquet file reads its histogram

@@ -426,8 +426,10 @@ const CASES: &[Case] = &[
 ];
 
 /// Tools that are no step, each with the words of its refusal. The count
-/// is the decision row of docs/chaining.md: 17 tools read no BAM, and
-/// `BuildBamIndex` indexes a file, which `write --index` does in a chain.
+/// is the decision row of docs/chaining.md: 17 tools read no BAM,
+/// `BuildBamIndex` indexes a file, which `write --index` does in a chain,
+/// and `SamFormatConverter` writes the format its file name gives, which
+/// `write` does.
 const REFUSED: &[(&str, &str, &str)] = &[
     (
         "AccumulateQualityYieldMetrics",
@@ -478,6 +480,11 @@ const REFUSED: &[(&str, &str, &str)] = &[
         "BuildBamIndex",
         "build-bam-index",
         "write --index writes the .bai",
+    ),
+    (
+        "SamFormatConverter",
+        "sam-format-converter",
+        "which is what the write step does",
     ),
 ];
 
@@ -767,7 +774,7 @@ fn every_registered_tool_has_a_step_or_a_refusal() {
         "each tool needs one row in CASES or REFUSED: {missing:?}"
     );
     assert_eq!(CASES.len() + REFUSED.len(), TOOLS.len());
-    assert_eq!((CASES.len(), REFUSED.len()), (53, 18));
+    assert_eq!((CASES.len(), REFUSED.len()), (53, 19));
 }
 
 #[test]

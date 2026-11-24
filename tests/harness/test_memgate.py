@@ -81,7 +81,8 @@ def test_the_committed_table_parses_and_names_both_tiers():
                        "chain materialize taps", "chain materialize merge",
                        "chain keep + qc", "chain short form resumed from r.bam",
                        "recipe prep qc", "chain qc wgs materialized", "sort-sam cram",
-                       "clean-sam cram long reads"]
+                       "clean-sam cram long reads", "sam-format-converter",
+                       "sam-format-converter cram"]
     for r in rows:
         # A row whose input a script writes first runs both in one `sh -c`.
         shell = r.argv[0] in ("sh", "/bin/sh") and r.argv[1:2] == ["-c"] and "{bin}" in r.argv[2]

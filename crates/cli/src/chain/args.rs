@@ -335,7 +335,8 @@ pub(crate) fn is_split(verb: &Verb) -> bool {
 /// hint, the one that lists the steps.
 ///
 /// `build-bam-index` names the `write --index` that does its work in a
-/// chain. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
+/// chain, `sam-format-converter` the `write` whose file name picks the
+/// format. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
 /// two commands, and the steps of a chain hand records on in memory, so no
 /// later wave makes it a step.
 pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
@@ -358,6 +359,17 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
         .hint(
             "write --index writes the .bai of the BAM a chain writes: bammetrics chain BAM + \
              ... + write out.bam --index",
+        );
+    }
+    if verb.class == bammetrics_core::sam_format_converter::TOOL.name {
+        return usage(format!(
+            "{place}: {} writes the records it reads in another format, which is what the \
+             write step does: it cannot be a step",
+            verb.class
+        ))
+        .hint(
+            "name the file of write: bammetrics chain BAM + ... + write out.sam (or out.cram \
+             with -R, or out.bam)",
         );
     }
     if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {

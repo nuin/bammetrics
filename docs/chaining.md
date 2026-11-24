@@ -56,7 +56,9 @@ Every registered tool that reads a BAM is a step at any position, 53 of the 71 (
 31). The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
 `compare-metrics`, `fifo-buffer`) are refused with exit 2 and the reason. So is
 `build-bam-index`: it names `write --index`, which writes the `.bai` of the BAM a chain
-writes.
+writes. So is `sam-format-converter` (wave W15): it writes the records it reads in the
+format its name gives, which is what `write out.sam`, `write out.bam` and `write
+out.cram` (with `-R`) do. The refusal names `write`.
 
 `fifo-buffer` is never a step. `FifoBuffer` copies the bytes of a pipe between two
 commands. The steps of a chain hand records on in memory, so a chain has no pipe for it

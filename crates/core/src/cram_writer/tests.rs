@@ -164,6 +164,9 @@ fn assert_same(written: &RawRecord, read: &RawRecord) {
             "{name} CIGAR"
         );
     }
+    // The reader gives a record without the paired flag no mate reference
+    // and no mate start, as htsjdk does, whatever the CRAM stores.
+    let paired = written.flags() & 0x1 != 0;
     assert_eq!(
         (
             read.mate_reference_id(),
@@ -171,8 +174,16 @@ fn assert_same(written: &RawRecord, read: &RawRecord) {
             read.template_length()
         ),
         (
-            written.mate_reference_id(),
-            written.mate_alignment_start(),
+            if paired {
+                written.mate_reference_id()
+            } else {
+                -1
+            },
+            if paired {
+                written.mate_alignment_start()
+            } else {
+                0
+            },
             written.template_length()
         ),
         "{name} mate"
@@ -557,7 +568,7 @@ fn an_unsorted_stream_reads_its_bases_through_the_index() {
 }
 
 #[test]
-fn a_cigar_in_a_cg_tag_is_stored_as_the_cigar() {
+fn a_cg_tag_of_too_few_operators_fails_as_in_htsjdk() {
     let qualities = [20u8; 8];
     let mut tags = b"CGBI\x03\x00\x00\x00".to_vec();
     for (length, op) in [(3u32, 0u32), (2, 2), (5, 0)] {
@@ -574,13 +585,15 @@ fn a_cigar_in_a_cg_tag_is_stored_as_the_cigar() {
         tags: &tags,
         ..Rec::default()
     });
-    let (_, read, _) = round_trip("cg", &header("coordinate"), &[written], 1);
-    assert_eq!(
-        read[0].cigar().collect::<Vec<_>>(),
-        [(3, 0), (2, 2), (5, 0)]
+    // htsjdk's `BAMRecord.getCigar` takes a `CG` tag only for more than
+    // 65,535 operators and throws on fewer; so does the writer. The
+    // 70,000-operator read of `cram_bams.py` is stored as its CIGAR
+    // (tests/concordance/test_sam_format_converter.py).
+    let message = fails("cg", true, &header("coordinate"), &[written]);
+    assert!(
+        message.contains("Only Cigar with > 65535 operators should be placed in CG tag"),
+        "{message}"
     );
-    assert_eq!(read[0].bases(), b"ACGTCATA");
-    assert_eq!(read[0].tag_bytes(), b"XYZk\0");
 }
 
 /// A failed writer leaves no file behind it.

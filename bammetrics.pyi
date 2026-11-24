@@ -1710,6 +1710,19 @@ def position_based_downsample_sam(
     for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in
     .cram."""
 
+def sam_format_converter(
+    input: _Path,
+    *,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """SamFormatConverter: no rows; OUTPUT gets every record of INPUT unchanged, as SAM
+    text for a name ending in .sam, a CRAM for one ending in .cram, else a BAM."""
+
 # END registry tools
 
 def alignment_summary(

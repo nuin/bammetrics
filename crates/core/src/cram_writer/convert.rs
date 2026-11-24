@@ -39,36 +39,17 @@ impl Window<'_> {
     }
 }
 
-/// The CIGAR of `record`: the operators of a `CG:B:I` tag when the CIGAR
-/// field holds the placeholder of a CIGAR over 65,535 operators (`<read
-/// length>S<reference length>N`), else the field. True when the tag was
+/// The CIGAR of `record`: the operators of its `CG` tag when the CIGAR
+/// field holds the placeholder of a CIGAR over 65,535 operators
+/// ([`crate::bam_raw::long_cigar`], `CG:B:i` as htsjdk writes it or `CG:B:I`
+/// as htslib and noodles write it), else the field. True when the tag was
 /// used: a CRAM has no limit on operators, so the tag is left out.
 fn cigar(record: &RawRecord) -> io::Result<(Vec<(u32, u8)>, bool)> {
     let field: Vec<(u32, u8)> = record.cigar().collect();
-    let placeholder = matches!(field.as_slice(), [(clip, 4), (_, 3)]
-        if *clip as usize == record.sequence_length());
-    if placeholder {
-        let mut at = record.tag_bytes();
-        while let Some(Field {
-            name,
-            kind,
-            value,
-            rest,
-        }) = next_tag(at)?
-        {
-            if name == *b"CG" && kind == b'B' && value.first() == Some(&b'I') {
-                let (ops, _) = value[5..].as_chunks::<4>();
-                let real = ops
-                    .iter()
-                    .map(|op| {
-                        let op = u32::from_le_bytes(*op);
-                        (op >> 4, (op & 0xF) as u8)
-                    })
-                    .collect();
-                return Ok((real, true));
-            }
-            at = rest;
-        }
+    if matches!(field.as_slice(), [(_, 4), (_, 3)])
+        && let Some(real) = crate::bam_raw::long_cigar(record, &record.tags()?)?
+    {
+        return Ok((real, true));
     }
     Ok((field, false))
 }

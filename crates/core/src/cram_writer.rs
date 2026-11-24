@@ -12,8 +12,13 @@
 //!   `CRAM 03 01`. 3.0 is the version a reader of 3.1 also reads; samtools
 //!   1.25, Picard 3.5.0 and this crate read the files. Blocks are gzip at
 //!   `COMPRESSION_LEVEL`, the quality scores rANS 4x8 of order 1.
-//! * **The header as the BAM holds it**, byte for byte
-//!   ([`crate::bam_writer::header_bytes`]). htsjdk adds no `M5` and no `UR`
+//! * **The header as htsjdk's CRAM writer stores it**: the BAM header text
+//!   ([`crate::bam_writer::header_bytes`]), one character per byte as
+//!   htsjdk holds a header, encoded as UTF-8 ([`crate::java::latin1_utf8`]).
+//!   `café` read from SAM text is held as `caf\xE9` and stored as UTF-8
+//!   `caf\xC3\xA9`; read from a BAM it is held as `caf\xC3\xA9` and stored
+//!   as `caf\xC3\x83\xC2\xA9`, as in Picard. [`crate::cram::read_header`]
+//!   reads it back as UTF-8. htsjdk adds no `M5` and no `UR`
 //!   to an `@SQ` line and needs neither to read; a reader finds the bases
 //!   through its own reference (`R=`, `samtools view -T`).
 //! * **Each reference sequence found in the FASTA by its name**, as
@@ -330,7 +335,8 @@ impl CramWriter {
         let mut out = BufWriter::with_capacity(1 << 20, file.create().map_err(error)?);
         let encoding = raw::Options::gzip(u32::from(options.compression_level));
         raw::write_file_definition(&mut out, &encoding).map_err(error)?;
-        raw::write_header_text(&mut out, &bam_writer::header_bytes(header)).map_err(error)?;
+        let text = bam_writer::header_bytes(header);
+        raw::write_header_text(&mut out, &crate::java::latin1_utf8(&text)).map_err(error)?;
         Ok(Self {
             path,
             file,
