@@ -40,8 +40,8 @@ use std::path::Path;
 use bammetrics_core::registry::did_you_mean;
 
 use super::args::{
-    find_step, is_chain_key, is_split, parser_flags, step_parser_flags, takes_further_inputs,
-    unknown_step, write_flags,
+    DRY_RUN, find_step, is_chain_key, is_split, parser_flags, step_parser_flags,
+    takes_further_inputs, unknown_step, write_flags,
 };
 use super::{QC, STEP, WRITE, qc_step, usage};
 use crate::error::VerbError;
@@ -301,6 +301,11 @@ pub(super) fn with_plus(args: &[String]) -> Result<Vec<String>, VerbError> {
         }
         head.extend(moved);
     }
+    if let Some(last) = steps.last_mut().filter(|step| !step.bare) {
+        let (kept, moved) = dry_run_after_last(last.verb.as_deref(), &chain, &last.args);
+        last.args = kept;
+        head.extend(moved);
+    }
     let mut out = head;
     for step in steps {
         out.push(STEP.to_owned());
@@ -459,6 +464,38 @@ fn names_path(args: &[String]) -> bool {
         }
     }
     false
+}
+
+/// The words of the last step `verb` of the `+` form: those that stay
+/// with it and a `--dry-run` it hands to the chain, when the step has no
+/// flag of that spelling. Every other chain option stays and gets the
+/// parser's error.
+fn dry_run_after_last(
+    verb: Option<&str>,
+    chain: &[Flag],
+    args: &[String],
+) -> (Vec<String>, Vec<String>) {
+    let step = flags_of(verb);
+    let (mut kept, mut moved) = (Vec::new(), Vec::new());
+    let mut at = 0;
+    while at < args.len() {
+        if args[at] == "--" {
+            kept.extend(args[at..].iter().cloned());
+            break;
+        }
+        let next = args.get(at + 1).map(String::as_str);
+        let (target, takes) = match grammar::option_of(&step, &args[at], next) {
+            Some((_, takes)) => (&mut kept, takes),
+            None => match grammar::option_of(chain, &args[at], next) {
+                Some((flag, takes)) if flag.key == DRY_RUN => (&mut moved, takes),
+                _ => (&mut kept, 0),
+            },
+        };
+        let end = (at + 1 + takes).min(args.len());
+        target.extend(args[at..end].iter().cloned());
+        at = end;
+    }
+    (kept, moved)
 }
 
 /// The words of the last bare step `verb`, step `number`: those that stay

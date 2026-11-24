@@ -595,3 +595,186 @@ fn the_last_writer_keeps_its_output() {
     );
     assert!(!dir.join("s.SAM").exists());
 }
+
+/// The binary in `dir`, with no config file and no `BAMMETRICS_REFERENCE`.
+fn run_in(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args(args)
+        .current_dir(dir)
+        .env("XDG_CONFIG_HOME", dir.join("no-config"))
+        .env_remove("BAMMETRICS_REFERENCE")
+        .output()
+        .expect("run bammetrics")
+}
+
+fn markdup() -> String {
+    root().join("tests/data/markdup.bam").display().to_string()
+}
+
+/// Without `-o`, the metrics files go beside the BAM of a `write` step
+/// (`write -o d/out.bam` gives the prefix `d/out`) in the bare, `+` and
+/// plan-file forms, and nothing lands in the current directory.
+#[test]
+fn without_o_the_metrics_follow_the_write_step() {
+    let source = markdup();
+    let plan_text = format!(
+        "[chain]\nsource = \"{source}\"\n\n[[step]]\nverb = \"mark-duplicates\"\n\n\
+         [[step]]\nverb = \"insert-size\"\n\n[[step]]\nverb = \"write\"\noutput = \"d/out.bam\"\n"
+    );
+    let forms: [(&str, Vec<&str>); 3] = [
+        (
+            "write-bare",
+            vec![
+                "chain",
+                &source,
+                "mark-duplicates",
+                "insert-size",
+                "write",
+                "-o",
+                "d/out.bam",
+            ],
+        ),
+        (
+            "write-plus",
+            vec![
+                "chain",
+                &source,
+                "+",
+                "mark-duplicates",
+                "+",
+                "insert-size",
+                "+",
+                "write",
+                "d/out.bam",
+            ],
+        ),
+        ("write-plan", vec!["chain", "--plan", "plan.toml"]),
+    ];
+    let mut dirs = Vec::new();
+    for (name, args) in forms {
+        let dir = fresh_dir(name);
+        fs::write(dir.join("plan.toml"), &plan_text).expect("plan file");
+        let stderr = ok(&run_in(&dir, &args));
+        assert!(
+            stderr.contains("no -o, files go to d/out.*, beside the BAM of the write step"),
+            "{name}: {stderr}"
+        );
+        assert_eq!(names(&dir), ["d", "plan.toml"], "{name}");
+        assert_eq!(
+            names(&dir.join("d")),
+            [
+                "out.bam",
+                "out.insert_size_metrics",
+                "out.marked.duplication_metrics"
+            ],
+            "{name}"
+        );
+        dirs.push(dir.join("d"));
+    }
+    same_files(&dirs[0], &dirs[1]);
+    same_files(&dirs[0], &dirs[2]);
+}
+
+/// Without `-o` and without a `write` path, a split step's `-o DIR` names
+/// the prefix: `DIR/<source name>`. A chain `-o` still wins.
+#[test]
+fn without_o_the_metrics_follow_the_split_directory_and_o_wins() {
+    let source = markdup();
+    let dir = fresh_dir("split-prefix");
+    let stderr = ok(&run_in(
+        &dir,
+        &[
+            "chain",
+            &source,
+            "insert-size",
+            "split-sam-by-library",
+            "-o",
+            "s1",
+        ],
+    ));
+    assert!(
+        stderr.contains("no -o, files go to s1/markdup.*, in the directory of the split step"),
+        "{stderr}"
+    );
+    assert_eq!(names(&dir), ["s1"]);
+    assert_eq!(
+        names(&dir.join("s1")),
+        ["lib1.bam", "lib2.bam", "markdup.insert_size_metrics"]
+    );
+    let plus = fresh_dir("split-prefix-plus");
+    ok(&run_in(
+        &plus,
+        &[
+            "chain",
+            &source,
+            "+",
+            "insert-size",
+            "+",
+            "split-sam-by-library",
+            "-o",
+            "s1",
+        ],
+    ));
+    same_files(&dir.join("s1"), &plus.join("s1"));
+    // An explicit -o names the metrics; the write step keeps its BAM.
+    let given = fresh_dir("write-prefix-given");
+    let stderr = ok(&run_in(
+        &given,
+        &[
+            "chain",
+            &source,
+            "-o",
+            "p/x",
+            "+",
+            "mark-duplicates",
+            "+",
+            "insert-size",
+            "+",
+            "write",
+            "d/out.bam",
+        ],
+    ));
+    assert!(!stderr.contains("no -o"), "{stderr}");
+    assert_eq!(names(&given.join("d")), ["out.bam"]);
+    assert_eq!(
+        names(&given.join("p")),
+        ["x.insert_size_metrics", "x.marked.duplication_metrics"]
+    );
+}
+
+/// `--dry-run` after the last step of the `+` form is the chain's: the plan
+/// prints and nothing is written. Another chain option there keeps its
+/// error.
+#[test]
+fn dry_run_after_the_last_plus_step_prints_the_plan() {
+    let source = markdup();
+    let dir = fresh_dir("dry-run-last");
+    let output = run_in(
+        &dir,
+        &[
+            "chain",
+            &source,
+            "+",
+            "quality-yield",
+            "+",
+            "write",
+            "x.bam",
+            "--index",
+            "--dry-run",
+        ],
+    );
+    ok(&output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.starts_with("chain plan for "), "{stdout}");
+    assert!(
+        stdout.contains("prefix    x (from the write step's path, no -o)"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("nothing ran: this is a plan"), "{stdout}");
+    assert!(names(&dir).is_empty(), "{:?}", names(&dir));
+    let stderr = usage_error(&run_in(
+        &dir,
+        &["chain", &source, "+", "insert-size", "--also", "json"],
+    ));
+    assert!(stderr.contains("--also belongs to the chain"), "{stderr}");
+}
