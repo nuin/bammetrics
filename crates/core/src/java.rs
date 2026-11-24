@@ -60,7 +60,14 @@ const MIN_TREEIFY_CAPACITY: usize = 64;
 /// `TREEIFY_THRESHOLD` entries in a table under 64 slots. `None` when a
 /// bin would become a tree, whose iteration order this does not model.
 pub fn hash_map_order_checked(hashes: &[i32]) -> Option<Vec<usize>> {
-    let mut capacity = 16usize;
+    hash_map_order_sized(hashes, 16)
+}
+
+/// [`hash_map_order_checked`] for `new HashMap<>(initial)`: the table
+/// starts at `tableSizeFor(initial)` slots (the power of two at or above
+/// it, 1 for 0 or 1, at most 2^30).
+pub fn hash_map_order_sized(hashes: &[i32], initial: usize) -> Option<Vec<usize>> {
+    let mut capacity = initial.clamp(1, 1 << 30).next_power_of_two();
     let mut bins: HashMap<usize, usize> = HashMap::new();
     let bin = |hash: i32, capacity: usize| (spread(hash) & (capacity as i32 - 1)) as usize;
     let rebin = |count: usize, capacity: usize| {

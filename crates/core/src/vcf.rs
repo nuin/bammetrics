@@ -40,6 +40,7 @@ mod header;
 mod line_cap;
 mod site;
 mod site_header;
+mod subset;
 
 pub use bit_set::MAX_DBSNP_PAGES;
 use bit_set::PAGE_BITS;
@@ -48,6 +49,7 @@ pub use encode::{Encoder, format_quality};
 pub use full_header::{Count, Definition, VcfHeader, java_compare};
 use line_cap::LineCap;
 pub use site_header::{ContigLine, MAX_HEADER_BYTES, RawHeader, SiteHeader};
+pub use subset::{SampleSubset, tree_set};
 
 use crate::bed_to_interval_list;
 use crate::error::{Error, Result};

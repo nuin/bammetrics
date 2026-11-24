@@ -33,7 +33,7 @@ use std::collections::BTreeMap;
 
 use super::full_header::{Count, VcfHeader, java_compare};
 use super::site::{self, Rules, java_split, percent_decode, split_condensed};
-use super::{Site, encode_genotypes};
+use super::{Site, VariantType, encode_genotypes};
 
 /// One record line in, one record line out.
 #[derive(Clone, Debug)]
@@ -139,6 +139,17 @@ impl Encoder {
             }
         }
         Ok(Some(site))
+    }
+
+    /// Read `line` as the codec reads it, its errors included, and give the
+    /// record's `VariantContext.getType`; `None` for a line that starts
+    /// with `#`. Nothing is encoded (`SplitVcfs` picks a writer by it).
+    pub fn read_type(&self, line: &str) -> Result<Option<VariantType>, String> {
+        if site::parse_line(line, &self.rules)?.is_none() {
+            return Ok(None);
+        }
+        let parts = split_condensed(line, 6);
+        Ok(Some(site::kind_of(&parts[3].to_uppercase(), parts[4])))
     }
 
     /// `parseInfo`, then `VCFEncoder.writeInfoString`.

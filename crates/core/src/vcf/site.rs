@@ -262,6 +262,39 @@ fn parse_filters(text: &str) -> Result<bool, String> {
     Ok(!names.is_empty())
 }
 
+/// `VariantContext.determineType` from the `REF` and `ALT` text of a line
+/// the codec read: no alternate is `NO_VARIATION`; each alternate against
+/// the reference is `SYMBOLIC`, a `SNP` or `MNP` (same length) or an
+/// `INDEL`; two alternates of different types make `MIXED`.
+pub(super) fn kind_of(reference: &str, alternates: &str) -> super::VariantType {
+    use super::VariantType;
+    let alts = if alternates.contains(',') {
+        java_split(alternates, ',')
+    } else {
+        vec![alternates]
+    };
+    let mut kind = None;
+    for alt in alts.into_iter().filter(|alt| *alt != ".") {
+        let this = if is_symbolic(alt.as_bytes()) {
+            VariantType::Symbolic
+        } else if alt.len() == reference.len() {
+            if alt.len() == 1 {
+                VariantType::Snp
+            } else {
+                VariantType::Mnp
+            }
+        } else {
+            VariantType::Indel
+        };
+        match kind {
+            None => kind = Some(this),
+            Some(k) if k != this => return VariantType::Mixed,
+            Some(_) => {}
+        }
+    }
+    kind.unwrap_or(VariantType::NoVariation)
+}
+
 /// `String.split` on one character: trailing empty parts dropped.
 pub(super) fn java_split(text: &str, separator: char) -> Vec<&str> {
     let mut parts: Vec<&str> = text.split(separator).collect();

@@ -597,6 +597,15 @@ impl VcfHeader {
         &self.samples
     }
 
+    /// The same lines with `samples` as the sample columns:
+    /// `new VCFHeader(getMetaDataInInputOrder(), samples)`.
+    pub fn with_samples(&self, samples: Vec<String>) -> Self {
+        let mut header = self.clone();
+        header.site.samples.clone_from(&samples);
+        header.samples = samples;
+        header
+    }
+
     /// The minor version of `VCFv4.N` the input named.
     pub fn minor(&self) -> u8 {
         self.minor

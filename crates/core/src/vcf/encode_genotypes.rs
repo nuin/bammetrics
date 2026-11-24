@@ -403,13 +403,17 @@ pub(super) fn check(
 /// `calcVCFGenotypeKeys`: `GT` first when a genotype has alleles, then
 /// every other key a genotype holds in sorted order; `GT` alone when none.
 fn genotype_keys<'t>(decoded: &[Decoded<'t>]) -> Vec<&'t str> {
+    genotype_keys_of(&decoded.iter().collect::<Vec<_>>())
+}
+
+fn genotype_keys_of<'t>(decoded: &[&Decoded<'t>]) -> Vec<&'t str> {
     let mut seen: HashSet<&str> = HashSet::new();
     for genotype in decoded {
         for (key, _) in &genotype.attributes {
             seen.insert(key);
         }
     }
-    let any = |test: fn(&Decoded) -> bool| decoded.iter().any(test);
+    let any = |test: fn(&Decoded) -> bool| decoded.iter().any(|g| test(g));
     for (name, present) in [
         ("GQ", any(|g| g.gq.is_some())),
         ("DP", any(|g| g.dp.is_some())),
@@ -508,6 +512,83 @@ fn write(
     site: &Site,
     out: &mut String,
 ) -> Result<(), String> {
+    let names = genotype_keys(&genotypes.samples);
+    write_keys(header, genotypes, &names, site, out)
+}
+
+/// `GenotypesContext.subsetToSamples` over the genotypes of `text`, then
+/// `appendGenotypeData` under `output`: every sample of `input` decoded
+/// (their errors come first: the lazy context decodes them all), then one
+/// genotype per pick, `None` for a sample the record lacks. The keys come
+/// from the genotypes found; a missing one is
+/// `GenotypeBuilder.createMissing` at the largest ploidy of the genotypes
+/// found (`getMaxPloidy(2)`: 2 when none has alleles).
+pub(super) struct Subset<'h> {
+    /// The sample count of the header the record was read under.
+    pub samples: usize,
+    /// That header is VCF 4.3 or later: values are percent-decoded.
+    pub percent: bool,
+    pub output: &'h VcfHeader,
+    pub picks: &'h [Option<usize>],
+}
+
+impl Subset<'_> {
+    pub(super) fn write(
+        &self,
+        text: &str,
+        alleles: usize,
+        site: &Site,
+        out: &mut String,
+    ) -> Result<(), String> {
+        let place = format!(" at {}:{}", site.contig, site.start);
+        let mut genotypes = decode_all(text, self.samples, alleles, self.percent, &place)?;
+        let mut all: Vec<Option<Decoded<'_>>> = std::mem::take(&mut genotypes.samples)
+            .into_iter()
+            .map(Some)
+            .collect();
+        let mut found: Vec<Option<Decoded<'_>>> = Vec::new();
+        let mut order: Vec<Option<usize>> = Vec::with_capacity(self.picks.len());
+        for pick in self.picks {
+            match pick.and_then(|at| all.get_mut(at)).and_then(Option::take) {
+                Some(genotype) => {
+                    order.push(Some(found.len()));
+                    found.push(Some(genotype));
+                }
+                None => order.push(None),
+            }
+        }
+        let present: Vec<&Decoded<'_>> = found.iter().flatten().collect();
+        let names = genotype_keys_of(&present);
+        let ploidy = present
+            .iter()
+            .map(|g| (g.alleles.end - g.alleles.start) as usize)
+            .max()
+            .filter(|&p| p > 0)
+            .unwrap_or(2);
+        let start = genotypes.alleles.len();
+        genotypes.alleles.extend(std::iter::repeat_n(None, ploidy));
+        let missing = Span::of(&genotypes.alleles, start);
+        genotypes.samples = order
+            .into_iter()
+            .map(|at| {
+                at.and_then(|at| found[at].take())
+                    .unwrap_or_else(|| Decoded {
+                        alleles: missing,
+                        ..Decoded::default()
+                    })
+            })
+            .collect();
+        write_keys(self.output, &genotypes, &names, site, out)
+    }
+}
+
+fn write_keys(
+    header: &VcfHeader,
+    genotypes: &Genotypes<'_>,
+    names: &[&str],
+    site: &Site,
+    out: &mut String,
+) -> Result<(), String> {
     use std::fmt::Write as _;
     if header.minor() < 1 && !genotypes.keys.contains(&"GT") {
         return Err(
@@ -515,7 +596,6 @@ fn write(
                 .to_owned(),
         );
     }
-    let names = genotype_keys(&genotypes.samples);
     if let Some(name) = names
         .iter()
         .find(|n| **n != "GT" && header.format(n).is_none())
@@ -528,7 +608,7 @@ fn write(
     }
     out.push_str(&names.join(":"));
     let with_gt = names.first().is_some_and(|n| *n == "GT");
-    let others = if with_gt { &names[1..] } else { &names[..] };
+    let others = if with_gt { &names[1..] } else { names };
     // One sample's values, each ended at an offset of `values`.
     let mut values = String::new();
     let mut ends: Vec<usize> = Vec::with_capacity(others.len());

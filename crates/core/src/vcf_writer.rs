@@ -195,8 +195,18 @@ pub struct VcfWriter {
     header: Arc<VcfHeader>,
     encoder: Encoder,
     options: VcfOptions,
+    /// The dictionary of the `.tbi` when it is not the header's
+    /// (`SplitVcfs SEQUENCE_DICTIONARY`).
+    dictionary: Option<crate::vcf::Dictionary>,
     line: String,
     records: u64,
+}
+
+/// A closed VCF and its companions under their temporary names: the paths
+/// they take, the VCF's first, and the files to rename into place.
+pub struct Staged {
+    pub written: Vec<PathBuf>,
+    pub files: Vec<AtomicFile>,
 }
 
 impl VcfWriter {
@@ -208,8 +218,20 @@ impl VcfWriter {
 
     /// [`VcfWriter::create`] holding the caller's copy of the header.
     pub fn create_shared(path: &Path, header: Arc<VcfHeader>, options: VcfOptions) -> Result<Self> {
+        Self::create_indexed_by(path, header, options, None)
+    }
+
+    /// [`VcfWriter::create_shared`] whose `.tbi` takes its contig lengths
+    /// from `dictionary` when one is given (Picard's
+    /// `setReferenceDictionary`), else from the header's `##contig` lines.
+    pub fn create_indexed_by(
+        path: &Path,
+        header: Arc<VcfHeader>,
+        options: VcfOptions,
+        dictionary: Option<crate::vcf::Dictionary>,
+    ) -> Result<Self> {
         options.check(path)?;
-        if options.index && header.dictionary().is_none() {
+        if options.index && dictionary.is_none() && header.dictionary().is_none() {
             // Picard's VCF writers refuse it before the first record.
             return Err(Error::Usage(format!(
                 "{}: A sequence dictionary must be available in the input file when creating \
@@ -250,6 +272,7 @@ impl VcfWriter {
             encoder: Encoder::new(&header),
             header,
             options,
+            dictionary,
             line: String::new(),
             records: 0,
         })
@@ -295,6 +318,15 @@ impl VcfWriter {
     /// Close the VCF, write its index and MD5 from the finished file, then
     /// rename every file into place. The VCF's path first.
     pub fn finish(self) -> Result<Vec<PathBuf>> {
+        let Staged { written, files } = self.stage()?;
+        crate::split_sam::commit_all(files)?;
+        Ok(written)
+    }
+
+    /// Close the VCF and write its index and MD5 from the finished file,
+    /// every file left under its temporary name for the caller to rename
+    /// with others as one set ([`crate::split_sam::commit_all`]).
+    pub fn stage(self) -> Result<Staged> {
         let output = |path: &Path| {
             let path = path.to_path_buf();
             move |source| Error::Output {
@@ -307,7 +339,7 @@ impl VcfWriter {
             Some(write_tabix(
                 self.file.writing(),
                 &self.path,
-                &self.header,
+                self.dictionary.as_ref().or(self.header.dictionary()),
                 &index_path(&self.path),
             )?)
         } else {
@@ -327,8 +359,10 @@ impl VcfWriter {
         let mut written = vec![self.path.clone()];
         written.extend(staged.iter().map(|file| file.path().to_path_buf()));
         staged.push(self.file);
-        crate::split_sam::commit_all(staged)?;
-        Ok(written)
+        Ok(Staged {
+            written,
+            files: staged,
+        })
     }
 }
 
@@ -336,14 +370,19 @@ impl VcfWriter {
 /// later), into a file to be renamed to `target`. Each record line is read
 /// back for `CHROM`, `POS` and its end ([`tabix::record_span`]); the writer
 /// checked the rest.
-fn write_tabix(vcf: &Path, shown: &Path, header: &VcfHeader, target: &Path) -> Result<AtomicFile> {
+fn write_tabix(
+    vcf: &Path,
+    shown: &Path,
+    dictionary: Option<&crate::vcf::Dictionary>,
+    target: &Path,
+) -> Result<AtomicFile> {
     let read = |source| Error::Input {
         path: shown.to_path_buf(),
         source,
     };
     let failed = |message: String| Error::Metric(format!("{}: {message}", shown.display()));
     let mut reader = bgzf::io::Reader::new(io::BufReader::new(File::open(vcf).map_err(read)?));
-    let mut builder = tabix::TabixBuilder::new(header.dictionary());
+    let mut builder = tabix::TabixBuilder::new(dictionary);
     let mut line = Vec::new();
     let mut end = 0u64;
     loop {
