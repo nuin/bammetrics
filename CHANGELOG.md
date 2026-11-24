@@ -129,10 +129,13 @@ Wave W15 of docs/07, 74 tools: CRAM output for every `OUTPUT` and chain `write` 
 
 - `CompareSAMs` compares the header values of a CRAM as the UTF-8 htsjdk decodes, as it
   did before the CRAM header was held one byte per character (`cram::read_header_decoded`):
-  `café` against `cafè`, CJK and emoji values print as Picard prints them. A CRAM header
-  line is cut at its line feeds before each character becomes its low byte, and a
-  character above U+00FF whose low byte is a tab or a line end is held as `?`, as for SAM
-  text. 22 cases of `test_header_values_beyond_ascii` failed on the merged branch.
+  `café` against `cafè`, CJK and emoji values print as Picard prints them. 22 cases of
+  `test_header_values_beyond_ascii` failed on the merged branch.
+- CRAM header text is split into lines and fields after it is decoded, as htsjdk splits
+  it, and only then held one byte per character. A character above U+00FF whose low byte
+  is a tab, a line end or a NUL (U+0109, U+010A, U+0100) is held as `?`, as for SAM text.
+  A crafted CRAM header could add `@RG` or `@SQ` lines or fields before
+  (`test_cram_header_text.py` against Picard `ViewSam`).
 - Chain, fitted to 0.32.0: `-o r.cram` on a chain with a transform and no `write` adds
   `write r.cram` (no `--index`) as the last step, against `-R`, `BAMMETRICS_REFERENCE` or
   the config file's `reference`, and names the metrics `r.<extension>`; without a
@@ -158,9 +161,13 @@ Wave W15 of docs/07, 74 tools: CRAM output for every `OUTPUT` and chain `write` 
   same bytes, every record equal under samtools again. Not measured: Picard on that
   file, an unsorted stream at scale.
 - SAM text: a header line is split into fields after it is decoded as UTF-8, as htsjdk
-  splits it. A character above U+00FF whose low byte is a tab or a line end (U+0109,
-  U+010A) no longer cuts its value or fails the header; it is held as `?`
-  (KNOWN_DIFFERENCES.md, SAM text).
+  splits it. A character above U+00FF whose low byte is a tab, a line end or a NUL
+  (U+0109, U+010A, U+0100) no longer cuts its value or fails the header; it is held as
+  `?` (KNOWN_DIFFERENCES.md, SAM text).
+- `MarkDuplicates` and `FixMateInformation` with several inputs name a BAM cut inside a
+  record as the other readers do (`PATH: truncated BAM: the file ends inside a record or
+  a block`), where they said `bad record: failed to fill whole buffer`
+  (`crates/cli/tests/cut_record.rs`).
 - The duplicate order (`SortSam SORT_ORDER=duplicate`, `CollectUmiPrevalenceMetrics`,
   `CompareSAMs LENIENT_DUP`): an unmapped record with a mapped mate and no `MC` fails only
   when another record ties with it in the file order, as htsjdk scores it only then. It

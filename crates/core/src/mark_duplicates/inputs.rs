@@ -14,7 +14,7 @@ use noodles::sam;
 
 use crate::bam_raw::RawRecord;
 use crate::error::{Error, Result};
-use crate::header_merge::{HeaderMerger, Merger};
+use crate::header_merge::{HeaderMerger, Merger, StreamInput};
 pub use crate::header_merge::{HeaderTag, SortOrder, base36, set_header_tag};
 use crate::pass;
 use crate::sam_text::Stringency;
@@ -33,15 +33,19 @@ pub struct Inputs<'a> {
 }
 
 enum Source<'a> {
-    One(&'a mut (dyn Read + 'static)),
+    One(StreamInput<'a>),
     Merged(Box<Merger<'a>>),
 }
 
 impl Inputs<'_> {
-    /// The next record into `record`; false after the last.
+    /// The next record into `record`; false after the last. A file cut
+    /// inside a record or a block is a truncated BAM of its path, as the
+    /// one-pass reader names it.
     pub fn next(&mut self, record: &mut RawRecord) -> Result<bool> {
         match &mut self.source {
-            Source::One(reader) => record.read_from(*reader).map_err(Error::Record),
+            Source::One((path, cram, reader)) => record
+                .read_from(*reader)
+                .map_err(|e| pass::read_error(path, *cram, e)),
             Source::Merged(merger) => merger.next(record),
         }
     }
@@ -62,7 +66,7 @@ pub fn open<T>(
     let mut f = Some(f);
     let mut call = |streams: Vec<Stream<'_>>| -> Result<T> {
         let f = f.take().expect("called once");
-        f(combine(streams, assume)?)
+        f(combine(streams, paths, assume)?)
     };
     let decoding = Decoding {
         reference,
@@ -128,7 +132,11 @@ fn open_nested<T>(
     }
 }
 
-fn combine(mut streams: Vec<Stream<'_>>, assume: Option<SortOrder>) -> Result<Inputs<'_>> {
+fn combine<'a>(
+    mut streams: Vec<Stream<'a>>,
+    paths: &'a [PathBuf],
+    assume: Option<SortOrder>,
+) -> Result<Inputs<'a>> {
     if let Some(order) = assume {
         set_header_tag(&mut streams[0].0, HeaderTag::SortOrder, order.name());
     }
@@ -137,12 +145,15 @@ fn combine(mut streams: Vec<Stream<'_>>, assume: Option<SortOrder>) -> Result<In
         return Ok(Inputs {
             header,
             cram,
-            source: Source::One(reader),
+            source: Source::One((&paths[0], cram, reader)),
         });
     }
     let cram = streams.iter().any(|s| s.2);
-    let (headers, readers): (Vec<sam::Header>, Vec<_>) =
-        streams.into_iter().map(|(h, r, _)| (h, r)).unzip();
+    let (headers, readers): (Vec<sam::Header>, Vec<_>) = streams
+        .into_iter()
+        .zip(paths)
+        .map(|((h, r, c), path)| (h, (path.as_path(), c, r)))
+        .unzip();
     let merged = HeaderMerger::merge(&headers)?;
     let order = SortOrder::of(&merged.header);
     if assume.is_none() && order != SortOrder::Unsorted {

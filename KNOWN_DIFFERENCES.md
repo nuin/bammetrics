@@ -297,8 +297,8 @@ behaves how.
   twice (the mode pass, then the counts), so `jumping-library -`, `jumping-library
   <(cat in.bam)` and `I=/dev/stdin` are refused with a usage error (exit 2 on the verb, 1
   on the Picard face) where every other verb reads standard input; the verb's `--help`
-  says so. A BAM cut inside a BGZF block exits 1 with `failed to fill whole buffer` and
-  writes no file. Picard 3.5.0 exits 0 and writes an all-zero row when the cut falls
+  says so. A BAM cut inside a BGZF block exits 1 with `truncated BAM: the file ends
+  inside a record or a block` and writes no file. Picard 3.5.0 exits 0 and writes an all-zero row when the cut falls
   inside the first block after the header block (`tests/data/insert_size.bam` cut at 120
   or 250 bytes, `jumping_bams.py` `main` cut at 1000), and throws `FileTruncatedException`
   (exit 1) when it falls in a later block (`main` cut at 60000 or at half its length).
@@ -1327,10 +1327,11 @@ below. bammetrics differs here:
   `CompareSAMs` alone compares names and header values as the file spells them.
 - A header line is split into its fields after it is decoded, as htsjdk splits it, so a
   character whose low byte is a tab or a colon (U+0109, U+013A) stays inside its value.
-  Where that low byte is a tab or a line end (U+0109, U+010A, U+010D and the like),
-  bammetrics holds `?` for it. htsjdk writes the byte itself into a BAM header, which
-  then has a field or a line more than the SAM text had. The header of a CRAM is read the
-  same way.
+  Where that low byte is a tab, a line end or a NUL (U+0109, U+010A, U+010D, U+0100 and
+  the like), bammetrics holds `?` for it. htsjdk writes the byte itself into a BAM header
+  or `ViewSam` text, which then has a field or a line more than the SAM text had. The
+  header text of a CRAM, which htsjdk also decodes as UTF-8, is held the same way
+  (`test_cram_header_text.py`).
 - `VALIDATION_STRINGENCY` is carried by every tool on the Picard face, every verb, every
   Python function (`validation_stringency=`), `chain --validation-stringency` for its
   source and `qc --validation-stringency`. A step of a chain refuses it: the chain reads

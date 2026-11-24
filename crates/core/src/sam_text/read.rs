@@ -261,19 +261,20 @@ fn utf16_units(text: &[u8]) -> usize {
     String::from_utf8_lossy(text).encode_utf16().count()
 }
 
-/// The bytes held for a decoded header line: the low byte of each UTF-16
-/// code unit, as htsjdk writes the line into a BAM. A character above
-/// U+00FF whose low byte is a tab or a line end is held as `?`: htsjdk
-/// writes that byte into the BAM, where it ends the field or the line
-/// (KNOWN_DIFFERENCES.md).
-pub(crate) fn held_bytes(line: &[u8]) -> Vec<u8> {
-    if line.is_ascii() {
-        return line.to_vec();
+/// The bytes held for decoded header text (UTF-8, one line or several):
+/// the low byte of each UTF-16 code unit, as htsjdk writes the text into a
+/// BAM. A character above U+00FF whose low byte is a tab, a line end or a
+/// NUL is held as `?`: htsjdk writes that byte into the BAM, where it ends
+/// the field, the line or the text (KNOWN_DIFFERENCES.md). The SAM text
+/// reader and the CRAM header reader (`cram::read_header`) both call it.
+pub(crate) fn held_bytes(text: &[u8]) -> Vec<u8> {
+    if text.is_ascii() {
+        return text.to_vec();
     }
-    String::from_utf8_lossy(line)
+    String::from_utf8_lossy(text)
         .encode_utf16()
         .map(|unit| match unit as u8 {
-            b'\t' | b'\n' | b'\r' if unit > 0xFF => b'?',
+            b'\t' | b'\n' | b'\r' | 0 if unit > 0xFF => b'?',
             low => low,
         })
         .collect()

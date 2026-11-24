@@ -985,7 +985,7 @@ W04:
 | docs/07 | As built | Reason |
 |---|---|---|
 | The verb is `chain`, with `run` as an alias or not (Q2) | `chain` only | The owner's decision on Q2 |
-| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM only. A `.sam`, `.cram`, `.fastq` or `.fq` name is a usage error naming W05, W15 or W22 | The SAM text writer is W05, the CRAM writer W15, FASTQ output W22 |
+| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM only. A `.sam`, `.cram`, `.fastq` or `.fq` name is a usage error naming W05, W15 or W22 | The SAM text writer is W05 (section 14). The CRAM writer shipped in W15, 0.33.0: `write r.cram` against the chain's `-R` (section 23). FASTQ output is W22 |
 | Two taps of one tool at one position is a usage error | It is one when both are named by the prefix, since they write one file. With `-o` on one of them the chain runs | A step's own `-o` is allowed, and two option sets of one tool on one stream is a use (`quality-yield` with and without original qualities) |
 | The `# INPUT=` line names the chain source and the step list | `INPUT=<source>` plus ` CHAIN=<transforms in front>`, as W03 wrote it. A tap on the source writes the tool's own line | A chain without a transform must write the bytes `qc` writes (section 10.2). The steps behind a tap do not change its records, so the line names only the transforms in front |
 | A transform's kept product is `PREFIX.<label>.bam` | The same, written by `write` without a path. The transform's own metrics file is `PREFIX.<label>.duplication_metrics` | docs/07 names no file for a transform's metrics. The label says which step wrote it |
@@ -1062,7 +1062,7 @@ the rest of W05.
 
 | docs/07 | As built | Reason |
 |---|---|---|
-| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM and SAM by extension, and `--output-format` | Standard output has no extension. CRAM and FASTQ stay W15 and W22 |
+| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM and SAM by extension, and `--output-format` | Standard output has no extension. CRAM shipped in W15, 0.33.0 (section 23, the `r.cram` row). FASTQ stays W22 |
 | SAM text reader and writer in one infrastructure row with header-merge and the BAI reader and writer | The reader, the writer and the comparators only | Part A. Header merge exists in `mark_duplicates/inputs.rs` since 0.18.0; BAI and the sort barrier are parts B and C |
 | A chain carries `VALIDATION_STRINGENCY` | The source is read at `STRICT` | A chain has one source and no option of the source's own; the tools and verbs carry the option |
 | The SAM file of `write` has the header of the stream, as the BAM has | The SAM file has htsjdk's `SAMFileWriter` header (`VN:1.6`) | Picard is the oracle for SAM text. The BAM of `write` keeps the stream's `VN`, which htsjdk also rewrites; changing that would change the bytes 0.22.0 writes |
@@ -1890,7 +1890,7 @@ files and `verdict.json` of `chain_qc_step` equal those of `qc_generic`),
 | `Key.upstream` | A hash of every earlier step's key | The ids of the transforms in front, and a step is skipped only when they are | A hash over every earlier step reruns the taps after a changed tap; the gate wants taps in front of step 3 kept |
 | Timing | Per step | The start and wall time of the run that ran the step | The steps of a chain share reads and run at once |
 | `qc.rs` | `Plan.bam` becomes a chain, `Read` gains `Tap(n)` | The qc verb is unchanged; the qc step reuses its collector planning (`qc::plan_chain_step`) | qc golden records stay byte for byte |
-| Kept product kind | A kept product may be CRAM | BAM, with its index when coordinate sorted | CRAM writing is wave W15 |
+| Kept product kind | A kept product may be CRAM | BAM, with its index when coordinate sorted | CRAM writing shipped in W15, 0.33.0, as `write r.cram` (section 23); `--keep` writes a BAM (section 28) |
 | Materialize fallback | A tool with only `run` reads a spooled copy of the stream | Built in section 31. The qc step's `CollectWgsMetrics` reads the source, a kept stream or the BAM a `write` step wrote, else it is a materialized step (D202) | No copy is written when a file already holds the stream |
 | Paths and fingerprints | The manifest's fingerprints | Paths compared resolved against the recorded `directory`; the source fingerprinted before the read, each output when written | A respelled path reran every step; a source swapped during a run was recorded with its new fingerprint |
 | Concurrent runs | Not covered | One run per prefix through `PREFIX.manifest.json.lock`; a second exits 2 | Two runs on one prefix wrote one kept BAM and a manifest that skipped over the other run's records |

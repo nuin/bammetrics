@@ -412,8 +412,11 @@ fn run(opts: &FixOptions) -> Result<Counters> {
                 let (header, reader, _) = streams.pop().expect("one input");
                 (header, Source::One(reader))
             } else {
-                let (headers, readers): (Vec<sam::Header>, Vec<_>) =
-                    streams.into_iter().map(|(h, r, _)| (h, r)).unzip();
+                let (headers, readers): (Vec<sam::Header>, Vec<_>) = streams
+                    .into_iter()
+                    .zip(&opts.inputs)
+                    .map(|((h, r, c), path)| (h, (path.as_path(), c, r)))
+                    .unzip();
                 let merged = HeaderMerger::merge(&headers)?;
                 let header = merged.header.clone();
                 let merge = if queryname {

@@ -161,10 +161,11 @@ fn not_bam_or_cram() -> io::Error {
 /// The SAM header of a CRAM, read from the start of the file as htsjdk's
 /// `CramIO.readSAMFileHeader` reads it: the text decoded as UTF-8, each
 /// character held as the low byte of its UTF-16 code unit
-/// ([`crate::java::decode_utf8`]; `?` for one above U+00FF whose low byte is
-/// a tab or a line end), the one-byte-per-character form a BAM
+/// ([`crate::java::decode_utf8`]), the one-byte-per-character form a BAM
 /// or SAM header is held in. `café` stored as UTF-8 is held as `caf\xE9`,
-/// which a SAM or BAM writer writes back as htsjdk's does. The text is read
+/// which a SAM or BAM writer writes back as htsjdk's does. Lines and fields
+/// are those of the decoded text: a character above U+00FF whose low byte
+/// is a line end, a tab or a NUL is held as `?`. The text is read
 /// whole, at most [`crate::doctor::input::MAX_HEADER_BYTES`] bytes.
 pub(crate) fn read_header<R: Read>(reader: &mut cram::io::Reader<R>) -> io::Result<sam::Header> {
     read_header_decoded(reader).map(|(held, _)| held)
@@ -199,18 +200,11 @@ pub(crate) fn read_header_decoded<R: Read>(
     let mut decoded = None;
     if !text.is_ascii() {
         let utf8 = crate::java::decode_utf8(&text).into_owned();
-        // Cut into lines before each character becomes its low byte, as
-        // htsjdk splits the decoded text: a character whose low byte is a
-        // tab or a line end is held as `?` (sam_text::held_bytes).
-        text = Vec::with_capacity(utf8.len());
-        for line in utf8.split_inclusive('\n') {
-            let (body, end) = match line.strip_suffix('\n') {
-                Some(body) => (body, "\n"),
-                None => (line, ""),
-            };
-            text.extend_from_slice(&crate::sam_text::held_bytes(body.as_bytes()));
-            text.extend_from_slice(end.as_bytes());
-        }
+        // htsjdk splits the decoded text into lines and fields, so a
+        // character whose low byte is a line end, a tab or a NUL (U+010A,
+        // U+0109, U+0100) stays inside its field; `held_bytes` holds `?`
+        // for it, never a byte that would end the field or the line.
+        text = crate::sam_text::held_bytes(utf8.as_bytes());
         // Only `CompareSAMs` reads it; a line noodles refuses here leaves
         // that tool the held header, and no other tool fails on it.
         decoded = parse_header_lines(utf8.as_bytes()).ok();
@@ -826,6 +820,37 @@ mod tests {
                 ),
             }
         }
+    }
+
+    #[test]
+    fn a_wide_character_never_ends_a_header_line_or_field() {
+        use noodles::cram::io::writer::raw;
+        // U+010A, U+0109, U+010D and U+0100 have the low bytes of a line
+        // feed, a tab, a carriage return and a NUL.
+        let text = "@HD\tVN:1.6\tSO:unsorted\n\
+                    @SQ\tSN:chr1\tLN:100\n\
+                    @RG\tID:rg1\tSM:x\u{109}y\u{10A}@RG\u{109}ID:rg2\n\
+                    @CO\ta\u{10A}@SQ\u{109}SN:chr2\u{109}LN:50\u{10D}\u{100}z\u{E9}\n";
+        let mut bytes = Vec::new();
+        raw::write_file_definition(&mut bytes, &raw::Options::gzip(5)).expect("definition");
+        raw::write_header_text(&mut bytes, text.as_bytes()).expect("header");
+        raw::write_eof(&mut bytes).expect("eof");
+        let mut reader = cram::io::Reader::new(&bytes[..]);
+        let header = read_header(&mut reader).expect("header");
+        assert_eq!(header.reference_sequences().len(), 1);
+        assert_eq!(header.read_groups().len(), 1);
+        assert_eq!(header.comments().len(), 1);
+        let held = crate::sam_text::header_text(&header, true);
+        assert_eq!(
+            held.split(|&b| b == b'\n')
+                .filter(|l| !l.is_empty())
+                .count(),
+            text.lines().count()
+        );
+        let line = b"@RG\tID:rg1\tSM:x?y?@RG?ID:rg2\n";
+        assert!(held.windows(line.len()).any(|w| w == line));
+        let comment: &[u8] = header.comments()[0].as_ref();
+        assert_eq!(comment, b"a?@SQ?SN:chr2?LN:50??z\xE9");
     }
 
     #[test]

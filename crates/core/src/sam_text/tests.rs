@@ -523,9 +523,10 @@ fn a_cigar_parses_as_the_text_codec_parses_it() {
 }
 
 /// A header line is split after it is decoded: a character whose low byte
-/// is a tab, a line end or a colon stays in its value. The header the
+/// is a tab, a line end, a NUL or a colon stays in its value. The header the
 /// records are read against holds one byte per UTF-16 unit, `?` where the
-/// byte would end the field or the line; the decoded header holds UTF-8.
+/// byte would end the field, the line or the text; the decoded header
+/// holds UTF-8.
 #[test]
 fn a_header_keeps_the_characters_its_bytes_cannot_hold() {
     let ds = |header: &sam::Header| -> Vec<u8> {
@@ -537,14 +538,15 @@ fn a_header_keeps_the_characters_its_bytes_cannot_hold() {
             .map(|(_, value)| value.to_vec())
             .expect("DS")
     };
-    let cases: [(&str, &[u8]); 7] = [
+    let cases: [(&str, &[u8]); 8] = [
         ("caf\u{e9}", b"caf\xe9"),
         ("\u{141}", b"A"),
         ("a\u{109}b", b"a?b"),
         ("a\u{10a}b", b"a?b"),
         ("a\u{10d}b", b"a?b"),
         ("a\u{13a}b", b"a:b"),
-        ("x\u{1f600}", b"x\x3d\x00"),
+        ("a\u{100}b", b"a?b"),
+        ("x\u{1f600}", b"x\x3d?"),
     ];
     for (value, held) in cases {
         let text = format!("@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:10\n@RG\tID:a\tSM:s\tDS:{value}\n");
