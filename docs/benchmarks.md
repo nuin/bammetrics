@@ -564,6 +564,33 @@ Not measured: Picard on that file; an unsorted stream at scale, which reads the 
 under each record through the `.fai`; other thread counts. The memgate row ran with the
 default `--out-root`, so its file was written under the checkout's `target/memgate`.
 
+## CompareSAMs and CheckTerminatorBlock (wave W15, HG002 exome)
+
+`HG002.exome.bam` (10 GB, 150,386,776 primary records) and its chromosomes 20 to 22
+(`samtools view`, 8,445,233 records, 547 MiB), coordinate sorted and collated (`samtools
+collate`, `SO:unsorted`); the default threads; `/usr/bin/time -l`; Picard 3.5.0 with `-Xmx8g`,
+`VALIDATION_STRINGENCY=SILENT` and `QUIET=true`. Every file against itself, so the
+coordinate walk pairs each record at its place and holds none, and the unsorted walk holds
+every primary record of the left file. Picard and bammetrics wrote the same row for both
+slices.
+
+| command | bammetrics | Picard |
+|---|---|---|
+| `check-terminator-block` exome | 0.0 s, 8 MiB | not run |
+| `compare-s-a-ms` exome, coordinate | 50.8 s, 45 MiB | not run |
+| `compare-s-a-ms --lenient-dup` exome, coordinate | 65.4 s, 117 MiB | not run |
+| `compare-s-a-ms` slice, coordinate | 2.2 s, 13 MiB | 12.1 s, 749 MiB |
+| `compare-s-a-ms` slice, unsorted | 7.9 s, 1,969 MiB | 19.7 s, 6,065 MiB |
+| `compare-s-a-ms --lenient-dup` slice, unsorted | 12.1 s, 3,526 MiB | not run |
+
+The unsorted walk is the worst case of the tool: 233 bytes a waiting record at the peak
+(48 bytes of table entry, the read name, and the old table while it is resized), 418 under
+`--lenient-dup`, which keeps each waiting record's fixed fields, name, CIGAR, `RG` and
+`MC`. Picard held 6,065 MiB under `-Xmx8g`. A coordinate walk of two files that share no
+read holds the primary records of both the same way. The two tools add 99,360 bytes to the
+stripped default binary (9,843,192 at 0.31.0, 9,942,552 with them; 113,664 unstripped),
+both built with rustc 1.100.0.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails
@@ -891,6 +918,17 @@ peaks at 666.8 / 1024 MiB (659.5 at 0.31.0), `fix-mate-information slice` at 629
 The resumed run writes the `insert_size_metrics` the fresh run writes, byte for byte
 after the `StringHeader` lines, in a tenth of its time: the read starts at the BAM the
 `write` step wrote (docs/chaining.md section 32.2).
+
+Wave W15 (`compare-s-a-ms`, `check-terminator-block`), measured with the commands of
+step 4 below, outputs under `~/data/bammetrics-scale/waves/w15`, removed after the run:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `compare-s-a-ms` | fixture | 9.8 / 64 | 0.01 | |
+| `compare-s-a-ms lenient` | fixture | 9.1 / 64 | 0.02 | |
+| `check-terminator-block` | fixture | 7.5 / 64 | 0.01 | |
+| `compare-s-a-ms exome against itself` | scale | 44.5 / 1024 | 43.43 | |
+| `check-terminator-block exome` | scale | 7.6 / 64 | 0.01 | |
 
 To add a scale row:
 

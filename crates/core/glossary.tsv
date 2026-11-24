@@ -844,3 +844,16 @@ picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetr
 picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	CALL_RATE	float	NUM_CALLS / NUM_NON_FILTERED_ASSAYS of this row, in single precision.
 picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	AUTOCALL_CALL_RATE	float	NUM_AUTOCALL_CALLS / NUM_NON_FILTERED_ASSAYS of this row, in single precision.
 picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_SINGLETONS	int	The detail rows' NUM_SINGLETONS summed over the samples.
+picard.sam.SamComparisonMetric	LEFT_FILE	string	The first file of the comparison, as an absolute path (the working directory in front of a relative path, nothing resolved).
+picard.sam.SamComparisonMetric	RIGHT_FILE	string	The second file of the comparison, as an absolute path.
+picard.sam.SamComparisonMetric	MAPPINGS_MATCH	int	Pairs of primary records, one per file with the same read name and read end, both mapped, whose reference names and alignment starts are equal. The strand is not compared. Under LENIENT_LOW_MQ_ALIGNMENT a pair whose mapping qualities are both at most LOW_MQ_THRESHOLD counts here wherever it maps, and under LENIENT_UNKNOWN_MQ_ALIGNMENT a pair whose qualities are both 255.
+picard.sam.SamComparisonMetric	MAPPINGS_DIFFER	int	Pairs of primary records, both mapped, that do not count in MAPPINGS_MATCH: another reference name or another alignment start.
+picard.sam.SamComparisonMetric	UNMAPPED_BOTH	int	Pairs of primary records flagged unmapped in both files.
+picard.sam.SamComparisonMetric	UNMAPPED_LEFT	int	Pairs of primary records flagged unmapped in the left file and mapped in the right file.
+picard.sam.SamComparisonMetric	UNMAPPED_RIGHT	int	Pairs of primary records mapped in the left file and flagged unmapped in the right file.
+picard.sam.SamComparisonMetric	MISSING_LEFT	int	Primary records of the right file without a record of the same read name and read end in the left file. A key the left file gives twice at one place holds one record, so the second right record counts here.
+picard.sam.SamComparisonMetric	MISSING_RIGHT	int	Primary records of the left file without a record of the same read name and read end in the right file.
+picard.sam.SamComparisonMetric	DUPLICATE_MARKINGS_DIFFER	int	Pairs of primary records whose duplicate flags (0x400) differ. Under LENIENT_DUP only the records the right file did not mark as another representative of the same duplicate set.
+picard.sam.SamComparisonMetric	ARE_EQUAL	string	Y when the headers are equal (LENIENT_HEADER leaves out SP, AS, M5, UR and the @PG lines), MISSING_LEFT, MISSING_RIGHT, MAPPINGS_DIFFER, UNMAPPED_LEFT, UNMAPPED_RIGHT and DUPLICATE_MARKINGS_DIFFER are all 0 and the records were compared; else N.
+CompareSAMs	BIN	string	Histogram key under COMPARE_MQ: LEFT,RIGHT, the mapping qualities of one pair of primary records in the left and the right file. Rows are in text order, so 10,3 comes before 2,2.
+CompareSAMs	VALUE	float	Pairs of primary records with the mapping qualities of BIN, whatever their places and flags.

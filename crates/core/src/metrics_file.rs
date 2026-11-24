@@ -266,6 +266,10 @@ pub enum KeyClass {
     Integer,
     Byte,
     Double,
+    /// `java.lang.String` keys `LEFT,RIGHT`, two mapping qualities
+    /// (`CompareSAMs COMPARE_MQ`), stored as
+    /// [`crate::compare_sams::mq_pair_key`].
+    MqPair,
 }
 
 impl KeyClass {
@@ -274,6 +278,7 @@ impl KeyClass {
             KeyClass::Integer => "java.lang.Integer",
             KeyClass::Byte => "java.lang.Byte",
             KeyClass::Double => "java.lang.Double",
+            KeyClass::MqPair => "java.lang.String",
         }
     }
 
@@ -281,6 +286,7 @@ impl KeyClass {
         match self {
             KeyClass::Integer | KeyClass::Byte => key.to_string(),
             KeyClass::Double => format!("{key}.0"),
+            KeyClass::MqPair => crate::compare_sams::mq_pair_text(key),
         }
     }
 }

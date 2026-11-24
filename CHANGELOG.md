@@ -101,6 +101,25 @@
     header character above U+00FF from SAM text into a CRAM.
   - The golden record `verb_sam_format_converter_other_name` holds the decoded BAM in
     place of its compressed bytes: a BAM under any name is recorded as a `.bam` is.
+- `CompareSAMs` (verb `compare-s-a-ms`, Python `compare_s_a_ms()`), as Picard 3.5.0: two
+  SAM, BAM or CRAM files as Picard's two positional arguments, the header comparison
+  (version, `CR`, `SO`, the dictionaries, read groups and program records) printed as
+  Picard's three lines per difference, the three record walks of `SamComparison`
+  (coordinate, queryname, unsorted), the `SamComparisonMetric` file, `LENIENT_HEADER`,
+  `LENIENT_DUP` (htsjdk's duplicate order and duplicate sets, spilled at
+  `MAX_RECORDS_IN_RAM`), `LENIENT_LOW_MQ_ALIGNMENT`, `LENIENT_UNKNOWN_MQ_ALIGNMENT`,
+  `LOW_MQ_THRESHOLD`, the `COMPARE_MQ` histogram, and exit 1 when the files differ. The
+  strand quirk of docs/04 Q-018 is kept. Not a chain step. Read names and header values
+  are compared as htsjdk's strings (a BAM one character per byte, SAM text and a CRAM as
+  UTF-8), so two SAM text values that share their low bytes differ.
+- `CheckTerminatorBlock` (verb `check-terminator-block`, Python
+  `check_terminator_block()`), as Picard 3.5.0: `HAS_TERMINATOR_BLOCK`,
+  `HAS_HEALTHY_LAST_BLOCK` or `DEFECTIVE` from the last 64 KiB of a BGZF file, exit 100 on
+  `DEFECTIVE`. The Picard face prints the name on standard error, as Picard does; the verb
+  on standard output. A named pipe is refused without being opened.
+- `tests/data/compare_sams_{left,right,other}.bam`
+  (`tests/data/make_compare_sams_fixtures.py`), 29 golden records, the concordance modules
+  `test_compare_s_a_ms.py` and `test_check_terminator_block.py`, five memory gate rows (three on fixtures, two on the exome).
 
 ### Changed
 
@@ -128,6 +147,18 @@
   (docs/benchmarks.md, docs/07 W15-11). After the review fixes: 360 and 422 MiB, the
   same bytes, every record equal under samtools again. Not measured: Picard on that
   file, an unsorted stream at scale.
+- SAM text: a header line is split into fields after it is decoded as UTF-8, as htsjdk
+  splits it. A character above U+00FF whose low byte is a tab or a line end (U+0109,
+  U+010A) no longer cuts its value or fails the header; it is held as `?`
+  (KNOWN_DIFFERENCES.md, SAM text).
+- The duplicate order (`SortSam SORT_ORDER=duplicate`, `CollectUmiPrevalenceMetrics`,
+  `CompareSAMs LENIENT_DUP`): an unmapped record with a mapped mate and no `MC` fails only
+  when another record ties with it in the file order, as htsjdk scores it only then. It
+  failed whenever it was read.
+- `CompareSAMs`: an `SO` value htsjdk does not know prints as `unknown` for a BAM or a
+  CRAM, as for SAM text. `chain` refuses `compare-s-a-ms` and `check-terminator-block`
+  as steps with a reason of their own (docs/chaining.md section 1). `CheckTerminatorBlock`
+  opens the path as given, so a file name that is not UTF-8 is checked.
 
 ## 0.32.0
 

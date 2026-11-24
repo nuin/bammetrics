@@ -244,6 +244,10 @@ the other steps wrote their files; a chain that ends in `qc --fail-on` exits 10 
 `CompareMetrics` exit 1 when the two files are NOT equal, as Picard does;
 `check-duplicate-marking` and `CheckDuplicateMarking` exit 1 when a record's duplicate flag
 differs from the first record of its queryname.
+`compare-s-a-ms` and `CompareSAMs` exit 1 when the two files differ, as Picard does.
+`check-terminator-block` and `CheckTerminatorBlock` exit 100 when the file's end is
+`DEFECTIVE`, Picard's code, and 0 for the other two outcomes; an error (a missing file)
+exits 1, or 2 for a usage error on the verb.
 
 ## Errors
 
@@ -353,6 +357,8 @@ table.
 | `downsample-sam` | DownsampleSam (a SAM, BAM or CRAM; `--probability`, `--strategy`, `--random-seed`, `--accuracy`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); `--metrics-file` the QualityYieldMetrics of the records kept |
 | `position-based-downsample-sam` | PositionBasedDownsampleSam (a SAM, BAM or CRAM file, read twice; `--fraction` required) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
 | `sam-format-converter` | SamFormatConverter (a SAM, BAM or CRAM; every record unchanged; not `convert`, which converts metrics files) | `-o` SAM text for a name ending in `.sam`, a CRAM for one ending in `.cram` (with `-R`), a BAM for any other name |
+| `compare-s-a-ms` | CompareSAMs (two SAM, BAM or CRAM files as positionals, the left then the right; `--lenient-header`, `--lenient-dup`, `--lenient-low-mq-alignment`, `--lenient-unknown-mq-alignment`, `--low-mq-threshold`, `--compare-mq`) | one SamComparisonMetric file; the header differences and the verdict on standard error; exit 1 when the files differ |
+| `check-terminator-block` | CheckTerminatorBlock (a BGZF file: a BAM, a bgzip VCF; its last 64 KiB are read) | `HAS_TERMINATOR_BLOCK`, `HAS_HEALTHY_LAST_BLOCK` or `DEFECTIVE` on standard output; exit 100 on `DEFECTIVE` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -591,7 +597,8 @@ bytes for SAM text; `test_cram_writer.py` for the CRAM).
 - `queryname` is htsjdk's `SAMRecordQueryNameComparator` (name by bytes, first of pair
   before second, forward before reverse, primary before secondary and supplementary, `HI`),
   `coordinate` its coordinate comparator (unplaced records last), `duplicate` its duplicate
-  comparator, which needs the `MC` tag on every paired record with a mapped mate.
+  comparator, which needs the `MC` tag on every mapped record of a pair with a mapped mate,
+  and on an unmapped record with a mapped mate when another record ties with it.
   Records with equal keys keep their input order.
 - `--max-records-in-ram N` (default 500,000) records are sorted in memory per run; more
   spill to `--tmp-dir` as sorted runs (BGZF level 3, mode 0600, removed at the end, on a
@@ -2189,6 +2196,114 @@ suppressed.`, then the summary at `ERROR` or `INFO`.
 - Python `check_duplicate_marking(bam, mode=..., output=...)` returns the rows; an empty
   list means every queryname agrees. It raises nothing for a bad marking, only for an
   error (a bad `mode`, an unpaired record under `PRIMARY_PROPER_PAIR_ONLY`).
+
+### compare-s-a-ms
+
+```bash
+bammetrics compare-s-a-ms old.bam new.bam -o compared.txt
+bammetrics compare-s-a-ms old.bam new.cram -R ref.fa --lenient-header --lenient-dup --lenient-low-mq-alignment
+bammetrics CompareSAMs old.bam new.bam O=compared.txt COMPARE_MQ=true
+```
+
+Two SAM, BAM or CRAM files in, one `SamComparisonMetric` row out; Picard 3.5.0's
+`CompareSAMs`, exit code included: 0 when the files are equal, 1 when they differ or on an
+error. The Picard face takes the two files as positional arguments anywhere among the
+options, as Picard does (`I=` is an unrecognized option there), prints each header
+difference on standard output as three lines (`X differs.`, `File 1: A`, `File 2: B`),
+writes the metrics file to `O=` only, and ends with `SAM files match.` or `SAM files
+differ.`. The verb writes the metrics file to `-o` or standard output and prints Picard's
+lines on standard error, each after `bammetrics compare-s-a-ms: `; `-q` drops them.
+
+- The header: the `@HD` version (`1.6` without `@HD`), `CR` and `SO`; per `@SQ` line the
+  name, the length, `SP`, `AS`, `M5` and `UR`; per `@RG` line `ID`, `SM`, `LB`, `DS`, `PU`,
+  `PI`, `CN`, `DT` and `PL`; per `@PG` line `ID`, `VN` and `CL`. Lines pair by position, and
+  a count that differs is one difference. `GO`, `@CO` lines and every other field are not
+  compared. `--lenient-header` leaves out `SP`, `AS`, `M5`, `UR` and the `@PG` lines. A `DT`
+  prints as htsjdk holds it, in the time zone of the process.
+- Records: secondary and supplementary records are skipped. Two records are one read when
+  their names are equal and both are unpaired, both first or both second of their pair.
+  A pair counts in `UNMAPPED_BOTH`, `UNMAPPED_LEFT` or `UNMAPPED_RIGHT` by its unmapped
+  flags, else in `MAPPINGS_MATCH` when reference name and start are equal, else in
+  `MAPPINGS_DIFFER`. A record without a partner counts in `MISSING_RIGHT` (a left record) or
+  `MISSING_LEFT`. The strand is never compared (Picard compares the left strand with
+  itself).
+- Names and header values are compared as the strings htsjdk holds: one character per
+  byte of a BAM, UTF-8 of a CRAM and of SAM text. `é` as the byte `E9` in a BAM equals `é`
+  in SAM text; the UTF-8 bytes `C3 A9` in a BAM are the two characters `Ã©`. Two SAM text
+  values that differ in a character above U+00FF (`A` and `Ł`) differ.
+- Both headers must name one sort order, else Picard prints `Cannot compare alignments if
+  sort orders differ.` and every count is 0. `coordinate` pairs records by place, then the
+  rest by key; it is refused when the dictionaries differ. `queryname` merges the two files
+  by key, the name in Java string order (not `samtools sort -n` order). `unsorted`, `duplicate`
+  and a header without `SO` hold the left file by key. `SO:unknown` exits 1, as in Picard.
+- `--lenient-low-mq-alignment` counts a pair as a match wherever it maps when both mapping
+  qualities are at most `--low-mq-threshold` (default 3; Picard's help says below, its code
+  tests at most). `--lenient-unknown-mq-alignment` does so when both are 255.
+- A pair whose duplicate flags differ counts in `DUPLICATE_MARKINGS_DIFFER`.
+  `--lenient-dup` forgives the pairs where the two files chose another representative of
+  one duplicate set: those pairs are sorted as htsjdk's duplicate order sorts them
+  (`--max-records-in-ram` keys per sort, runs in `--tmp-dir`) and need `MC` on a mapped
+  record whose mate is mapped once two pairs differ. An unmapped record with a mapped mate
+  needs `MC` only when another differing record is at its place, as in Picard.
+- `--compare-mq` adds a histogram of pairs by `LEFT,RIGHT` mapping quality (`BIN`, `VALUE`),
+  the keys in text order, as Picard writes it.
+- `ARE_EQUAL` is `Y` when the headers are equal, the records were compared, and
+  `MISSING_LEFT`, `MISSING_RIGHT`, `MAPPINGS_DIFFER`, `UNMAPPED_LEFT`, `UNMAPPED_RIGHT` and
+  `DUPLICATE_MARKINGS_DIFFER` are 0.
+- Three results that look wrong are Picard's (KNOWN_DIFFERENCES.md, CompareSAMs): a key a
+  file gives twice at one place holds one record, so such a file differs from itself; a
+  queryname-sorted pair whose right file ends first exits 1 with no result; a file sorted
+  by `samtools sort -n` is not in the order the merge expects.
+- Memory: the queryname merge holds two records. The other two walks hold the records that
+  wait for a partner: none for two files in one order (45 MiB for the 10 GB HG002 exome
+  against itself), every primary record of both files when they share no read, every
+  primary record of the left file when unsorted. A waiting record costs 233 bytes at the
+  peak, 418 under `--lenient-dup` (1,969 and 3,526 MiB for 8.4 million unsorted records;
+  Picard holds 6,065 MiB there under `-Xmx8g`, docs/benchmarks.md).
+- Memory under `--lenient-dup`: the sorts spill, the duplicate sets read back from them do
+  not. One name per record of every left duplicate set of two or more records, the names
+  matched so far and one set whole stay in memory, about 470 bytes for each pair whose
+  duplicate flags differ (257 MB for 400,000 such pairs in one set, 69 MB without the
+  option). The worst case is every pair differing. Picard holds the records of those sets.
+- `LEFT_FILE` and `RIGHT_FILE` are absolute paths, the working directory in front of a
+  relative one. `-o` may not name an input (exit 2; the Picard face exits 1). A failed run
+  writes no file.
+- `--format json`, `jsonl`, `tsv` and `human` print the row; `--sample` is accepted and
+  ignored. Python `compare_s_a_ms([left, right], lenient_dup=True, ...)` returns the row;
+  `ARE_EQUAL` is its verdict.
+
+### check-terminator-block
+
+```bash
+bammetrics check-terminator-block sample.bam
+bammetrics check-terminator-block calls.vcf.gz -o end.txt
+bammetrics CheckTerminatorBlock I=sample.bam
+```
+
+How a BGZF file ends; Picard 3.5.0's `CheckTerminatorBlock`, exit code included.
+`HAS_TERMINATOR_BLOCK`: the last 28 bytes are the BGZF end-of-file block.
+`HAS_HEALTHY_LAST_BLOCK`: no end-of-file block, and the last block ends at the last byte
+(a writer that stopped at a block boundary). `DEFECTIVE`, exit 100: anything else, such as
+a file cut inside a block, bytes after the end-of-file block, fewer than 28 bytes, a plain
+gzip file, a CRAM or SAM text. The Picard face prints the name on standard error, as Picard
+does, and nothing on standard output. The verb prints it on standard output or to `-o`.
+
+- The last 64 KiB of the file are read and nothing is inflated, so a 100 GB BAM takes as
+  long as a small one. It is htsjdk's `checkTermination`, the test `GatherBamFiles` and a
+  header-only record edit use before a block copy.
+- The file must be a regular file. A named pipe, a socket or a device exits 2 on the verb
+  and 1 on the Picard face without being opened; Picard opens it and reports a size of 0 as
+  `DEFECTIVE`.
+- A missing file, a directory and a file without read permission exit 1 with htsjdk's
+  messages (`Cannot read non-existent file: file:///...`).
+- `doctor`'s `eof` check reads the same bytes and says why: it passes on
+  `HAS_TERMINATOR_BLOCK`, fails with `no end-of-file block` on `HAS_HEALTHY_LAST_BLOCK` and
+  with `cut short` or `bytes after the end-of-file block` on `DEFECTIVE`.
+- Picard has no `OUTPUT`: `O=` on the Picard face exits 1 with `Unrecognized option: O`.
+  `--format json`, `jsonl`, `tsv` and `human` print one row: `file` and `termination`.
+  `--threads` and `--sample` are accepted and ignored.
+- Python `check_terminator_block(path)` returns the row and raises nothing for
+  `DEFECTIVE`.
 
 ### report
 

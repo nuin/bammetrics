@@ -24,7 +24,9 @@ use noodles::sam;
 use crate::bam_raw::RawRecord;
 use crate::error::{Error, Result};
 use crate::header_merge::{HeaderTag, set_header_tag};
-use crate::sam_order::{DuplicateKey, Libraries, Order, QuerynameKey, coordinate_order, hit_index};
+use crate::sam_order::{
+    DuplicateKey, Libraries, Order, QuerynameKey, Scoring, coordinate_order, hit_index,
+};
 use crate::spill::{
     SortStats, Sorted, Sorter, Spill, TempDir, get_u64, need_bytes, need_i64, need_u64, put_bytes,
     put_i64, put_u64,
@@ -156,7 +158,7 @@ impl Spill for Keyed {
             ] {
                 put_i64(out, i64::from(value));
             }
-            put_u64(out, u64::from(key.flags));
+            put_u64(out, key.packed_flags());
             match &key.read_group {
                 Some(group) => {
                     out.push(1);
@@ -193,7 +195,8 @@ impl Spill for Keyed {
             let mate_reference_id = need_i32(input)?;
             let mate_coordinate = need_i32(input)?;
             let score = i16::try_from(need_i64(input)?).map_err(|_| invalid("a score"))?;
-            let flags = u16::try_from(need_u64(input)?).map_err(|_| invalid("flags"))?;
+            let (flags, unscored) =
+                DuplicateKey::unpacked_flags(need_u64(input)?).ok_or_else(|| invalid("flags"))?;
             input.read_exact(&mut flag)?;
             let read_group = match flag[0] {
                 0 => None,
@@ -206,7 +209,7 @@ impl Spill for Keyed {
                 flags,
                 mate_reference_id,
                 mate_coordinate,
-                score,
+                (score, unscored),
                 read_group,
             ));
         }
@@ -219,7 +222,7 @@ impl Spill for Keyed {
                 flags,
                 mate_reference_id,
                 mate_coordinate,
-                score,
+                (score, unscored),
                 read_group,
             )| {
                 Box::new(DuplicateKey {
@@ -230,6 +233,7 @@ impl Spill for Keyed {
                     mate_reference_id,
                     mate_coordinate,
                     score,
+                    unscored,
                     read_group,
                     name: std::borrow::Cow::Owned(record.name().to_vec()),
                 })
@@ -307,18 +311,27 @@ impl<'d> RecordSorter<'d> {
     /// Every record in order, and what the sort did.
     pub fn finish(self) -> Result<(SortedRecords<'d>, SortStats)> {
         let (sorted, stats) = self.sorter.finish_with_stats()?;
-        Ok((SortedRecords { sorted }, stats))
+        let scoring = Scoring::default();
+        Ok((SortedRecords { sorted, scoring }, stats))
     }
 }
 
 /// The sorted records; run files are removed once read.
 pub struct SortedRecords<'d> {
     sorted: Sorted<'d, Keyed>,
+    /// A duplicate sort fails where htsjdk's fails to score a record.
+    scoring: Scoring,
 }
 
 impl SortedRecords<'_> {
     pub fn next_record(&mut self) -> Result<Option<RawRecord>> {
-        Ok(self.sorted.next_item()?.map(|keyed| keyed.record))
+        let Some(keyed) = self.sorted.next_item()? else {
+            return Ok(None);
+        };
+        if let Some(key) = &keyed.duplicate {
+            self.scoring.next(key)?;
+        }
+        Ok(Some(keyed.record))
     }
 }
 

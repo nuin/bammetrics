@@ -391,6 +391,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::downsample_sam::TOOL,
     &crate::position_based_downsample_sam::TOOL,
     &crate::sam_format_converter::TOOL,
+    &crate::compare_sams::TOOL,
+    &crate::check_terminator_block::TOOL,
 ];
 
 /// The tool named `name`.

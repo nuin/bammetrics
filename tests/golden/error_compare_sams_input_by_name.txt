@@ -1,0 +1,9 @@
+## argv
+CompareSAMs
+I=tests/data/compare_sams_left.bam
+I=tests/data/compare_sams_right.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: CompareSAMs: Unrecognized option: I (the two files are positional arguments)

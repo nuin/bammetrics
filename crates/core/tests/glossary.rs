@@ -453,6 +453,18 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             format!("M={}", dir.join("downsample_metrics").display()),
         ],
     );
+    // Wave W15: the SamComparisonMetric row and the COMPARE_MQ histogram.
+    args.insert(
+        "CompareSAMs",
+        vec![
+            format!("I={DATA}/markdup.bam"),
+            format!("I={DATA}/markdup.bam"),
+            "COMPARE_MQ=true".to_owned(),
+            out("compared_sams"),
+        ],
+    );
+    // No OUTPUT option; the name goes to standard error.
+    args.insert("CheckTerminatorBlock", vec![bam.clone()]);
     args
 }
 

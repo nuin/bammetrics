@@ -1,0 +1,8 @@
+## argv
+check-terminator-block
+tests/data
+## exit
+1
+## stdout
+## stderr
+bammetrics check-terminator-block: Cannot read file because it is a directory: file://ROOT/tests/data/

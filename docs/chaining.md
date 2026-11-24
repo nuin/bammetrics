@@ -78,6 +78,13 @@ flagstat -`, or `producer | bammetrics fifo-buffer | bammetrics chain - + insert
 `crates/cli/tests/chain.rs` checks both: the bytes behind the buffer equal the BAM the
 chain writes to a file.
 
+`compare-s-a-ms` and `check-terminator-block` are never steps, each with its own reason
+(exit 2). `CompareSAMs` reads two files and a chain has one stream: write the stream with
+`write out.bam`, then run `bammetrics compare-s-a-ms BAM out.bam`. `CheckTerminatorBlock`
+reads the last bytes of a file and a stream has none: run it on the file the chain wrote.
+A spooled copy of the stream gives neither tool its input, so no later wave makes either
+a step.
+
 ## 2. The chain verb
 
 ```

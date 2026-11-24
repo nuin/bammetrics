@@ -100,6 +100,11 @@ const FIXTURES: &[(&str, &str)] = &[
     ("RO_EXTRA", "tests/data/reorder_extra.dict"),
     ("RO_DROPPED", "tests/data/reorder_dropped.dict"),
     ("RO_LENGTH", "tests/data/reorder_length.dict"),
+    ("CSL", "tests/data/compare_sams_left.bam"),
+    ("CSR", "tests/data/compare_sams_right.bam"),
+    ("CSO", "tests/data/compare_sams_other.bam"),
+    ("NO_EOF", "tests/data/doctor/no_eof.bam"),
+    ("CUT", "tests/data/doctor/cut.bam"),
     ("DS", "tests/data/downsampled.bam"),
 ];
 
@@ -1311,6 +1316,45 @@ const SAM_FORMAT_CONVERTER_CASES: &[Case] = &[
     case!("error_chain_sam_format_converter", "chain", "MD", "+", "sam-format-converter"),
 ];
 
+/// Wave W15: `CompareSAMs` on the three fixtures of
+/// tests/data/make_compare_sams_fixtures.py, a CRAM against its BAM, SAM
+/// text against its BAM and two sort orders; `CheckTerminatorBlock` on a
+/// whole BAM, one without its end-of-file block, a cut one, a CRAM and two
+/// bgzip files. The Picard faces, the verbs and the errors.
+#[rustfmt::skip]
+const COMPARE_TERMINATOR_CASES: &[Case] = &[
+    case!("picard_compare_sams", "CompareSAMs", "CSL", "CSR", "O=OUT/compared.txt"),
+    case!("picard_compare_sams_lenient", "CompareSAMs", "CSL", "CSR", "O=OUT/compared.txt", "LENIENT_HEADER=true", "LENIENT_DUP=true", "LENIENT_LOW_MQ_ALIGNMENT=true", "LENIENT_UNKNOWN_MQ_ALIGNMENT=true", "COMPARE_MQ=true"),
+    case!("picard_compare_sams_stdout", "CompareSAMs", "CSL", "CSO"),
+    case!("picard_compare_sams_new_syntax", "CompareSAMs", "-O", "OUT/compared.txt", "CSO", "--LOW_MQ_THRESHOLD", "2", "CSL", "--LENIENT_LOW_MQ_ALIGNMENT"),
+    // A flag takes the next word only when it is true or false: here it is a file.
+    case!("picard_compare_sams_flag_first", "CompareSAMs", "--LENIENT_DUP", "CSL", "CSR", "-O", "OUT/compared.txt", "--LENIENT_HEADER", "True"),
+    case!("picard_compare_sams_cram", "CompareSAMs", "IS", "IS_CRAM", "R=REF", "O=OUT/compared.txt", "COMPARE_MQ=true"),
+    case!("picard_compare_sams_queryname", "CompareSAMs", "DM", "DM", "O=OUT/compared.txt"),
+    case!("picard_compare_sams_sort_orders", "CompareSAMs", "MD", "DM"),
+    case!("verb_compare_s_a_ms", "compare-s-a-ms", "CSL", "CSR", "-o", "OUT/compared.txt"),
+    case!("verb_compare_s_a_ms_json", "compare-s-a-ms", "CSL", "CSR", "--lenient-header", "--lenient-dup", "--lenient-low-mq-alignment", "--lenient-unknown-mq-alignment", "--compare-mq", "--format", "json"),
+    case!("verb_compare_s_a_ms_sam_quiet", "compare-s-a-ms", "MD_SAM", "MD", "-q", "--lenient-dup", "--max-records-in-ram", "2"),
+    case!("error_compare_sams_one_input", "CompareSAMs", "CSL", "O=OUT/compared.txt"),
+    case!("error_compare_sams_input_by_name", "CompareSAMs", "I=CSL", "I=CSR"),
+    case!("error_compare_sams_threshold", "CompareSAMs", "CSL", "CSR", "LOW_MQ_THRESHOLD=null"),
+    case!("error_compare_sams_missing", "CompareSAMs", "CSL", "tests/data/nope.bam", "O=OUT/compared.txt"),
+    case!("error_verb_compare_s_a_ms_output_is_input", "compare-s-a-ms", "CSL", "CSR", "-o", "CSL"),
+    case!("picard_check_terminator_block", "CheckTerminatorBlock", "I=IS"),
+    case!("picard_check_terminator_block_no_eof", "CheckTerminatorBlock", "I=NO_EOF"),
+    case!("picard_check_terminator_block_cut", "CheckTerminatorBlock", "I=CUT", "VALIDATION_STRINGENCY=SILENT"),
+    case!("picard_check_terminator_block_cram", "CheckTerminatorBlock", "I=IS_CRAM"),
+    case!("verb_check_terminator_block", "check-terminator-block", "IS"),
+    case!("verb_check_terminator_block_cut_json", "check-terminator-block", "CUT", "--format", "json"),
+    case!("verb_check_terminator_block_output", "check-terminator-block", "NO_EOF", "-o", "OUT/end.txt"),
+    case!("verb_check_terminator_block_bgzip_vcf", "check-terminator-block", "AVCF"),
+    case!("verb_check_terminator_block_bgzip_bed", "check-terminator-block", "BED_BGZ", "--format", "tsv"),
+    case!("error_check_terminator_block_missing", "CheckTerminatorBlock", "I=tests/data/nope.bam"),
+    case!("error_check_terminator_block_output", "CheckTerminatorBlock", "I=IS", "O=OUT/end.txt"),
+    case!("error_verb_check_terminator_block_directory", "check-terminator-block", "tests/data"),
+    case!("error_verb_check_terminator_block_stdin", "check-terminator-block", "-"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -2050,6 +2094,11 @@ fn documented_sam_format_converter_commands_on_the_fixtures() {
     check(SAM_FORMAT_CONVERTER_CASES);
 }
 
+#[test]
+fn documented_compare_and_terminator_commands_on_the_fixtures() {
+    check(COMPARE_TERMINATOR_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -2176,6 +2225,7 @@ fn case_names_are_unique() {
         .chain(CHAIN_COMBINED_CASES)
         .chain(CRAM_WRITER_CASES)
         .chain(SAM_FORMAT_CONVERTER_CASES)
+        .chain(COMPARE_TERMINATOR_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .chain(RESUME_CASES.iter().map(|s| s.name))

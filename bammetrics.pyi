@@ -1723,6 +1723,33 @@ def sam_format_converter(
     """SamFormatConverter: no rows; OUTPUT gets every record of INPUT unchanged, as SAM
     text for a name ending in .sam, a CRAM for one ending in .cram, else a BAM."""
 
+def compare_s_a_ms(
+    input: _Paths,
+    *,
+    output: _Path | None = None,
+    lenient_header: bool | None = None,
+    lenient_dup: bool | None = None,
+    lenient_low_mq_alignment: bool | None = None,
+    lenient_unknown_mq_alignment: bool | None = None,
+    low_mq_threshold: int | None = None,
+    compare_mq: bool | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    max_records_in_ram: int | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """CompareSAMs: one SamComparisonMetric row for two SAM, BAM or CRAM files: the pairs
+    of primary records that map to the same place, differ, are unmapped or missing on a
+    side, the duplicate flags that differ, and ARE_EQUAL. The command line prints each
+    header difference and exits 1 when the files differ."""
+
+def check_terminator_block(
+    input: _Path,
+) -> list[dict[str, Any]]:
+    """CheckTerminatorBlock: one row (file, termination) saying how a BGZF file ends:
+    HAS_TERMINATOR_BLOCK, HAS_HEALTHY_LAST_BLOCK or DEFECTIVE, from its last 64 KiB; the
+    command prints the name and exits 100 on DEFECTIVE."""
+
 # END registry tools
 
 def alignment_summary(

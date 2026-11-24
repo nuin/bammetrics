@@ -521,3 +521,79 @@ fn a_cigar_parses_as_the_text_codec_parses_it() {
     assert!(parse_cigar(b"10").is_err());
     assert!(parse_cigar(b"M").is_err());
 }
+
+/// A header line is split after it is decoded: a character whose low byte
+/// is a tab, a line end or a colon stays in its value. The header the
+/// records are read against holds one byte per UTF-16 unit, `?` where the
+/// byte would end the field or the line; the decoded header holds UTF-8.
+#[test]
+fn a_header_keeps_the_characters_its_bytes_cannot_hold() {
+    let ds = |header: &sam::Header| -> Vec<u8> {
+        let (_, group) = header.read_groups().first().expect("a read group");
+        group
+            .other_fields()
+            .iter()
+            .find(|(tag, _)| <_ as AsRef<[u8; 2]>>::as_ref(*tag) == b"DS")
+            .map(|(_, value)| value.to_vec())
+            .expect("DS")
+    };
+    let cases: [(&str, &[u8]); 7] = [
+        ("caf\u{e9}", b"caf\xe9"),
+        ("\u{141}", b"A"),
+        ("a\u{109}b", b"a?b"),
+        ("a\u{10a}b", b"a?b"),
+        ("a\u{10d}b", b"a?b"),
+        ("a\u{13a}b", b"a:b"),
+        ("x\u{1f600}", b"x\x3d\x00"),
+    ];
+    for (value, held) in cases {
+        let text = format!("@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:10\n@RG\tID:a\tSM:s\tDS:{value}\n");
+        let reader = Reader::new(text.as_bytes(), Stringency::Strict, None).expect("header");
+        assert_eq!(ds(&reader.header().expect("held")), held, "{value}");
+        let decoded = reader
+            .decoded_header()
+            .expect("decoded")
+            .expect("not ASCII");
+        assert_eq!(ds(&decoded), value.as_bytes());
+        assert_eq!(decoded.reference_sequences().len(), 1);
+        assert_eq!(
+            reader.header_text().iter().filter(|&&b| b == b'\n').count(),
+            3
+        );
+    }
+    let ascii = Reader::new(HEADER.as_bytes(), Stringency::Strict, None).expect("header");
+    assert!(ascii.decoded_header().expect("decoded").is_none());
+    // Two values that differ only above their low bytes clash, as in htsjdk.
+    let clash = "@RG\tID:a\tSM:s\tDS:A\tDS:\u{141}\n";
+    let error = Reader::new(clash.as_bytes(), Stringency::Strict, None)
+        .err()
+        .expect("a clash");
+    assert!(error.to_string().contains("clashes with DS:A"), "{error}");
+    // A key is two characters, whatever its bytes.
+    let key = "@RG\tID:a\tSM:s\t\u{e9}\u{e8}:x\n";
+    assert!(Reader::new(key.as_bytes(), Stringency::Strict, None).is_ok());
+}
+
+/// The names a record cannot hold come beside the record stream, each
+/// with the index of its record; a name up to U+00FF is in the record.
+#[test]
+fn wide_read_names_come_with_the_index_of_their_record() {
+    let tail = "\t4\t*\t0\t0\t*\t*\t0\t0\t*\t*\n";
+    let names = ["A", "\u{141}", "caf\u{e9}", "x\u{1f600}"];
+    let lines: String = names.iter().map(|name| format!("{name}{tail}")).collect();
+    let text = format!("@HD\tVN:1.6\n{lines}");
+    let reader = Reader::new(text.as_bytes(), Stringency::Strict, None).expect("header");
+    let header = reader.header().expect("header");
+    let mut records = reader.records(&header);
+    let wide = records.wide_names();
+    let mut held = Vec::new();
+    while let Some(record) = records.next_record().expect("record") {
+        held.push(record.name().to_vec());
+    }
+    assert_eq!(held, [&b"A"[..], b"A", b"caf\xe9", b"x\x3d\x00"]);
+    let queued: Vec<(u64, String)> = wide.lock().expect("queue").iter().cloned().collect();
+    assert_eq!(
+        queued,
+        [(1, "\u{141}".to_owned()), (3, "x\u{1f600}".to_owned())]
+    );
+}

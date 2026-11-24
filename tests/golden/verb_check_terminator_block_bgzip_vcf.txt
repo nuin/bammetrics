@@ -1,0 +1,8 @@
+## argv
+check-terminator-block
+tests/data/arrays/arrays.vcf.gz
+## exit
+0
+## stdout
+HAS_TERMINATOR_BLOCK
+## stderr

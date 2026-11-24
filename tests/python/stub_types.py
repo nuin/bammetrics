@@ -38,6 +38,9 @@ def forms(names: list[str]) -> None:
     assert_type(bm.build_bam_index("x.bam", output="x.bai")[0]["unaligned"], int)
     assert_type(bm.create_sequence_dictionary("r.fa")[0], dict[str, Any])
     assert_type(bm.view_sam("x.sam", alignment_status="Aligned", header_only=False), list[dict[str, Any]])
+    assert_type(bm.compare_s_a_ms(["a.bam", "b.bam"], lenient_dup=True, compare_mq=True,
+                                  low_mq_threshold=2), list[dict[str, Any]])
+    assert_type(bm.check_terminator_block("x.bam")[0], dict[str, Any])
     table = bm.read_table("x.insert_size_metrics")
     assert_type(table, bm.Table)
     assert_type(table.dtypes["READ_PAIRS"], Literal["int", "float", "string"])

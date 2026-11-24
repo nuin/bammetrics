@@ -1324,6 +1324,12 @@ below. bammetrics differs here:
   each UTF-16 code unit, so `é` (bytes `C3 A9`) comes out as the byte `E9`. bammetrics
   does the same. htsjdk orders such names by code unit while they are in memory;
   bammetrics orders the bytes it holds, which differs for characters above U+00FF.
+  `CompareSAMs` alone compares names and header values as the file spells them.
+- A header line is split into its fields after it is decoded, as htsjdk splits it, so a
+  character whose low byte is a tab or a colon (U+0109, U+013A) stays inside its value.
+  Where that low byte is a tab or a line end (U+0109, U+010A, U+010D and the like),
+  bammetrics holds `?` for it. htsjdk writes the byte itself into a BAM header, which
+  then has a field or a line more than the SAM text had.
 - `VALIDATION_STRINGENCY` is carried by every tool on the Picard face, every verb, every
   Python function (`validation_stringency=`), `chain --validation-stringency` for its
   source and `qc --validation-stringency`. A step of a chain refuses it: the chain reads
@@ -1936,6 +1942,96 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
 - `PositionBasedDownsampleSam` refuses standard input and pipes with exit 2: it reads its
   input twice. Picard opens `INPUT` three times and its later reads of a pipe find no
   record.
+
+## CompareSAMs and CheckTerminatorBlock
+
+Picard behavior kept, each checked against Picard 3.5.0
+(`tests/concordance/test_compare_s_a_ms.py`):
+
+- The strand is never compared (docs/04 Q-018). `SamComparison.alignmentsMatch` tests
+  `left.getReadNegativeStrandFlag() == left.getReadNegativeStrandFlag()`, so two records
+  at one reference name and start match on either strand.
+- `LENIENT_LOW_MQ_ALIGNMENT` matches a pair whose mapping qualities are both at most
+  `LOW_MQ_THRESHOLD`. Picard's help says below; its code tests `<=`.
+- A key (read name and read end) a file gives twice at one place holds its last record:
+  the maps of the coordinate and unsorted walks replace the earlier one. The second
+  record of the other file then counts in `MISSING_LEFT`, so a file with such a key
+  differs from itself (the foundation corpus does, by its 32 QC-failed copies).
+- A queryname-sorted pair whose right file ends before the left exits 1 with no result.
+  Picard counts the left records that remain and then reads the current record of the
+  ended left file, which throws (`Cannot call next() on exhausted iterator`). bammetrics
+  exits 1 there with an error that says so.
+- The queryname walk merges by name in byte order, then unpaired, first, second. A file
+  in `samtools sort -n` order (its natural order) is not in that order where the two
+  differ, and the counts are what the merge gives, in both tools.
+- `SO:unknown`, and an `SO` value htsjdk does not know, exit 1 (`Unrecognized sort order
+  (unknown) found.`).
+- An `SO` value htsjdk does not know (`bogus`, `Coordinate`) prints as `unknown` on the
+  `Sort order differs.` lines, in a BAM, a CRAM and SAM text: htsjdk's `setAttribute`
+  stores it that way.
+- A record whose reference index or mate reference index is outside the dictionary,
+  a secondary or supplementary record too, exits 1 at any stringency (`Reference name
+  for '77' not found in sequence dictionary.`): htsjdk resolves both names of every
+  record it decodes.
+- A `@RG DT` prints as htsjdk holds it: read as a date and written back in the time zone
+  of the process. Two `DT` values that name one instant in two zones are equal.
+- The `COMPARE_MQ` histogram keys (`LEFT,RIGHT`) are in text order: `10,3` before `2,2`.
+- `LENIENT_DUP` reads `MC` on a pair whose mate is mapped only when two or more pairs
+  differ in their duplicate flag; one pair alone counts 1. An unmapped record with a
+  mapped mate and no `MC` fails only when another differing record ties with it in
+  htsjdk's file order (library, reference, unclipped 5' end, orientation): htsjdk reads
+  the mate CIGAR of such a record for its score alone, and scores on a tie. `SortSam
+  SORT_ORDER=duplicate` and `CollectUmiPrevalenceMetrics` follow the same rule.
+- Read names and header values are htsjdk's strings: a BAM's bytes one character each, a
+  CRAM's and SAM text's decoded as UTF-8. A BAM that holds `é` as UTF-8 (`C3 A9`) and SAM
+  text that spells `é` name two reads; a BAM that holds the byte `E9` and that SAM text
+  name one. The queryname walk orders names as `String.compareTo` does, by UTF-16 unit.
+
+Where bammetrics differs:
+
+- A BAM or a CRAM is not validated, as for every tool: Picard's default `STRICT` stops
+  at a record it finds invalid, so the harness runs Picard with
+  `VALIDATION_STRINGENCY=SILENT`. SAM text is checked at the stringency given.
+- The header of a BAM or a CRAM is read by noodles and is not checked at the stringency
+  given. Picard's default `STRICT` refuses a BAM header with an `SO` value htsjdk does not
+  know; bammetrics prints the difference with `unknown`, as Picard does at `SILENT`.
+- Three header shapes htsjdk reads and noodles refuses exit 1 (`not a BAM or CRAM file`
+  for a BAM, `cannot be read` for SAM text): an `@HD VN` that is not `MAJOR.MINOR`
+  (`1.6.1`; Picard prints `File format version differs.` at every stringency), and, in a
+  BAM at `SILENT` or `LENIENT`, an empty `SO:` (Picard prints `File 2: null`) and a tag
+  given twice in one line (Picard keeps one value). At Picard's default `STRICT` the last
+  two fail in both tools.
+- A file that is neither SAM, BAM nor CRAM exits 1 before the comparison. htsjdk opens any
+  text as SAM text with an empty header and reads its lines only when records are
+  compared, so against a file of another sort order Picard prints the header differences
+  and `SAM files differ.`. Both exit 1.
+- An `OUTPUT` that is one of the two inputs, by name or by device and inode, is refused
+  before the read; Picard writes over it. A failed run writes no file.
+- `LENIENT_DUP` finds each swapped representative through an index of the left file's
+  duplicate sets where Picard walks the set for every unflagged record; the count is the
+  same and the work is linear in the set (`compare_sams/duplicates.rs`).
+- `LENIENT_DUP` holds in memory what it reads back from its two sorts: one name per
+  record of every left duplicate set of two or more records, the names matched so far and
+  one set whole, about 470 bytes for each pair whose duplicate flags differ (257 MB for
+  400,000 such pairs in one set). The sorts spill; this index does not. Picard holds the
+  `SAMRecord`s of the same sets.
+- A CRAM whose read names hold a byte outside printable ASCII is refused by the CRAM
+  reader (`invalid name`), for every tool; Picard reads it and decodes the name as UTF-8.
+- A record waiting for its partner holds its name and 48 bytes (233 bytes a record at
+  the peak of 8.4 million; under `LENIENT_DUP` also its fixed fields, CIGAR, `RG` and
+  `MC`, 418 bytes), where Picard holds the `SAMRecord`. The worst case is the same:
+  every primary record of both files in a coordinate walk of two files that share no
+  read, every primary record of the left file in an unsorted walk.
+- Error texts are bammetrics' own where Picard prints a Java exception; `Unrecognized sort
+  order (unknown) found.` and `Mate CIGAR (Tag MC) not found` are Picard's.
+- The verb prints Picard's standard output lines on standard error, so standard output
+  holds the metrics file alone; `-q` drops them. The Picard face prints them on standard
+  output and writes no metrics file without `O=`, as Picard does.
+- `CheckTerminatorBlock` refuses a path that is not a regular file (a named pipe, a
+  socket, a device) without opening it. Picard opens it, reads a size of 0 and prints
+  `DEFECTIVE`; opening a pipe with no writer never returns.
+- The `check-terminator-block` verb prints the name on standard output (or `-o`); the
+  Picard face prints it on standard error, where Picard prints it.
 
 ## Not in Picard
 
