@@ -2284,3 +2284,97 @@ Golden records: the 9 of `CHAIN_COMBINED_CASES` and the 4 of `COMBINED_RESUME_CA
 `chain_plan_qc_wgs_*`, four errors, `chain_short_form_resume_skips`,
 `chain_short_form_resume_option_change`, its plan, `recipe_prep_resume_option_change`).
 `tests/python/test_chain.py` holds the same cases through `chain`, `step` and `recipe`.
+
+## 33. W16: a VCF source, the variant stream
+
+A chain whose source is a VCF carries the source's record lines from step to step
+(`crates/core/src/stage/variant.rs`). The source is told by its text: a regular file,
+plain, gzip or BGZF, that starts with `##fileformat`. Standard input stays a stream of
+alignments.
+
+```bash
+# Copy a VCF as htsjdk writes it, with its .tbi: Picard VcfFormatConverter's output
+bammetrics chain calls.vcf.gz -o out/calls.vcf.gz
+
+# Two taps and the copy, one read
+bammetrics chain calls.vcf.gz variant-calling --dbsnp dbsnp.vcf.gz \
+    genotype-concordance --truth-vcf truth.vcf.gz --truth-sample NA12878 \
+    -o out/calls.vcf.gz
+```
+
+### 33.1 Steps of a variant stream
+
+| Step | What it does |
+|---|---|
+| `write [PATH]` | The lines of its position as a VCF (`crates/core/src/vcf_writer.rs`). A name ending in `.gz`, `.gzip`, `.bgz` or `.bgzf`, in any case, is BGZF; any other name is plain text; `.bcf` exits 2. `--index` writes the `.tbi` of a BGZF VCF; `--md5` writes `PATH.md5`; `--compression-level` 0 to 9 (default 5). Without a path, `PREFIX.<stream>.vcf.gz` |
+| `variant-calling` | `CollectVariantCallingMetrics` as a tap: `PREFIX.variant_calling_detail_metrics` and `PREFIX.variant_calling_summary_metrics`. The tool alone reads `INPUT` whole and Picard needs it indexed; the tap reads the stream in its order and needs no index |
+| `genotype-concordance` | `GenotypeConcordance` as a tap: the stream is the call VCF, `--truth-vcf` is read in step with it. `--call-vcf` on the step exits 2. `INTERVALS` still needs both files indexed, as the tool checks |
+
+`-o r.vcf.gz` (also `.vcf.bgz` and `.vcf`, any case) on a chain whose source is a VCF
+and that has no `write` step adds `write r.vcf.gz --index` as the last step, `write
+r.vcf` for a plain name, and the prefix of every metrics file is `r`. A chain with no
+step and `-o r.vcf.gz` is the copy above.
+
+Refused before the first read, exit 2:
+
+| Command line | Error |
+|---|---|
+| `chain calls.vcf insert-size` | `step 1 (insert-size): CollectInsertSizeMetrics reads alignments, and this chain's stream holds VCF records (the source is a VCF): it cannot be a step of this chain` |
+| `chain in.bam variant-calling --dbsnp d.vcf` | `step 1 (variant-calling): CollectVariantCallingMetrics reads VCF records, and this chain's stream holds alignments (the source is a BAM, CRAM or SAM file): it cannot be a step of this chain` |
+| `chain calls.vcf vcf-to-interval-list` | `step 1 (vcf-to-interval-list): VcfToIntervalList reads a VCF file of its own: it cannot be a step; ...` |
+| `chain in.bam mark-duplicates -o r.vcf.gz` | `-o r.vcf.gz names a VCF, and this chain's source is no VCF: its stream holds alignments` |
+| `chain calls.vcf -o r.bam` | `-o r.bam names a BAM, SAM or CRAM, and this chain's source is a VCF: its stream holds VCF records` |
+| `chain calls.vcf write r.vcf --index` | the index of a plain VCF is tribble's `.idx`, which this writer does not write (decision W16-3) |
+| `chain calls.vcf write -` | a VCF is written to a file |
+| `chain calls.vcf ... qc` | qc reads the metrics of the taps of a BAM |
+
+A record the codec or the encoder refuses (an `INFO` key or `FILTER` name with no header
+line, a negative `QUAL`, a sample with more values than keys when the samples are out
+of sorted order) fails the `write` step with exit 1 and leaves no file, as Picard fails
+(`tests/concordance/test_vcf_writer.py::test_error_parity`). The `.tbi` needs the
+records sorted by contig and start: `Sequence c1 added out of order` or `Features added
+out of order` fail the step, and nothing is renamed into place.
+
+### 33.2 What the writer writes
+
+The writer is htsjdk 5.0.0's `VCFWriter` for the record of `VCFCodec`:
+
+- The header: `##fileformat=VCFv4.2` first, whatever version the input names, then every
+  kept line once in sorted order (contig lines in their own order), then the column
+  line. A standard `INFO` or `FORMAT` line whose count or type differs from htsjdk's is
+  replaced by htsjdk's (`FT` with `Number=1` becomes `Number=.`, `Genotype-level
+  filter`: the rewrite the inventory found in every case). An `INFO` or `FORMAT` line
+  loses keys other than `ID`, `Number`, `Type`, `Description`, `Source` and `Version`;
+  one without `Description` gets `Not provided in original VCF header`; a line with no
+  `=` is dropped.
+- Each record: `POS` as an `int`, `REF` and the alternates upper case (symbolic ones as
+  given), `QUAL` as `%.2f` with `.00` cut (missing for `.`, `-1` and `-10`), the
+  `FILTER` names sorted once, the `INFO` keys sorted with a flag's value dropped, and
+  the genotypes as read. When the header names its samples out of sorted order htsjdk
+  decodes them, and so does the writer: the keys `GT` first then sorted, `GQ` at most
+  99, `FT` `PASS` for an unfiltered genotype, trailing missing values dropped.
+
+The memory is one line and the BGZF workers' blocks: 1,000,000 records hold under the
+500 MiB of docs/07 section 5 (`benches/memgate.toml`, `vcf_writer_*`).
+
+### 33.3 What equals what
+
+| Test | What it holds |
+|---|---|
+| `tests/concordance/test_vcf_writer.py::test_round_trip` | every VCF of `variant_vcfs.py` and 7 corner files, plain and `.vcf.gz`, through `chain X -o OUT` and Picard `VcfFormatConverter`: header lines (date, command and inventoried volatile lines aside) and every record line equal; each `.tbi` answers every whole-contig and 200-base `tabix` query as Picard's does |
+| `test_headers_match_the_inventory` | each case of `tests/concordance/vcf_headers.json` whose output header adds and removes no line: the chain's header of its input header equals the recorded output |
+| `test_error_parity`, `test_unsorted_records_fail_the_index` | 9 refused inputs fail both tools with no file left; unsorted records fail the index in both and copy equal without it |
+| `test_variant_calling_tap`, `test_genotype_concordance_tap` | the taps write the bodies the tools write alone |
+| `crates/core/src/stage/variant.rs` tests | taps see the lines of their position, a transform's counters, a tap fails alone, a failing writer stops the chain and leaves no file |
+| `crates/cli/tests/vcf_chain.rs` | `--resume` skips a VCF `write` and reruns a changed tap; the manifest records kinds `vcf`, `index` and `md5` |
+
+Golden records: the 14 of `VCF_WRITER_CASES` on `tests/data/vcf_writer`
+(`tests/data/make_vcf_writer_fixtures.py`).
+
+### 33.4 Departures from docs/07
+
+The decision rows W16-1 to W16-8 of docs/07 section 7. In short: the variant stream runs
+on an executor of the same shape beside `exec.rs` (no barrier yet); its item is the
+record line, which the writer needs to pass genotypes through as htsjdk does; the
+plain VCF's `.idx` is refused; `-o r.vcf.gz` copies a VCF with no transform; the `.tbi`
+is built from the finished file read back.

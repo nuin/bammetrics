@@ -1454,6 +1454,14 @@ bammetrics chain in.bam mark-duplicates qc --preset wgs -R ref.fa -o out.bam --r
   steps. One step may follow a recipe: `qc`. `--resume` works on a recipe as on its chain.
 - `--resume` with `-o r.bam`: a second run with another option of a tap reruns that tap
   alone and reads `r.bam`; the transforms in front do not run again.
+- A VCF source (a file whose text starts with `##fileformat`, plain, gzip or BGZF) gives
+  a stream of VCF records (docs/chaining.md section 33): its steps are `write [PATH]` (a
+  VCF as htsjdk writes it, BGZF for a `.gz` or `.bgz` name, `--index` for its `.tbi`,
+  `--md5`) and the taps `variant-calling` and `genotype-concordance` (the stream is the
+  call VCF). `-o r.vcf.gz` adds `write r.vcf.gz --index` (`write r.vcf` for a plain
+  name), with or without other steps: `bammetrics chain calls.vcf.gz -o out.vcf.gz`
+  copies a VCF as Picard `VcfFormatConverter` does. A step of the other kind, `-o r.bam`
+  on a VCF source, `-o r.vcf.gz` on a BAM and an index of a plain `.vcf` exit 2.
 
 ### config
 

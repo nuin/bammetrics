@@ -1379,3 +1379,48 @@ argv = [
 needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
 max_rss_mib = 64
 max_seconds = 10
+
+# Wave W16: the VCF writer and the variant stream of the chain. One line in memory and
+# the BGZF workers' blocks; docs/07 section 5 sets 500 MiB for any input. Measured on
+# this machine: 200,000 records 31 MiB (copy and variant-calling) and 20 MiB (samples
+# out of sorted order: every genotype decoded and written anew).
+[[command]]
+name = "chain vcf copy"
+argv = ["{bin}", "chain", "tests/data/vcf_writer/calls.vcf", "-o", "{out}/r.vcf.gz"]
+needs = ["tests/data/vcf_writer/calls.vcf"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "chain vcf genotype-concordance"
+argv = [
+    "{bin}", "chain", "tests/data/vcf_writer/call.vcf", "-o", "{out}/r.vcf.gz",
+    "genotype-concordance", "--truth-vcf", "tests/data/vcf_writer/truth.vcf",
+    "--truth-sample", "T", "--call-sample", "C",
+]
+needs = ["tests/data/vcf_writer/call.vcf", "tests/data/vcf_writer/truth.vcf"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "chain vcf 200,000 records"
+argv = [
+    "sh", "-c",
+    "python3 benches/vcf_scale.py {out} 200000 && {bin} chain {out}/big.vcf -o {out}/r.vcf.gz variant-calling --dbsnp {out}/dbsnp.vcf && {bin} chain {out}/big_unsorted.vcf -o {out}/u.vcf.gz",
+]
+needs = ["benches/vcf_scale.py"]
+max_rss_mib = 64
+max_seconds = 60
+
+# The scale input: python3 benches/vcf_scale.py ~/data/bammetrics-scale/waves/w16 1000000
+# (104 MB of text): 57.3 MiB, 6.8 s; removed after the measurement of docs/benchmarks.md.
+[[command]]
+name = "chain vcf 1,000,000 records"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "{bin} chain ~/data/bammetrics-scale/waves/w16/big.vcf -o {out}/r.vcf.gz variant-calling --dbsnp ~/data/bammetrics-scale/waves/w16/dbsnp.vcf && {bin} chain ~/data/bammetrics-scale/waves/w16/big_unsorted.vcf -o {out}/u.vcf.gz",
+]
+needs = ["~/data/bammetrics-scale/waves/w16/big.vcf"]
+max_rss_mib = 500
+max_seconds = 300

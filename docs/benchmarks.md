@@ -591,6 +591,28 @@ read holds the primary records of both the same way. The two tools add 99,360 by
 stripped default binary (9,843,192 at 0.31.0, 9,942,552 with them; 113,664 unstripped),
 both built with rustc 1.100.0.
 
+## VCF writer and the variant stream (wave W16)
+
+No real VCF exists under `~/data`. `python3 benches/vcf_scale.py
+~/data/bammetrics-scale/waves/w16 1000000` wrote 1,000,000 records on three 100 Mb contigs
+(three samples with `GT:GQ:DP:AD`, 104,444,492 bytes of text), the same records with the
+samples out of sorted order, and a dbSNP of every tenth site; the files were removed after
+the run. Default threads, `/usr/bin/time -l`; Picard 3.5.0 `VcfFormatConverter
+REQUIRE_INDEX=false` with `-Xmx8g` (its `CREATE_INDEX` default writes the `.tbi`).
+
+| command | bammetrics | Picard |
+|---|---|---|
+| `chain big.vcf -o r.vcf.gz variant-calling --dbsnp dbsnp.vcf` (copy, `.tbi`, tap) | 1.84 s, 60.6 MiB | copy alone 5.3 s, 316 MiB |
+| `chain big_unsorted.vcf -o u.vcf.gz` (every genotype decoded and written anew) | 5.14 s, 16.3 MiB | 8.0 s, 302 MiB |
+| `chain big.vcf -o p.vcf` (plain, no index) | 1.02 s, 11.2 MiB | not run |
+| `variant-calling big.vcf --dbsnp dbsnp.vcf` (the tool alone) | 1.12 s, 46.9 MiB | not run |
+
+Both copies inflate to the text Picard writes, all 1,000,012 lines, and a `tabix` query of
+`chr2:5000000-9000000` returns the same 13,378 records from both indexes. The memgate row
+`chain vcf 1,000,000 records` (both chains in one `sh -c`) peaked at 57.3 MiB against the
+500 MiB of docs/07 section 5, in 6.82 s. The 1,000,000 records hold 33,183,346 bytes of
+BGZF at level 5 and a 174,281-byte `.tbi`.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails

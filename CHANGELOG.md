@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Added
+
+- The VCF writer (wave W16 of docs/07, `crates/core/src/vcf_writer.rs`): the header and
+  each record line as htsjdk 5.0.0's `VCFWriter` writes them for Picard 3.5.0
+  (`crates/core/src/vcf/full_header.rs`, `encode.rs`, `encode_genotypes.rs`): the header
+  sorted under `##fileformat=VCFv4.2` with the standard lines repaired, `QUAL` as `%.2f`,
+  sorted `FILTER` names and `INFO` keys, genotypes passed through unread (decoded and
+  written anew when the samples are out of sorted order). Plain or BGZF by the name, the
+  `.tbi` of a BGZF VCF (`vcf_writer/tabix.rs`), `.md5`, every file through `AtomicFile`.
+  The example `vcf_copy` copies a VCF through it.
+- The variant stream of `chain` (docs/chaining.md section 33): a VCF source carries its
+  record lines through `crates/core/src/stage/variant.rs` (batches, a thread per tap and
+  sink, the failure rules of the BAM chain). Its steps: `write` (a VCF) and the taps
+  `variant-calling` and `genotype-concordance`. `-o r.vcf.gz` adds the write; manifest 2
+  records kinds `vcf`, `index` (`.tbi`) and `md5`; `--resume` skips them. A step of the
+  other kind exits 2 before the first read, naming the stream's kind.
+- `tests/concordance/test_vcf_writer.py`: every VCF of `variant_vcfs.py` and 7 corner
+  files, plain and `.vcf.gz`, equal to Picard `VcfFormatConverter` line for line, the
+  `.tbi` equal by `tabix` queries, the inventory's pure-rewrite headers, error parity, and
+  the two taps. 14 golden records (`VCF_WRITER_CASES`, `tests/data/vcf_writer`), four
+  memgate rows (`chain vcf *`).
+
+### Fixed
+
+- A VCF `QUAL` within 5e-5 of -1 is missing, as htsjdk reads the VCF 3 spelling; it failed
+  `VcfToIntervalList` (`vcf/site.rs`). A `GT` with an empty allele token (`0//1`, `1/`)
+  skips it, as `StringTokenizer` does; it failed `CollectVariantCallingMetrics` and
+  `GenotypeConcordance`.
+
 ## 0.33.0
 
 Wave W15 of docs/07, 74 tools: CRAM output for every `OUTPUT` and chain `write` step ending in `.cram` (`-o r.cram` on a chain too), and `SamFormatConverter`, `CompareSAMs` and `CheckTerminatorBlock` (tools 72 to 74, none a chain step); decisions D206 to D235.

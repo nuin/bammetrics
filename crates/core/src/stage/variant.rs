@@ -536,11 +536,10 @@ fn flow(
     mut batch: Vec<VcfLine>,
     from: usize,
 ) -> std::result::Result<(), Failure> {
-    for position in from..positions.len() {
+    for (position, sinks) in positions.iter().enumerate().skip(from) {
         if batch.is_empty() {
             return Ok(());
         }
-        let sinks = &positions[position];
         let last = position == transforms.len();
         if !sinks.is_empty() {
             let shared: Shared = if last {
@@ -678,7 +677,10 @@ mod tests {
         assert_eq!(notes, ["5000", "", "2500", ""]);
         let halved = results[1].as_ref().expect("ok").counters.expect("counted");
         assert_eq!((halved.records_in, halved.records_out), (5000, 2500));
-        assert_eq!(results[3].as_ref().expect("ok").files, [out.clone()]);
+        assert_eq!(
+            results[3].as_ref().expect("ok").files,
+            std::slice::from_ref(&out)
+        );
         let text = std::fs::read_to_string(&out).expect("written");
         assert_eq!(text.lines().filter(|l| !l.starts_with('#')).count(), 2500);
         assert!(text.contains("\nc1\t1\t.\tA\tC\t30\t.\tDP=0\n"));
