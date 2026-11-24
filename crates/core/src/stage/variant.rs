@@ -39,29 +39,42 @@ pub struct VcfLine {
     pub text: String,
 }
 
+/// The text a batch holds at most before it is handed on: a batch ends at
+/// [`BATCH_RECORDS`] lines or once its lines hold this many bytes, so a
+/// queue of [`QUEUED_BATCHES`] batches holds at most 8 times this plus one
+/// line each, however wide the lines.
+pub const BATCH_BYTES: usize = 4 << 20;
+
 /// A variant stream read in batches.
 pub trait VariantRecords {
     /// Replace the content of `out` by the next lines, at most
-    /// [`BATCH_RECORDS`]. False after the last line, with `out` empty.
+    /// [`BATCH_RECORDS`] and, past one line, at most [`BATCH_BYTES`] of
+    /// text. False after the last line, with `out` empty.
     fn next_batch(&mut self, out: &mut Vec<VcfLine>) -> Result<bool>;
 }
 
 impl VariantRecords for VcfLines {
     fn next_batch(&mut self, out: &mut Vec<VcfLine>) -> Result<bool> {
         let mut filled = 0;
-        while filled < BATCH_RECORDS {
+        let mut bytes = 0usize;
+        while filled < BATCH_RECORDS && bytes < BATCH_BYTES {
             if filled == out.len() {
                 out.push(VcfLine::default());
             }
             if !self.next_line(&mut out[filled].text)? {
                 break;
             }
+            bytes += out[filled].text.len();
             filled += 1;
         }
         out.truncate(filled);
         Ok(filled > 0)
     }
 }
+
+/// What [`VcfSource::read`] hands the header, one shared copy, and the
+/// record lines to.
+pub type Consume<'c> = dyn FnMut(Arc<VcfHeader>, &mut dyn VariantRecords) -> Result<()> + 'c;
 
 /// The VCF a variant chain starts from: plain, gzip or BGZF.
 #[derive(Clone, Debug)]
@@ -82,13 +95,10 @@ impl VcfSource {
 
     /// Open the source, read its header and hand `consume` the header and
     /// the record lines.
-    pub fn read(
-        &self,
-        consume: &mut dyn FnMut(&VcfHeader, &mut dyn VariantRecords) -> Result<()>,
-    ) -> Result<()> {
+    pub fn read(&self, consume: &mut Consume<'_>) -> Result<()> {
         let mut lines = VcfLines::open(&self.path)?;
-        let header = lines.header().clone();
-        consume(&header, &mut lines)
+        let header = lines.shared_header();
+        consume(header, &mut lines)
     }
 }
 
@@ -121,10 +131,12 @@ pub trait VariantSink: Send {
     fn finish(self: Box<Self>) -> Result<Products>;
 }
 
-/// Builds a sink from the header at its position.
-pub type BuildVariantSink = Box<dyn FnOnce(&VcfHeader) -> Result<Box<dyn VariantSink>>>;
+/// Builds a sink from the header at its position, one copy shared by
+/// every step.
+pub type BuildVariantSink = Box<dyn FnOnce(&Arc<VcfHeader>) -> Result<Box<dyn VariantSink>>>;
 /// Builds a transform from the header at its position.
-pub type BuildVariantTransform = Box<dyn FnOnce(&VcfHeader) -> Result<Box<dyn VariantTransform>>>;
+pub type BuildVariantTransform =
+    Box<dyn FnOnce(&Arc<VcfHeader>) -> Result<Box<dyn VariantTransform>>>;
 
 pub enum VariantStepKind {
     /// A step that reads the lines of its position and fails alone.
@@ -163,7 +175,7 @@ impl VariantStep {
         Self {
             label: "write".to_owned(),
             kind: VariantStepKind::Sink(Box::new(move |header| {
-                let writer = VcfWriter::create(&path, header, options)?;
+                let writer = VcfWriter::create_shared(&path, Arc::clone(header), options)?;
                 Ok(Box::new(WriteSink { writer }) as Box<dyn VariantSink>)
             })),
         }
@@ -277,7 +289,7 @@ impl<'scope> Worker<'scope> {
     fn spawn(
         scope: &'scope Scope<'scope, '_>,
         step: usize,
-        header: VcfHeader,
+        header: Arc<VcfHeader>,
         mut sink: Box<dyn VariantSink>,
         stops_chain: bool,
     ) -> Self {
@@ -365,13 +377,12 @@ enum Failure {
 /// every step's result.
 fn run<'scope>(
     scope: &'scope Scope<'scope, '_>,
-    header: &VcfHeader,
+    mut header: Arc<VcfHeader>,
     steps: Vec<VariantStep>,
     records: &mut dyn VariantRecords,
     labels: &[String],
     results: &mut [Option<Result<Products>>],
 ) {
-    let mut header = header.clone();
     // The sinks of each position; transform `k` sits between positions
     // `k` and `k + 1`.
     let mut positions: Vec<Vec<Worker<'scope>>> = vec![Vec::new()];
@@ -381,14 +392,14 @@ fn run<'scope>(
         match kind {
             VariantStepKind::Tap(build) => match build(&header) {
                 Ok(sink) => {
-                    let worker = Worker::spawn(scope, step, header.clone(), sink, false);
+                    let worker = Worker::spawn(scope, step, Arc::clone(&header), sink, false);
                     positions.last_mut().expect("one").push(worker);
                 }
                 Err(e) => results[step] = Some(Err(e)),
             },
             VariantStepKind::Sink(build) => match build(&header) {
                 Ok(sink) => {
-                    let worker = Worker::spawn(scope, step, header.clone(), sink, true);
+                    let worker = Worker::spawn(scope, step, Arc::clone(&header), sink, true);
                     positions.last_mut().expect("one").push(worker);
                 }
                 Err(e) => {
@@ -399,7 +410,7 @@ fn run<'scope>(
             VariantStepKind::Transform(build) => {
                 match build(&header).and_then(|t| t.header(&header).map(|h| (t, h))) {
                     Ok((transform, after)) => {
-                        header = after;
+                        header = Arc::new(after);
                         transforms.push((step, transform));
                         positions.push(Vec::new());
                     }

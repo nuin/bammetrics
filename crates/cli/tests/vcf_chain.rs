@@ -155,3 +155,50 @@ fn md5_and_a_failed_write() {
     assert_eq!(stdout.status.code(), Some(2), "{stdout:?}");
     fs::remove_dir_all(dir).expect("clean");
 }
+
+#[test]
+fn compressed_names_bare_cr_lines_and_sources_that_are_no_vcf() {
+    let dir = fresh_dir("names");
+    // htsjdk writes BGZF for any name ending in .gz or .bgz (decision W16-9).
+    for name in ["x.gz", "y.BGZ"] {
+        let out = dir.join(name);
+        let done = bammetrics(&["chain", CALLS, "-q", "-o", &out.display().to_string()]);
+        assert!(done.status.success(), "{done:?}");
+        assert_eq!(fs::read(&out).expect("vcf")[..4], [0x1f, 0x8b, 8, 4]);
+        assert!(dir.join(format!("{name}.tbi")).exists());
+        assert_eq!(text(&out), text(&root().join(CALLS)));
+    }
+    // A bare CR ends a line as a line feed does.
+    let source = fs::read_to_string(root().join(CALLS)).expect("calls");
+    let cr = dir.join("cr.vcf");
+    fs::write(&cr, source.replace('\n', "\r")).expect("cr");
+    let out = dir.join("cr_out.vcf");
+    let done = bammetrics(&[
+        "chain",
+        &cr.display().to_string(),
+        "-q",
+        "-o",
+        &out.display().to_string(),
+    ]);
+    assert!(done.status.success(), "{done:?}");
+    assert_eq!(text(&out), text(&root().join(CALLS)));
+    // A source that is no VCF is named with its reason.
+    for (name, bytes, reason) in [
+        ("empty.txt", &b""[..], "it is empty"),
+        ("text.txt", &b"hello\n"[..], "does not start with #"),
+        ("calls.bcf", &b"BCF\x02\x02rest"[..], "it is a BCF"),
+    ] {
+        let path = dir.join(name);
+        fs::write(&path, bytes).expect("source");
+        let refused = bammetrics(&[
+            "chain",
+            &path.display().to_string(),
+            "-o",
+            &dir.join("r.vcf").display().to_string(),
+        ]);
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert_eq!(refused.status.code(), Some(2), "{stderr}");
+        assert!(stderr.contains(reason), "{name}: {stderr}");
+    }
+    fs::remove_dir_all(dir).expect("clean");
+}

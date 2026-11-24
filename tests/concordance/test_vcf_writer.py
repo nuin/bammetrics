@@ -143,6 +143,74 @@ CORNERS = {
     ]),
 }
 
+# The corners of the fixup of wave W16, each found against Picard: the header adds a
+# key of Number=2 and GL. Samples out of sorted order, so htsjdk decodes the genotypes.
+HEADER_W16 = HEADER.replace(
+    "##FORMAT=<ID=XS,",
+    '##FORMAT=<ID=X2,Number=2,Type=String,Description="Two">\n'
+    '##FORMAT=<ID=XR,Number=R,Type=String,Description="Per allele">\n'
+    '##FORMAT=<ID=GL,Number=G,Type=Float,Description="Likelihoods">\n'
+    "##FORMAT=<ID=XS,")
+
+
+def w16(rows, version="VCFv4.2", samples=("S2", "S1")):
+    return vcf_text(version, samples=samples, rows=rows, header=HEADER_W16)
+
+
+CORNERS.update({
+    # GL becomes PL; a PL read earlier in the record wins over a later GL.
+    "corners_gl": w16([
+        ("c1", 1, ".", "A", "C", ".", ".", ".", "GT:GL", "0/1:-1.5,-0.1,-100", "1/1:0,-1,-2"),
+        ("c1", 2, ".", "A", "C", ".", ".", ".", "GT:GL:PL", "0/1:-1.5,-0.1,-100:5,6,7", "1/1:0,-1,-2"),
+        ("c1", 3, ".", "A", "C", ".", ".", ".", "GT:PL:GL", "0/1:5,6,7:-1,0,-2", "1/1:0,-1,-2"),
+        ("c1", 4, ".", "A", "C", ".", ".", ".", "GT:GL", "0/1:.,.,.", "1/1:."),
+        ("c1", 5, ".", "A", "C,G", ".", ".", ".", "GT:GL", "0/2:-0.04,-1.4,-2.5,-3,-4.44,-5.55",
+         "1/1:-1e-5,-1,-2,-3,-4,-500"),
+        ("c1", 6, ".", "A", "C", ".", ".", ".", "GT:GL", "0:-0.04,-1.4", "1:0,-2.05"),
+        ("c1", 7, ".", "A", "C", ".", ".", ".", "GT:GL", "0/1:NaN,0,-1", "1/1:-Infinity,0,-1"),
+        ("c1", 8, ".", "A", "C", ".", ".", ".", "GT:GL", "0/1:1.5,0.2,-3", "1/1:-0.05,-0.15,-0.25"),
+    ]),
+    # A missing value before a present one is one `.` whatever the key's Number.
+    "corners_missing_values": w16([
+        ("c1", 1, ".", "A", "T,G", ".", ".", ".", "GT:XA:DP", "0/1:.:5", "0/1:0.5,.:6"),
+        ("c1", 2, ".", "A", "C,G,T", ".", ".", ".", "GT:XS:XA", "0/1:b", "0/1:c:1,2,3"),
+        ("c1", 3, ".", "A", "C", ".", ".", ".", "GT:X2:XS:XR", "0/1:.:b:.", "0/1:.:.:z"),
+        ("c1", 4, ".", "A", "C", ".", ".", ".", "GT:XR:X2:XS", "0/1:.:.:b", "0/1"),
+        ("c1", 5, ".", "A", "C", ".", ".", ".", "GT:PL:XS", "0/1:.:b", "0/1:1,0,2"),
+        ("c1", 6, ".", "A", "C", ".", ".", ".", "GT:AD:DP", "0/1:.:5", "0/1:1,2:6"),
+    ]),
+    # A GQ that rounds to -1 is no GQ; a QUAL of -0 prints 0.
+    "corners_gq_qual": w16([
+        ("c1", 1, ".", "A", "C", "-0", ".", ".", "GT:GQ", "0/1:-1.5", "0/1:-0.6"),
+        ("c1", 2, ".", "A", "C", "-0.0", ".", ".", "GT:GQ", "0/1:-1.0", "0/1:-0.4"),
+    ]),
+    # An empty first sample cell (DP -1 and FF missing), and v4.3 text with %3A: both
+    # written, and the .tbi built from the written lines.
+    "corners_empty_cell": w16([
+        ("c1", 1, ".", "A", "C", ".", ".", ".", "DP:XS", "-1:.", "5:x"),
+    ]),
+    "corners_v43_colon": w16([
+        ("c1", 1, ".", "A", "C", ".", ".", ".", "GT:XS", "0/1:a%3Ab", "0/1:x"),
+    ], version="VCFv4.3"),
+    # Text is written as ISO-8859-1: up to U+00FF one byte, any other character `?`,
+    # a byte that is not UTF-8 `?` too.
+    "corners_latin1": (
+        HEADER_W16.replace('Description="Text"', 'Description="DépĊth"')
+        + "##comment=café 中 \U0001F600  \n"
+        + COLUMNS + "\tFORMAT\tS2\tt中\n"
+        + "c1\t1\tré\tA\tC\t.\t.\tXT=café中\U0001F600\tGT:XS\t0/1:é\t0/1:x\n"
+    ).encode() .replace(b"XT=caf\xc3\xa9", b"XT=caf\xc3\xa9\xe9", 1),
+    # A bare CR ends a line, as htsjdk's line reader ends it.
+    "corners_cr_only": w16([
+        ("c1", 1, ".", "A", "C", ".", ".", ".", "GT", "0/1", "0/1"),
+        ("c1", 2, ".", "A", "C", ".", ".", ".", "GT", "0/1", "1/1"),
+    ]).replace("\n", "\r"),
+    # The version line need not be the first header line.
+    "corners_source_first": "##source=first\n" + w16([
+        ("c1", 1, ".", "A", "C", ".", ".", ".", "GT", "0/1", "0/1"),
+    ]),
+})
+
 # Files both tools refuse: name -> text.
 ERRORS = {
     "undeclared_info": vcf_text(rows=[("c1", 1, ".", "A", "C", ".", ".", "NOPE=1", "GT", "0", "0")]),
@@ -157,6 +225,22 @@ ERRORS = {
                              rows=[("c1", 1, ".", "A", "C", ".", ".", ".", "GT", "0/3", "0")]),
     "duplicate_allele": vcf_text(rows=[("c1", 1, ".", "A", "C,C", ".", ".", ".", "GT", "0", "0")]),
     "no_version": HEADER.replace("##fileformat=VCFv4.2\n", "") + COLUMNS + "\n",
+    "gl_not_a_number": w16([("c1", 1, ".", "A", "C", ".", ".", ".", "GT:GL", "0/1:x,1,2", "0")]),
+    "gl_partly_missing": w16([("c1", 1, ".", "A", "C", ".", ".", ".", "GT:GL", "0/1:.,1,2", "0")]),
+    # A CR inside a field ends the line there: the record is cut short.
+    "cr_in_id": w16([("c1", 1, "a\rb", "A", "C", ".", ".", ".", "GT", "0/1", "0/1")]),
+    "cr_in_info": w16([("c1", 1, ".", "A", "C", ".", ".", "XT=a\rb", "GT", "0/1", "0/1")]),
+}
+
+# Inputs whose .vcf.gz index both tools refuse: a record past the 32,770 16 kb windows a
+# .tbi holds, by its start on a long contig or by its END.
+INDEX_LIMITS = {
+    "past_tbi_start": HEADER_W16.replace("##contig=<ID=c1,length=5000>",
+                                         "##contig=<ID=c1,length=600000000>")
+    + COLUMNS + "\n" + "c1\t10\t.\tA\tC\t.\t.\t.\n" + "c1\t550000000\t.\tA\tC\t.\t.\t.\n",
+    "past_tbi_end": HEADER_W16.replace(
+        "##INFO=<ID=DP,", '##INFO=<ID=END,Number=1,Type=Integer,Description="End">\n##INFO=<ID=DP,')
+    + COLUMNS + "\n" + "c1\t1\t.\tA\tC\t.\t.\tEND=2000000000\n",
 }
 
 # Inputs a .vcf.gz with an index refuses: records out of order (c1 12 before c1 11).
@@ -167,9 +251,9 @@ UNSORTED = vcf_text(rows=[ROWS[3], ROWS[5], ROWS[4]])
 def vcfs(tmp_path_factory):
     out = tmp_path_factory.mktemp("vcf_writer")
     files = build_all(out)
-    for name, text in {**CORNERS, **ERRORS, "unsorted": UNSORTED}.items():
+    for name, text in {**CORNERS, **ERRORS, **INDEX_LIMITS, "unsorted": UNSORTED}.items():
         path = out / f"{name}.vcf"
-        path.write_bytes(text.encode())
+        path.write_bytes(text if isinstance(text, bytes) else text.encode())
         files[f"{name}.vcf"] = path
     files["dir"] = out
     return files
@@ -194,7 +278,8 @@ def tabix_regions(path, contigs):
         regions.extend(f"{name}:{start}-{start + 199}" for start in range(1, length + 1, 200))
     out = []
     for region in regions:
-        done = subprocess.run(["tabix", str(path), region], capture_output=True, text=True)
+        # Bytes: a record may hold ISO-8859-1 text, which is no UTF-8.
+        done = subprocess.run(["tabix", str(path), region], capture_output=True)
         out.append((region, done.returncode, done.stdout))
     return out
 
@@ -269,6 +354,42 @@ def test_unsorted_records_fail_the_index(vcfs, tmp_path):
     assert p.returncode == 0 and o.returncode == 0, (p.stderr[-500:], o.stderr)
     assert not diff_vcf_rule(tmp_path / "p.vcf.gz", tmp_path / "o.vcf.gz")
     RESULTS.append(("VcfWriter unsorted", 2, 2, "index fails in both, copy equal"))
+
+
+@pytest.mark.parametrize("name", sorted(INDEX_LIMITS))
+def test_index_limits_fail_in_both(vcfs, tmp_path, name):
+    src = vcfs[f"{name}.vcf"]
+    picard, ours = tmp_path / "picard.vcf.gz", tmp_path / "ours.vcf.gz"
+    p = run_picard(src, picard, "CREATE_INDEX=true")
+    o = run_chain(src, ours)
+    assert p.returncode != 0 and o.returncode != 0, (p.stderr[-500:], o.stderr)
+    assert "ArrayIndexOutOfBounds" in p.stderr, p.stderr[-500:]
+    assert ".tbi" in o.stderr, o.stderr
+    assert not ours.exists() and not Path(f"{ours}.tbi").exists()
+    # The plain copy holds every record in both.
+    p = run_picard(src, tmp_path / "p.vcf", "CREATE_INDEX=false")
+    o = run_chain(src, tmp_path / "o.vcf")
+    assert p.returncode == 0 and o.returncode == 0, (p.stderr[-500:], o.stderr)
+    assert not diff_vcf_rule(tmp_path / "p.vcf", tmp_path / "o.vcf")
+    RESULTS.append((f"VcfWriter {name}", 2, 2, "index fails in both, copy equal"))
+
+
+@pytest.mark.parametrize("suffix", [".gz", ".bgz", ".GZ"])
+def test_compressed_names_are_bgzf(vcfs, tmp_path, suffix):
+    """htsjdk writes BGZF and a .tbi for any name ending in .gz or .bgz."""
+    src = vcfs["corners_unsorted_samples.vcf"]
+    picard, ours = tmp_path / f"picard{suffix}", tmp_path / f"ours{suffix}"
+    p = run_picard(src, picard, "CREATE_INDEX=true")
+    o = run_chain(src, ours)
+    assert p.returncode == 0 and o.returncode == 0, (p.stderr[-500:], o.stderr)
+    assert ours.read_bytes()[:4] == picard.read_bytes()[:4] == b"\x1f\x8b\x08\x04"
+    assert ours.read_bytes().endswith(BGZF_EOF)
+    assert Path(f"{ours}.tbi").exists() and Path(f"{picard}.tbi").exists()
+    assert not diff_vcf_rule(picard, ours)
+    if shutil.which("tabix"):
+        contigs = contigs_of(vcf_lines(ours))
+        assert tabix_regions(picard, contigs) == tabix_regions(ours, contigs)
+    RESULTS.append((f"VcfWriter name {suffix}", 1, 1, "BGZF and .tbi as Picard"))
 
 
 def pure_rewrites():

@@ -3,7 +3,7 @@
 //! ([`crate::vcf_writer`]).
 //!
 //! Reading (`AbstractVCFCodec.parseHeaderFromLines`, checked by
-//! [`super::site_header::parse`]):
+//! [`super::site_header::parse_without_contigs`]):
 //!
 //! - `##INFO` and `##FORMAT` lines keep `ID`, `Number`, `Type`,
 //!   `Description`, and from VCF 4.2 `Source` and `Version`; any other key
@@ -361,7 +361,7 @@ fn repair(line: Line) -> Line {
 const NO_DESCRIPTION: &str = "Not provided in original VCF header";
 
 /// `##INFO` or `##FORMAT` (`VCFCompoundHeaderLine`): the checks are
-/// [`site_header::parse`]'s, made before.
+/// [`site_header::parse_without_contigs`]'s, made before.
 fn compound(key: &'static str, text: &str, minor: u8) -> Result<Line, String> {
     let recommended: &[&str] = if minor >= 2 {
         &["Source", "Version"]
@@ -399,10 +399,26 @@ fn compound(key: &'static str, text: &str, minor: u8) -> Result<Line, String> {
     }))
 }
 
-/// The header a VCF writer writes, with what its encoder looks up.
+/// One kept line as written, without its `##`: its bytes in
+/// [`VcfHeader::text`], and `contig`, its place among the `##contig` lines
+/// from 1, 0 for any other line.
+#[derive(Clone, Copy, Debug)]
+struct Written {
+    contig: u32,
+    start: u32,
+    end: u32,
+}
+
+/// The header a VCF writer writes, with what its encoder looks up. Each
+/// kept line is held once, as the text it is written as, in one buffer
+/// with 12 bytes of offsets per line; the site rules hold no contig line
+/// (the dictionary does). The raw lines are freed as they are read, so a
+/// header of `n` lines of `b` bytes costs about `2b + 100n` bytes at its
+/// peak (docs/chaining.md section 33).
 #[derive(Clone, Debug)]
 pub struct VcfHeader {
-    lines: Vec<Line>,
+    text: String,
+    lines: Vec<Written>,
     samples: Vec<String>,
     minor: u8,
     site: SiteHeader,
@@ -410,6 +426,30 @@ pub struct VcfHeader {
     formats: HashMap<String, Definition>,
     filters: HashSet<String>,
     dictionary: Dictionary,
+}
+
+/// Keep the first contig of each name, in order: the dictionary takes the
+/// first `##contig` line of each `ID`. A sort of 4-byte indexes finds the
+/// repeats, so no second copy of the names is held.
+fn first_of_each_name(dictionary: &mut Dictionary) {
+    let mut order: Vec<u32> = (0..dictionary.len() as u32).collect();
+    order.sort_by(|&a, &b| {
+        dictionary[a as usize]
+            .name
+            .cmp(&dictionary[b as usize].name)
+            .then(a.cmp(&b))
+    });
+    let mut keep = vec![true; dictionary.len()];
+    for pair in order.windows(2) {
+        if dictionary[pair[0] as usize].name == dictionary[pair[1] as usize].name {
+            keep[pair[1] as usize] = false;
+        }
+    }
+    let mut at = 0;
+    dictionary.retain(|_| {
+        at += 1;
+        keep[at - 1]
+    });
 }
 
 /// Java's `String.compareTo`: UTF-16 code units in order.
@@ -421,37 +461,58 @@ impl VcfHeader {
     /// Read the header of `reader` as `VCFCodec` reads it, leaving the
     /// reader at the first record.
     pub fn read(reader: &mut impl BufRead) -> Result<Self, String> {
-        Self::from_raw(&site_header::read_raw(reader)?)
+        Self::from_raw(site_header::read_raw(reader)?)
     }
 
-    /// The header of `raw`, checked line by line.
-    pub fn from_raw(raw: &RawHeader) -> Result<Self, String> {
-        let site = site_header::parse(raw)?;
-        let mut lines = Vec::new();
-        let mut contigs: HashSet<String> = HashSet::new();
-        let mut dictionary = Vec::new();
+    /// The header of `raw`, checked line by line; each raw line is freed
+    /// once it is kept as written.
+    pub fn from_raw(raw: RawHeader) -> Result<Self, String> {
+        let site = site_header::parse_without_contigs(&raw)?;
+        let RawHeader {
+            lines: raw_lines,
+            columns,
+            minor,
+        } = raw;
+        // Sized from the lines read, so no buffer doubles past its need.
+        let mut lines = Vec::with_capacity(raw_lines.len());
+        let mut text = String::with_capacity(raw_lines.iter().map(String::len).sum());
+        let mut dictionary = Vec::with_capacity(
+            raw_lines
+                .iter()
+                .filter(|line| line.starts_with("##contig"))
+                .count(),
+        );
         let mut contig_lines = 0usize;
-        for line in &raw.lines {
+        let mut header = Self {
+            text: String::new(),
+            lines: Vec::new(),
+            samples: column_samples(&columns)?,
+            minor,
+            site,
+            infos: HashMap::new(),
+            formats: HashMap::new(),
+            filters: HashSet::new(),
+            dictionary: Vec::new(),
+        };
+        for line in raw_lines {
+            let line = line.as_str();
             let kept = if line.starts_with("##INFO") {
-                Some(compound("INFO", after(line, 7)?, raw.minor)?)
+                Some(compound("INFO", after(line, 7)?, minor)?)
             } else if line.starts_with("##FORMAT") {
-                Some(compound("FORMAT", after(line, 9)?, raw.minor)?)
+                Some(compound("FORMAT", after(line, 9)?, minor)?)
             } else if line.starts_with("##contig") {
                 let fields = parse_fields(after(line, 9)?, None, &[])?;
-                let id = value(&fields, "ID").unwrap_or_default();
-                if contigs.insert(id.clone()) {
-                    dictionary.push(Contig {
-                        name: id,
-                        length: value(&fields, "length").and_then(|l| l.parse().ok()),
-                    });
-                }
+                dictionary.push(Contig {
+                    name: value(&fields, "ID").unwrap_or_default(),
+                    length: value(&fields, "length").and_then(|l| l.parse().ok()),
+                });
                 contig_lines += 1;
                 Some(Line::Structured {
                     key: "contig".to_owned(),
                     fields,
                     contig: Some(contig_lines),
                 })
-            } else if let Some((key, skip)) = structured_key(line, raw.minor) {
+            } else if let Some((key, skip)) = structured_key(line, minor) {
                 Some(Line::Structured {
                     key: key.to_owned(),
                     fields: parse_fields(after(line, skip)?, None, &[])?,
@@ -466,46 +527,68 @@ impl VcfHeader {
                     })
                 })
             };
-            lines.extend(kept);
+            if let Some(line) = kept {
+                header.index(&line);
+                let contig = match &line {
+                    Line::Structured {
+                        contig: Some(rank), ..
+                    } => u32::try_from(*rank).unwrap_or(u32::MAX),
+                    _ => 0,
+                };
+                let start = text.len();
+                text.push_str(&line.text());
+                let offset = |at: usize| {
+                    u32::try_from(at).map_err(|_| "the VCF header is over 4 GiB".to_owned())
+                };
+                lines.push(Written {
+                    contig,
+                    start: offset(start)?,
+                    end: offset(text.len())?,
+                });
+            }
         }
-        let mut header = Self {
-            lines,
-            samples: column_samples(&raw.columns)?,
-            minor: raw.minor,
-            site,
-            infos: HashMap::new(),
-            formats: HashMap::new(),
-            filters: HashSet::new(),
-            dictionary,
-        };
-        header.index();
+        first_of_each_name(&mut dictionary);
+        lines.shrink_to_fit();
+        text.shrink_to_fit();
+        dictionary.shrink_to_fit();
+        header.text = text;
+        header.lines = lines;
+        header.dictionary = dictionary;
         Ok(header)
     }
 
+    /// The text of a kept line, without its `##`.
+    fn line(&self, line: Written) -> &str {
+        &self.text[line.start as usize..line.end as usize]
+    }
+
     /// The lookups of the encoder: the first line of each `ID`.
-    fn index(&mut self) {
-        for line in &self.lines {
-            match line {
-                Line::Compound {
-                    key, id, count, ty, ..
-                } => {
-                    let map = if *key == "INFO" {
-                        &mut self.infos
-                    } else {
-                        &mut self.formats
-                    };
-                    map.entry(id.clone()).or_insert(Definition {
-                        count: *count,
-                        flag: ty == "Flag",
-                    });
+    fn index(&mut self, line: &Line) {
+        match line {
+            Line::Compound {
+                key, id, count, ty, ..
+            } => {
+                let map = if *key == "INFO" {
+                    &mut self.infos
+                } else {
+                    &mut self.formats
+                };
+                if !map.contains_key(id) {
+                    map.insert(
+                        id.clone(),
+                        Definition {
+                            count: *count,
+                            flag: ty == "Flag",
+                        },
+                    );
                 }
-                Line::Structured { key, fields, .. } if key == "FILTER" => {
-                    if let Some(id) = value(fields, "ID") {
-                        self.filters.insert(id);
-                    }
-                }
-                _ => {}
             }
+            Line::Structured { key, fields, .. } if key == "FILTER" => {
+                if let Some(id) = value(fields, "ID") {
+                    self.filters.insert(id);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -544,40 +627,57 @@ impl VcfHeader {
     /// The header text as `VCFWriter.writeHeader` writes it, each line
     /// ended by `\n`.
     pub fn text(&self) -> String {
-        let mut lines: Vec<(Option<usize>, String)> = self
-            .lines
-            .iter()
-            .map(|line| {
-                let contig = match line {
-                    Line::Structured { contig, .. } => *contig,
-                    _ => None,
-                };
-                (contig, line.text())
-            })
-            .collect();
-        lines.sort_by(|(a_contig, a), (b_contig, b)| match (a_contig, b_contig) {
-            (Some(x), Some(y)) => x.cmp(y),
-            _ => java_compare(a, b),
-        });
-        lines.dedup_by(|(a_contig, a), (b_contig, b)| {
-            a_contig.is_none() && b_contig.is_none() && a == b
-        });
-        let mut out = String::from("##fileformat=VCFv4.2\n");
-        for (_, line) in &lines {
-            out.push_str("##");
+        let mut out = String::new();
+        self.each_line(&mut |line| {
             out.push_str(line);
-            out.push('\n');
+            Ok(())
+        })
+        .unwrap_or_default();
+        out
+    }
+
+    /// Hand `put` each piece of [`VcfHeader::text`] in order, so a writer
+    /// never holds the whole text: the lines are sorted by an index of
+    /// 4 bytes per line.
+    pub fn each_line(
+        &self,
+        put: &mut dyn FnMut(&str) -> std::io::Result<()>,
+    ) -> std::io::Result<()> {
+        let mut order: Vec<u32> = (0..self.lines.len() as u32).collect();
+        order.sort_by(|&a, &b| {
+            let (a, b) = (self.lines[a as usize], self.lines[b as usize]);
+            if a.contig > 0 && b.contig > 0 {
+                a.contig.cmp(&b.contig)
+            } else {
+                java_compare(self.line(a), self.line(b))
+            }
+        });
+        put("##fileformat=VCFv4.2\n")?;
+        let mut previous: Option<Written> = None;
+        for &at in &order {
+            let line = self.lines[at as usize];
+            // `TreeSet` keeps one of two equal lines that are no contig.
+            if let Some(before) = previous
+                && before.contig == 0
+                && line.contig == 0
+                && self.line(before) == self.line(line)
+            {
+                continue;
+            }
+            previous = Some(line);
+            put("##")?;
+            put(self.line(line))?;
+            put("\n")?;
         }
-        out.push_str("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO");
+        put("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO")?;
         if !self.samples.is_empty() {
-            out.push_str("\tFORMAT");
+            put("\tFORMAT")?;
             for sample in &self.samples {
-                out.push('\t');
-                out.push_str(sample);
+                put("\t")?;
+                put(sample)?;
             }
         }
-        out.push('\n');
-        out
+        put("\n")
     }
 }
 

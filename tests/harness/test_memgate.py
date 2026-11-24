@@ -85,7 +85,8 @@ def test_the_committed_table_parses_and_names_both_tiers():
                        "sam-format-converter cram", "compare-s-a-ms",
                        "compare-s-a-ms lenient", "check-terminator-block", "chain vcf copy",
                        "chain vcf genotype-concordance",
-                       "chain vcf 200,000 records"]
+                       "chain vcf 200,000 records", "chain vcf wide lines",
+                       "chain vcf 100,000 contig lines"]
     for r in rows:
         # A row whose input a script writes first runs both in one `sh -c`.
         shell = r.argv[0] in ("sh", "/bin/sh") and r.argv[1:2] == ["-c"] and "{bin}" in r.argv[2]

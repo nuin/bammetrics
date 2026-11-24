@@ -12,6 +12,10 @@
 //!   starts in the block that one ends in, or the block after.
 //! - With `##contig` lines a reference takes its length from its line, and
 //!   a reference the lines lack fails (htsjdk's `NullPointerException`).
+//! - A record that starts or ends past 536,903,680 (32,770 windows of 16
+//!   kb) fails, as htsjdk fails there (`ArrayIndexOutOfBoundsException`):
+//!   a TBI covers 2^29 bases. A CSI index would hold it; none is written.
+//! - Names are the bytes the writer wrote (ISO-8859-1).
 //! - The file: `TBI\1`, the reference count, format 2 (VCF), sequence
 //!   column 1, start column 2, end column 0, meta character `#`, 0 lines
 //!   to skip, the names each ended by a NUL, then per reference its bins
@@ -25,6 +29,55 @@ use crate::bai::{Chunk, region_to_bin, window};
 
 /// The first bin of the 16 kb leaves.
 const FIRST_LEAF_BIN: usize = 4681;
+/// The 16 kb windows of htsjdk's linear index (`LinearIndex` holds
+/// `MAX_LINEAR_INDEX_SIZE` of them): a record that starts or ends in a
+/// later one fails there with an `ArrayIndexOutOfBoundsException`.
+const LINEAR_WINDOWS: i64 = 32_770;
+
+/// `CHROM`, `POS` and the end of a record line the writer wrote: `INFO/END`
+/// when present (the writer prints a checked `END` with its value), else
+/// `POS` plus the length of `REF` less 1 in Java `int` arithmetic.
+pub(crate) fn record_span(line: &[u8]) -> Result<(&[u8], i32, i32), String> {
+    let mut fields = line.split(|&b| b == b'\t');
+    let mut next = || fields.next();
+    let (Some(contig), Some(pos), _, Some(reference), _, _, _, Some(info)) = (
+        next(),
+        next(),
+        next(),
+        next(),
+        next(),
+        next(),
+        next(),
+        next(),
+    ) else {
+        return Err(format!(
+            "a record line written has fewer than 8 columns: {}",
+            crate::error::excerpt(&String::from_utf8_lossy(line))
+        ));
+    };
+    let number = |text: &[u8], what: &str| {
+        std::str::from_utf8(text)
+            .ok()
+            .and_then(|t| crate::java::parse_integer(t, 32).ok())
+            .map(|n| n as i32)
+            .ok_or_else(|| {
+                format!(
+                    "the {what} of a record written is no integer: {}",
+                    String::from_utf8_lossy(text)
+                )
+            })
+    };
+    let start = number(pos, "POS")?;
+    let end = info
+        .split(|&b| b == b';')
+        .filter_map(|entry| entry.strip_prefix(b"END="))
+        .next_back();
+    let end = match end {
+        Some(value) => number(value, "END")?,
+        None => (i64::from(start) + reference.len() as i64 - 1) as i32,
+    };
+    Ok((contig, start, end))
+}
 /// `GenomicIndexUtil.MAX_BINS`.
 const MAX_BINS: usize = 37450;
 
@@ -140,25 +193,49 @@ struct Pending {
 }
 
 /// `TabixIndexCreator`: features in file order in, the index bytes out.
-pub(crate) struct TabixBuilder {
-    /// The `##contig` lengths by name, `None` without `##contig` lines.
-    lengths: Option<HashMap<String, i64>>,
-    names: Vec<String>,
-    index_of: HashMap<String, usize>,
+pub(crate) struct TabixBuilder<'d> {
+    /// The `##contig` lengths, `None` without `##contig` lines.
+    lengths: Option<Lengths<'d>>,
+    names: Vec<Vec<u8>>,
+    index_of: HashMap<Vec<u8>, usize>,
     /// The references written so far.
     written: Vec<u8>,
     current: Option<Building>,
     pending: Option<Pending>,
 }
 
-impl TabixBuilder {
-    pub(crate) fn new(dictionary: Option<&crate::vcf::Dictionary>) -> Self {
+/// The dictionary's lengths by name as written (ISO-8859-1), through 4
+/// bytes of sorted index per contig: no copy of the names.
+struct Lengths<'d> {
+    dictionary: &'d crate::vcf::Dictionary,
+    by_name: Vec<u32>,
+}
+
+impl<'d> Lengths<'d> {
+    fn new(dictionary: &'d crate::vcf::Dictionary) -> Self {
+        let name = |i: u32| crate::java::iso_8859_1(&dictionary[i as usize].name);
+        let mut by_name: Vec<u32> = (0..dictionary.len() as u32).collect();
+        by_name.sort_by(|&a, &b| name(a).cmp(&name(b)).then(a.cmp(&b)));
         Self {
-            lengths: dictionary.map(|d| {
-                d.iter()
-                    .map(|c| (c.name.clone(), c.length.unwrap_or(0)))
-                    .collect()
-            }),
+            dictionary,
+            by_name,
+        }
+    }
+
+    /// The length of the first contig named `name`; 0 for one without a
+    /// length.
+    fn get(&self, name: &[u8]) -> Option<i64> {
+        let key = |i: u32| crate::java::iso_8859_1(&self.dictionary[i as usize].name);
+        let first = self.by_name.partition_point(|&i| key(i).as_ref() < name);
+        let &at = self.by_name.get(first)?;
+        (key(at).as_ref() == name).then(|| self.dictionary[at as usize].length.unwrap_or(0))
+    }
+}
+
+impl<'d> TabixBuilder<'d> {
+    pub(crate) fn new(dictionary: Option<&'d crate::vcf::Dictionary>) -> Self {
+        Self {
+            lengths: dictionary.map(Lengths::new),
             names: Vec::new(),
             index_of: HashMap::new(),
             written: Vec::new(),
@@ -190,16 +267,26 @@ impl TabixBuilder {
     /// line starts at the virtual offset `offset`.
     pub(crate) fn add(
         &mut self,
-        contig: &str,
+        contig: &[u8],
         start: i32,
         end: i32,
         offset: u64,
     ) -> Result<(), String> {
+        let shown = String::from_utf8_lossy(contig);
+        let reach = window(i64::from(start)).max(window(i64::from(end)));
+        if reach >= LINEAR_WINDOWS {
+            return Err(format!(
+                "the record at {shown}:{start} (end {end}) reaches past {}, the last position \
+                 the {LINEAR_WINDOWS} windows of a .tbi hold; a CSI index would hold it, and \
+                 none is written (htsjdk fails too)",
+                LINEAR_WINDOWS << 14
+            ));
+        }
         let reference = match self.index_of.get(contig) {
             Some(&index) if index + 1 == self.names.len() => index,
             Some(_) => {
                 return Err(format!(
-                    "Sequence {contig} added out of order: the records of a block-compressed VCF \
+                    "Sequence {shown} added out of order: the records of a block-compressed VCF \
                      with an index must be sorted by contig"
                 ));
             }
@@ -210,7 +297,7 @@ impl TabixBuilder {
             && previous.start > start
         {
             return Err(format!(
-                "Features added out of order: previous ({contig}:{}) > next ({contig}:{start})",
+                "Features added out of order: previous ({shown}:{}) > next ({shown}:{start})",
                 previous.start
             ));
         }
@@ -218,9 +305,9 @@ impl TabixBuilder {
         if reference == self.names.len() {
             let length = match &self.lengths {
                 None => 0,
-                Some(lengths) => *lengths.get(contig).ok_or_else(|| {
+                Some(lengths) => lengths.get(contig).ok_or_else(|| {
                     format!(
-                        "contig {contig} has no ##contig line, and the index takes each \
+                        "contig {shown} has no ##contig line, and the index takes each \
                          contig's length from its line (htsjdk fails with a \
                          NullPointerException)"
                     )
@@ -230,8 +317,8 @@ impl TabixBuilder {
                 done.write(&mut self.written);
             }
             self.current = Some(Building::new(length));
-            self.index_of.insert(contig.to_owned(), reference);
-            self.names.push(contig.to_owned());
+            self.index_of.insert(contig.to_vec(), reference);
+            self.names.push(contig.to_vec());
         }
         self.pending = Some(Pending {
             reference,
@@ -258,7 +345,7 @@ impl TabixBuilder {
         let names_length: usize = self.names.iter().map(|n| n.len() + 1).sum();
         out.extend_from_slice(&(names_length as i32).to_le_bytes());
         for name in &self.names {
-            out.extend_from_slice(name.as_bytes());
+            out.extend_from_slice(name);
             out.push(0);
         }
         out.extend_from_slice(&self.written);

@@ -196,3 +196,48 @@ fn a_bad_record_fails_and_leaves_no_file() {
     assert_eq!(fs::read_dir(&dir).expect("dir").count(), 0);
     fs::remove_dir_all(dir).expect("clean");
 }
+
+#[test]
+fn text_is_written_as_iso_8859_1() {
+    let dir = scratch("latin1");
+    let out = dir.join("out.vcf");
+    // An ID with U+00E9, U+4E2D, U+1F600 and the U+FFFD of a byte that was
+    // not UTF-8: Picard writes E9 and a `?` for each of the others.
+    let lines = vec!["c1\t1\tr\u{e9}\u{4e2d}\u{1f600}\u{fffd}\tA\tC\t.\t.\t.\tGT\t0".to_owned()];
+    write(&out, &lines, VcfOptions::default()).expect("writes");
+    let bytes = fs::read(&out).expect("vcf");
+    let record = bytes
+        .split(|&b| b == b'\n')
+        .find(|line| line.starts_with(b"c1"))
+        .expect("record");
+    assert_eq!(record, b"c1\t1\tr\xe9???\tA\tC\t.\t.\t.\tGT\t0");
+    fs::remove_dir_all(dir).expect("clean");
+}
+
+#[test]
+fn the_index_is_built_from_the_written_columns() {
+    let line = b"c1\t10\t.\tACG\tA\t.\t.\tDP=1;XEND=9\tGT\t0";
+    assert_eq!(tabix::record_span(line), Ok((&b"c1"[..], 10, 12)));
+    let line = b"c1\t10\t.\tA\t<DEL>\t.\t.\tDP=1;END=40\t\t";
+    assert_eq!(tabix::record_span(line), Ok((&b"c1"[..], 10, 40)));
+    assert!(tabix::record_span(b"c1\t10\t.").is_err());
+}
+
+#[test]
+fn a_record_past_the_tbi_windows_fails_the_index_and_leaves_no_file() {
+    let dir = scratch("tbi-limit");
+    let out = dir.join("out.vcf.gz");
+    let options = VcfOptions {
+        index: true,
+        ..VcfOptions::default()
+    };
+    for line in [
+        "c1\t1\t.\tA\t<DEL>\t.\t.\tEND=600000000\tGT\t0",
+        "c2\t550000000\t.\tA\tC\t.\t.\t.\tGT\t0",
+    ] {
+        let error = write(&out, &[line.to_owned()], options).expect_err("fails");
+        assert!(error.to_string().contains(".tbi"), "{error}");
+        assert_eq!(fs::read_dir(&dir).expect("dir").count(), 0);
+    }
+    fs::remove_dir_all(dir).expect("clean");
+}

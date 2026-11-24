@@ -1424,3 +1424,26 @@ argv = [
 needs = ["~/data/bammetrics-scale/waves/w16/big.vcf"]
 max_rss_mib = 500
 max_seconds = 300
+
+# Wide lines and a long header (the W16 review): 20,000 samples out of sorted order, 100
+# records of 300 KB, each decoded and written anew (batches end at 4 MiB of text), and a
+# header of 100,000 ##contig lines. Measured: 61 MiB and 34 MiB.
+[[command]]
+name = "chain vcf wide lines"
+argv = [
+    "sh", "-c",
+    "python3 benches/vcf_wide.py {out} 20000 100 100000 && {bin} chain {out}/wide.vcf -o {out}/w.vcf.gz",
+]
+needs = ["benches/vcf_wide.py"]
+max_rss_mib = 128
+max_seconds = 30
+
+[[command]]
+name = "chain vcf 100,000 contig lines"
+argv = [
+    "sh", "-c",
+    "python3 benches/vcf_wide.py {out} 2 1 100000 && {bin} chain {out}/contigs.vcf -o {out}/c.vcf.gz",
+]
+needs = ["benches/vcf_wide.py"]
+max_rss_mib = 64
+max_seconds = 30

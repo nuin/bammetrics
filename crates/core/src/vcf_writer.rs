@@ -18,19 +18,27 @@
 //!   (`DynamicIndexCreator`); this writer refuses that index (docs/07
 //!   decision W16-3) and writes the `.vcf` alone.
 //! - `md5` writes `OUTPUT.md5`, the hex MD5 of the file.
+//! - The text is written as ISO-8859-1, as htsjdk's `VCFWriter` writes it
+//!   (`VCFEncoder.VCF_CHARSET`): a character up to U+00FF as its one byte,
+//!   any other as `?`. The reader decodes UTF-8, a malformed byte becoming
+//!   U+FFFD, so it too is written `?`.
 //! - Every file is written under a temporary name in its directory and
 //!   renamed into place when the last one is whole
-//!   ([`crate::cleanup::AtomicFile`]); a failed run leaves none of them.
+//!   ([`crate::cleanup::AtomicFile`]), the index and MD5 first and the VCF
+//!   last, as one set ([`crate::split_sam::commit_all`]): a failed run or
+//!   rename leaves none of them.
 
 use std::fs::File;
 use std::io::{self, BufRead, BufWriter, Write};
 use std::num::NonZero;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use noodles::bgzf;
 
 use crate::cleanup::AtomicFile;
 use crate::error::{Error, Result};
+use crate::java::iso_8859_1;
 use crate::vcf::{Encoder, VcfHeader};
 
 mod tabix;
@@ -184,7 +192,7 @@ pub struct VcfWriter {
     file: AtomicFile,
     out: Output,
     format: VcfFormat,
-    header: VcfHeader,
+    header: Arc<VcfHeader>,
     encoder: Encoder,
     options: VcfOptions,
     line: String,
@@ -195,6 +203,11 @@ impl VcfWriter {
     /// Start `path` under its temporary name and write `header` as htsjdk
     /// writes it.
     pub fn create(path: &Path, header: &VcfHeader, options: VcfOptions) -> Result<Self> {
+        Self::create_shared(path, Arc::new(header.clone()), options)
+    }
+
+    /// [`VcfWriter::create`] holding the caller's copy of the header.
+    pub fn create_shared(path: &Path, header: Arc<VcfHeader>, options: VcfOptions) -> Result<Self> {
         options.check(path)?;
         if options.index && header.dictionary().is_none() {
             // Picard's VCF writers refuse it before the first record.
@@ -225,16 +238,17 @@ impl VcfWriter {
                 )
             }
         };
-        out.writer()
-            .write_all(header.text().as_bytes())
+        let writer = out.writer();
+        header
+            .each_line(&mut |piece| writer.write_all(&iso_8859_1(piece)))
             .map_err(output)?;
         Ok(Self {
             path: path.to_path_buf(),
             file,
             out,
             format,
-            header: header.clone(),
-            encoder: Encoder::new(header),
+            encoder: Encoder::new(&header),
+            header,
             options,
             line: String::new(),
             records: 0,
@@ -271,7 +285,7 @@ impl VcfWriter {
         self.records += 1;
         self.out
             .writer()
-            .write_all(self.line.as_bytes())
+            .write_all(&iso_8859_1(&self.line))
             .map_err(|source| Error::Output {
                 path: self.path.clone(),
                 source,
@@ -307,19 +321,21 @@ impl VcfWriter {
         } else {
             None
         };
+        // The companions first and the VCF last, as one set: a failed
+        // rename leaves none of them and puts back each file it replaced.
+        let mut staged: Vec<AtomicFile> = index.into_iter().chain(md5).collect();
         let mut written = vec![self.path.clone()];
-        self.file.commit().map_err(output(&self.path))?;
-        for file in index.into_iter().chain(md5) {
-            let path = file.path().to_path_buf();
-            file.commit().map_err(output(&path))?;
-            written.push(path);
-        }
+        written.extend(staged.iter().map(|file| file.path().to_path_buf()));
+        staged.push(self.file);
+        crate::split_sam::commit_all(staged)?;
         Ok(written)
     }
 }
 
 /// The `.tbi` of the block-compressed VCF at `vcf` (renamed to `shown`
-/// later), into a file to be renamed to `target`.
+/// later), into a file to be renamed to `target`. Each record line is read
+/// back for `CHROM`, `POS` and its end ([`tabix::record_span`]); the writer
+/// checked the rest.
 fn write_tabix(vcf: &Path, shown: &Path, header: &VcfHeader, target: &Path) -> Result<AtomicFile> {
     let read = |source| Error::Input {
         path: shown.to_path_buf(),
@@ -327,7 +343,6 @@ fn write_tabix(vcf: &Path, shown: &Path, header: &VcfHeader, target: &Path) -> R
     };
     let failed = |message: String| Error::Metric(format!("{}: {message}", shown.display()));
     let mut reader = bgzf::io::Reader::new(io::BufReader::new(File::open(vcf).map_err(read)?));
-    let encoder = Encoder::new(header);
     let mut builder = tabix::TabixBuilder::new(header.dictionary());
     let mut line = Vec::new();
     let mut end = 0u64;
@@ -345,13 +360,8 @@ fn write_tabix(vcf: &Path, shown: &Path, header: &VcfHeader, target: &Path) -> R
         if line.last() == Some(&b'\n') {
             line.pop();
         }
-        let text = String::from_utf8_lossy(&line);
-        let Some(site) = encoder.site(&text).map_err(failed)? else {
-            continue;
-        };
-        builder
-            .add(&site.contig, site.start, site.end, start)
-            .map_err(failed)?;
+        let (contig, first, last) = tabix::record_span(&line).map_err(failed)?;
+        builder.add(contig, first, last, start).map_err(failed)?;
     }
     let bytes = builder.finish(end).map_err(failed)?;
     let file = AtomicFile::new(target);

@@ -845,6 +845,21 @@ pub fn latin1_utf8(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     std::borrow::Cow::Owned(out)
 }
 
+/// The bytes an `OutputStreamWriter` over ISO-8859-1 writes for `text`: a
+/// character up to U+00FF as its one byte, any other as `?` (one `?` for a
+/// character outside the Basic Multilingual Plane, a surrogate pair in
+/// Java).
+pub fn iso_8859_1(text: &str) -> std::borrow::Cow<'_, [u8]> {
+    if text.is_ascii() {
+        return std::borrow::Cow::Borrowed(text.as_bytes());
+    }
+    std::borrow::Cow::Owned(
+        text.chars()
+            .map(|c| u8::try_from(u32::from(c)).unwrap_or(b'?'))
+            .collect(),
+    )
+}
+
 /// `new String(bytes, UTF_8)`: each malformed sequence becomes U+FFFD as
 /// the JDK's decoder replaces it. That is Rust's `from_utf8_lossy` but for
 /// an encoded surrogate: `ED` followed by `A0` to `BF` is one malformed

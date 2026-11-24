@@ -613,6 +613,24 @@ Both copies inflate to the text Picard writes, all 1,000,012 lines, and a `tabix
 500 MiB of docs/07 section 5, in 6.82 s. The 1,000,000 records hold 33,183,346 bytes of
 BGZF at level 5 and a 174,281-byte `.tbi`.
 
+The review of the writer measured wide lines and long headers (`chain X -o r.vcf.gz`,
+`/usr/bin/time -l`, peak RSS before and after the fix):
+
+| input | before | after |
+|---|---|---|
+| 20,000 samples out of sorted order, 300 records (91 MB) | 298 MB | 100 MB |
+| 100,000 samples out of sorted order, 60 records (92 MB) | 1,075 MB | 140 MB |
+| 100,000 samples in sorted order, 60 records | 106 MB | 106 MB |
+| 100,000 `##contig` lines (4.4 MB) | 285 MB | 37 MB |
+| 1,000,000 `##contig` lines (45 MB) | 2,678 MB | 209 MB |
+| 3,150,000 short `##contig` lines (65 MB, under the 64 MiB header cap) | not run | 486 MB |
+
+Three changes: a batch ends at 4 MiB of text; the header is one shared copy whose lines
+are held as written in one buffer; a record whose samples are out of sorted order is
+decoded into one array per record, where each sample allocated before. The 1,000,000
+records above, written again and removed: the copy with its tap 1.40 s and 58.6 MiB, the
+samples out of sorted order 2.58 s (was 5.14 s) and 16.3 MiB.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails

@@ -18,6 +18,7 @@
 use std::path::{Path, PathBuf};
 
 use bammetrics_core::registry::Kind as OptKind;
+use bammetrics_core::vcf_writer::VcfFormat;
 
 use super::args::{find_step, is_split, is_transform, materialize_leaves, step_parser_flags};
 use super::{QC, Spec, StepSpec, WRITE, usage};
@@ -93,15 +94,23 @@ fn result_of(text: &str) -> Option<Kind> {
 }
 
 /// The length of the VCF extension `-o` ends in: `.vcf`, `.vcf.gz` or
-/// `.vcf.bgz`, in any case, on a name that is not a directory.
-fn vcf_extension(text: &str) -> Option<usize> {
+/// `.vcf.bgz`, in any case, on a name that is not a directory. On a chain
+/// whose source is a VCF, a name htsjdk writes block-compressed (`.gz`,
+/// `.gzip`, `.bgz`, `.bgzf`) is one too (decision W16-8).
+fn vcf_extension(text: &str, vcf_source: bool) -> Option<usize> {
     if Path::new(text).is_dir() || text.ends_with('/') {
         return None;
     }
     let lower = text.to_ascii_lowercase();
+    let compressed: &[&str] = if vcf_source {
+        &[".gz", ".gzip", ".bgz", ".bgzf"]
+    } else {
+        &[]
+    };
     [".vcf.gz", ".vcf.bgz", ".vcf"]
         .iter()
-        .find(|extension| lower.ends_with(*extension))
+        .chain(compressed)
+        .find(|extension| lower.ends_with(*extension) && lower.len() > extension.len())
         .map(|extension| extension.len())
 }
 
@@ -119,7 +128,7 @@ fn source_is_vcf(spec: &Spec) -> bool {
 /// alignments, or a BAM name on a chain of VCF records, is refused.
 fn vcf_output(spec: &mut Spec, text: &str) -> Result<bool, VerbError> {
     let vcf_source = source_is_vcf(spec);
-    let Some(extension) = vcf_extension(text) else {
+    let Some(extension) = vcf_extension(text, vcf_source) else {
         if vcf_source && result_of(text).is_some() {
             return Err(usage(format!(
                 "-o {text} names a BAM, SAM or CRAM, and this chain's source is a VCF: its \
@@ -139,18 +148,33 @@ fn vcf_output(spec: &mut Spec, text: &str) -> Result<bool, VerbError> {
         return Ok(false);
     }
     if !vcf_source {
+        let source = spec
+            .source
+            .as_deref()
+            .map(Path::new)
+            .unwrap_or(Path::new("-"));
+        let empty = std::fs::metadata(source).is_ok_and(|m| m.is_file() && m.len() == 0);
+        if !empty && bammetrics_core::cram::holds_alignments(source) {
+            return Err(usage(format!(
+                "-o {text} names a VCF, and this chain's source is no VCF: its stream holds \
+                 alignments"
+            ))
+            .from("-o")
+            .hint("-o out.bam writes the BAM of a chain with a transform"));
+        }
         return Err(usage(format!(
-            "-o {text} names a VCF, and this chain's source is no VCF: its stream holds \
-             alignments"
+            "-o {text} names a VCF, and the source {} is no VCF: {}",
+            source.display(),
+            bammetrics_core::vcf::why_not_vcf(source)
         ))
         .from("-o")
-        .hint("-o out.bam writes the BAM of a chain with a transform"));
+        .hint("a VCF source is plain, gzip or BGZF text whose header lines start with #"));
     }
     if spec.steps.iter().any(|step| step.verb == WRITE) {
         return Ok(true);
     }
     let mut args = vec![text.to_owned()];
-    if text.len() > 4 && !text.to_ascii_lowercase().ends_with(".vcf") {
+    if VcfFormat::of(Path::new(text)).is_ok_and(|format| format == VcfFormat::Bgzf) {
         args.push("--index".to_owned());
     }
     spec.steps.push(StepSpec {

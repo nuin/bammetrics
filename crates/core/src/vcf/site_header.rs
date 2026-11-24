@@ -2,6 +2,7 @@
 //! reads it (`readActualHeader`, then `AbstractVCFCodec.parseHeaderFromLines`),
 //! for `VcfToIntervalList`.
 //!
+//! - A line ends at `\n`, `\r` or `\r\n`, as htsjdk's line reader ends it.
 //! - Every line from the start that begins with `##` is a header line.
 //!   One that splits on `=` into exactly two parts, the first `format` or
 //!   `fileformat` after a trim, names the version: `VCFv4.0` to `VCFv4.3`
@@ -76,17 +77,14 @@ pub fn read(reader: &mut impl BufRead) -> Result<SiteHeader, String> {
 }
 
 /// [`read`] without the checks of each line: the lines, the column line
-/// and the version. [`parse`] checks them.
+/// and the version. [`parse_without_contigs`] checks them.
 pub fn read_raw(reader: &mut impl BufRead) -> Result<RawHeader, String> {
     let mut lines = Vec::new();
     let mut held = 0usize;
     let mut minor = None;
     let mut raw = Vec::new();
     loop {
-        raw.clear();
-        let read = reader
-            .read_until(b'\n', &mut raw)
-            .map_err(|e| e.to_string())?;
+        let read = super::line_cap::read_line(reader, &mut raw).map_err(|e| e.to_string())?;
         if read == 0 {
             return Err(malformed(
                 "We never saw the required CHROM header line (starting with one #) for the input \
@@ -98,12 +96,6 @@ pub fn read_raw(reader: &mut impl BufRead) -> Result<RawHeader, String> {
             return Err(format!(
                 "the VCF header holds more than {MAX_HEADER_BYTES} bytes, the most read"
             ));
-        }
-        if raw.last() == Some(&b'\n') {
-            raw.pop();
-            if raw.last() == Some(&b'\r') {
-                raw.pop();
-            }
         }
         let line = crate::java::decode_utf8(&raw).into_owned();
         if line.starts_with("##") {
@@ -160,12 +152,23 @@ fn version_line(line: &str) -> Result<Option<u8>, String> {
 }
 
 /// The checks `AbstractVCFCodec.parseHeaderFromLines` makes of each line,
-/// and what a site reader needs.
-pub fn parse(raw: &RawHeader) -> Result<SiteHeader, String> {
-    parse_lines(&raw.lines, &raw.columns, raw.minor)
+/// and what a site reader needs, holding no contig line: for a reader that
+/// keeps the `##contig` lines itself.
+pub(super) fn parse_without_contigs(raw: &RawHeader) -> Result<SiteHeader, String> {
+    parse_kept(&raw.lines, &raw.columns, raw.minor, false)
 }
 
+/// The checks of [`parse_without_contigs`] and the contig lines.
 fn parse_lines(lines: &[String], columns: &str, minor: u8) -> Result<SiteHeader, String> {
+    parse_kept(lines, columns, minor, true)
+}
+
+fn parse_kept(
+    lines: &[String],
+    columns: &str,
+    minor: u8,
+    keep_contigs: bool,
+) -> Result<SiteHeader, String> {
     let mut header = SiteHeader {
         minor,
         ..SiteHeader::default()
@@ -185,6 +188,9 @@ fn parse_lines(lines: &[String], columns: &str, minor: u8) -> Result<SiteHeader,
             compound(after(line, 9)?, minor, true)?;
         } else if line.starts_with("##contig") {
             let fields = simple(after(line, 9)?, "contig", None)?;
+            if !keep_contigs {
+                continue;
+            }
             let id = get(&fields, "ID").unwrap_or_default().to_owned();
             if contig_ids.insert(id.clone()) {
                 header.contigs.push(ContigLine {

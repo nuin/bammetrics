@@ -77,6 +77,22 @@ impl Rules {
 
 /// The parsed line: `None` for a line starting with `#`.
 pub fn parse_line(line: &str, rules: &Rules) -> Result<Option<Site>, String> {
+    let Some((site, alleles, genotypes)) = parse_fixed(line, rules)? else {
+        return Ok(None);
+    };
+    if rules.eager_genotypes {
+        super::encode_genotypes::check(genotypes, rules.samples, alleles, rules.percent_decoded)?;
+    }
+    Ok(Some(site))
+}
+
+/// [`parse_line`] without the genotypes decoded: the site, the record's
+/// allele count and the `FORMAT` and sample text (empty without samples),
+/// for a caller that decodes the genotypes itself.
+pub(super) fn parse_fixed<'l>(
+    line: &'l str,
+    rules: &Rules,
+) -> Result<Option<(Site, usize, &'l str)>, String> {
     if line.starts_with('#') {
         return Ok(None);
     }
@@ -130,21 +146,18 @@ pub fn parse_line(line: &str, rules: &Rules) -> Result<Option<Site>, String> {
             wide as i32
         }
     };
-    if rules.eager_genotypes {
-        super::encode_genotypes::check(
-            parts[8],
-            rules.samples,
-            alleles.count,
-            rules.percent_decoded,
-        )?;
-    }
-    Ok(Some(Site {
+    let site = Site {
         contig: parts[0].to_owned(),
         start,
         end,
         id,
         filtered,
-    }))
+    };
+    Ok(Some((
+        site,
+        alleles.count,
+        parts.get(8).copied().unwrap_or(""),
+    )))
 }
 
 /// `ParsingUtils.split(line, parts, '\t', true)` with `max` parts: a

@@ -2035,6 +2035,26 @@ Where bammetrics differs:
 - The `check-terminator-block` verb prints the name on standard output (or `-o`); the
   Picard face prints it on standard error, where Picard prints it.
 
+## VCF writer and the variant stream
+
+The writer (`crates/core/src/vcf_writer.rs`, docs/chaining.md section 33) is held to
+Picard `VcfFormatConverter` line for line (`tests/concordance/test_vcf_writer.py`).
+Where it differs:
+
+- A plain `.vcf` gets no index. Picard writes tribble's `.idx` beside it
+  (`CREATE_INDEX`); `write out.vcf --index` exits 2 (docs/07 W16-3).
+- The `.tbi` of a `.vcf.gz` differs from Picard's in its bytes: its offsets are those
+  of this writer's BGZF blocks. Every whole-contig and 200-base `tabix` query returns
+  the same records (W16-5).
+- A header over 64 MiB or a line over 16 MiB fails the read with exit 1 and no file;
+  htsjdk reads any length (W16-10).
+- A BCF is neither read nor written: a `.bcf` output exits 2, a BCF source is named as
+  one.
+- Standard input is never a VCF source: a chain reads alignments from `-` (W16-6).
+- A record that starts or ends past 536,903,680 fails the `.tbi` in both tools; Picard
+  with an `ArrayIndexOutOfBoundsException`, bammetrics naming the record. Neither writes
+  a CSI index.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

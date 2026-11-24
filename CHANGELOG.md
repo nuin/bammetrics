@@ -18,11 +18,24 @@
   `variant-calling` and `genotype-concordance`. `-o r.vcf.gz` adds the write; manifest 2
   records kinds `vcf`, `index` (`.tbi`) and `md5`; `--resume` skips them. A step of the
   other kind exits 2 before the first read, naming the stream's kind.
-- `tests/concordance/test_vcf_writer.py`: every VCF of `variant_vcfs.py` and 7 corner
+- `tests/concordance/test_vcf_writer.py`: every VCF of `variant_vcfs.py` and 16 corner
   files, plain and `.vcf.gz`, equal to Picard `VcfFormatConverter` line for line, the
-  `.tbi` equal by `tabix` queries, the inventory's pure-rewrite headers, error parity, and
-  the two taps. 14 golden records (`VCF_WRITER_CASES`, `tests/data/vcf_writer`), four
-  memgate rows (`chain vcf *`).
+  `.tbi` equal by `tabix` queries, the inventory's pure-rewrite headers, error parity
+  (13 inputs, 2 past the windows of a `.tbi`), `.gz` and `.bgz` names, and the two taps.
+  14 golden records (`VCF_WRITER_CASES`, `tests/data/vcf_writer`), six memgate rows
+  (`chain vcf *`, `benches/vcf_wide.py` for wide lines and a long header).
+- The review of the VCF writer, each found against Picard: `GL` becomes `PL` when the
+  genotypes are decoded (a `PL` read earlier in the record wins); a missing value is one
+  `.` whatever the key's `Number`; a `GQ` that rounds to -1 is absent; a `QUAL` of `-0`
+  prints `0`; the text is written as ISO-8859-1 (`?` above U+00FF); a bare `\r` ends a
+  line; the `.tbi` reads `CHROM`, `POS`, `REF` and `END` of each written line, so a
+  record Picard indexes is indexed; a record past 536,903,680 fails the `.tbi` as in
+  Picard; the index and MD5 are renamed before the VCF, as one set. `-o r.gz` and
+  `-o r.bgz` on a VCF source write a BGZF VCF (W16-9); a source that is no VCF is named
+  with its reason (empty, a BCF, no `#`); `##fileformat` need not be the first line.
+  Memory: batches end at 4 MiB of text, the header is shared and held as one buffer,
+  decoded genotypes use one array per record (100,000 samples out of sorted order: 133
+  MiB, was 1 GiB; 1,000,000 `##contig` lines: 199 MiB, was 2.5 GiB).
 
 ### Fixed
 

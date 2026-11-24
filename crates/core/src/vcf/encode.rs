@@ -12,7 +12,8 @@
 //! - `QUAL` from `log10PError` (`QUAL / -10`): missing prints `.`, any
 //!   other value `String.format("%.2f")` of `log10PError * -10` with a
 //!   trailing `.00` cut (`30.0` prints `30`, `12.345` prints `12.35`).
-//!   Java rounds half up on the shortest decimal form of the double.
+//!   Java rounds half up on the shortest decimal form of the double. A
+//!   `QUAL` of `-0` prints `0`, as Picard 3.5.0 writes it.
 //! - `FILTER`: `.` and `PASS` as given; names split on `;`, each once,
 //!   sorted (`String.compareTo`) and joined by `;`. A name with no
 //!   `##FILTER` line fails.
@@ -79,12 +80,6 @@ impl Encoder {
         }
     }
 
-    /// The site of `line` as the codec reads it, `None` for a line that
-    /// starts with `#`: what an index needs, without the line written.
-    pub fn site(&self, line: &str) -> Result<Option<Site>, String> {
-        site::parse_line(line, &self.rules)
-    }
-
     /// Append the encoded form of `line` (no line end) to `out`; `None`
     /// for a line that starts with `#`, which the codec skips.
     pub fn encode(
@@ -93,8 +88,21 @@ impl Encoder {
         line: &str,
         out: &mut String,
     ) -> Result<Option<Site>, String> {
-        let Some(site) = site::parse_line(line, &self.rules)? else {
+        let Some((site, allele_count, genotype_text)) = site::parse_fixed(line, &self.rules)?
+        else {
             return Ok(None);
+        };
+        // htsjdk decodes the genotypes as it reads the record, so their
+        // errors come before the encoder's.
+        let decoded = if self.rules.eager_genotypes {
+            Some(encode_genotypes::decode(
+                header,
+                genotype_text,
+                allele_count,
+                &site,
+            )?)
+        } else {
+            None
         };
         let max = if self.rules.samples > 0 { 9 } else { 8 };
         let parts = split_condensed(line, max);
@@ -116,7 +124,8 @@ impl Encoder {
         out.push('\t');
         match site::log10_p_error(parts[5])? {
             None => out.push('.'),
-            Some(log10) => out.push_str(&format_quality(log10 * -10.0)),
+            // `-0.0 + 0.0` is `0.0`: a `QUAL` of `-0` prints `0`.
+            Some(log10) => out.push_str(&format_quality(log10 * -10.0 + 0.0)),
         }
         out.push('\t');
         out.push_str(&filters(parts[6], header, &site)?);
@@ -124,13 +133,9 @@ impl Encoder {
         self.info(parts[7], header, &site, out)?;
         if max == 9 {
             out.push('\t');
-            if self.rules.eager_genotypes {
-                let mut alleles = Vec::with_capacity(alternates.len() + 1);
-                alleles.push(reference);
-                alleles.extend(alternates);
-                encode_genotypes::encode(header, parts[8], &alleles, &site, out)?;
-            } else {
-                out.push_str(parts[8]);
+            match &decoded {
+                Some(decoded) => encode_genotypes::write_decoded(header, decoded, &site, out)?,
+                None => out.push_str(parts[8]),
             }
         }
         Ok(Some(site))
@@ -387,6 +392,14 @@ mod tests {
             (
                 "c1\t13\t.\tG\t<del>\t12.345\t.\t.\tGT\t.",
                 "c1\t13\t.\tG\t<del>\t12.35\t.\t.\tGT\t.",
+            ),
+            (
+                "c1\t14\t.\tG\tC\t-0\t.\t.\tGT\t.",
+                "c1\t14\t.\tG\tC\t0\t.\t.\tGT\t.",
+            ),
+            (
+                "c1\t15\t.\tG\tC\t-0.0\t.\t.\tGT\t.",
+                "c1\t15\t.\tG\tC\t0\t.\t.\tGT\t.",
             ),
         ];
         for (line, expected) in cases {
