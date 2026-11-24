@@ -110,6 +110,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "PositionBasedDownsampleSam",
         "writes a BAM of the records kept: no metrics file, no row, no column",
     ),
+    (
+        "SamFormatConverter",
+        "writes SAM text, a BAM or a CRAM of the input's records: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

@@ -323,6 +323,17 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
              ... + write - --output-format sam",
         );
     }
+    if verb.class == bammetrics_core::sam_format_converter::TOOL.name {
+        return usage(format!(
+            "{place}: {} writes the records it reads in another format, which is what the \
+             write step does: it cannot be a step",
+            verb.class
+        ))
+        .hint(
+            "name the file of write: bammetrics chain BAM + ... + write out.sam (or out.cram \
+             with -R, or out.bam)",
+        );
+    }
     if verb.class == bammetrics_core::merge_sam_files::TOOL.name {
         return usage(format!(
             "{place}: {} merges several INPUT files and a chain reads one source: it cannot be \

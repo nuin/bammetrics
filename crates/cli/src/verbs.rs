@@ -742,6 +742,16 @@ pub const VERBS: &[Verb] = &[
             Files::Bam,
         )
     },
+    Verb {
+        about: Some(
+            "writes every record of the input unchanged in the format -o names, as Picard's \
+             SamFormatConverter does: SAM text for a name ending in .sam, a CRAM (with -R) for \
+             one ending in .cram, a BAM for any other name. The header is the input's, with no \
+             @PG line added. Not bammetrics convert, which converts metrics files.",
+        ),
+        writes: "BAM",
+        ..verb("sam-format-converter", "SamFormatConverter", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
