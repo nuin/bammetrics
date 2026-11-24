@@ -52,9 +52,9 @@ NO_REFERENCE = "A reference must be supplied that includes the reference sequenc
 
 # Records bammetrics' ViewSam prints otherwise than Picard's, from a CRAM of any writer.
 # Not the writer's: a reader gap. The test fails when the set changes either way.
-#   long_cigar: ViewSam prints the `<n>S<m>N` placeholder and the CG tag of a CIGAR over
-#     65,535 operators, for the BAM too, and rebuilds MD and NM from the placeholder (seen
-#     with bammetrics', samtools' and Picard's CRAM of one BAM).
+#   long_cigar: a CIGAR of 70,000 operators that ends the reference span of its slice.
+#     htsjdk rebuilds NM against that span and leaves out the insertion after its last
+#     base (34,999); bammetrics counts it (35,000). The CIGAR prints as htsjdk prints it.
 READER_GAPS = {"edges": {"long_cigar"}, "no_hd": {"long_cigar"}}
 
 
@@ -365,9 +365,9 @@ def test_what_a_cram_does_not_give_back(edge, tmp_path):
         assert mine["unpaired_mate_fields"][6:9] == other["unpaired_mate_fields"][6:9], who
         assert mine["unpaired_mate_fields"][6] == "*", who
     assert original["unpaired_mate_fields"][6:9] == ["e2", "77", "123"]
-    # bammetrics' reader returns what the CRAM stores.
+    # bammetrics' reader gives `*` and 0, as htsjdk's, and keeps the template length.
     back = {r[0]: r for r in ours_view(cram, reference).records}
-    assert back["unpaired_mate_fields"][6:9] == ["e2", "77", "123"]
+    assert back["unpaired_mate_fields"][6:9] == ["*", "0", "123"]
     RESULTS.append(("cram-writer limits", 4, 4, "each loss equal to samtools' CRAM"))
 
 
@@ -770,23 +770,38 @@ def test_a_record_without_bases_over_16_mi_read_bases_fails(tmp_path):
 
 
 def test_header_text_outside_ascii(tmp_path):
-    """docs/07 W15-13: the CRAM holds the bytes of the BAM header. samtools and bammetrics
-    read the CRAM header as the BAM's. Picard reads the CRAM header as UTF-8 and the BAM
-    header one character per byte, so its ViewSam prints the two differently; the test
-    fails when that changes."""
-    head = FIXTURE_HEAD + "@RG\tID:g1\tSM:s\tDS:café über\n@CO\tcafé ✓\n"
+    """docs/07 W15-13: the CRAM header holds the header as htsjdk holds it (one character
+    per byte of the BAM, or per character of SAM text) encoded as UTF-8, and a CRAM
+    header is read back as UTF-8. Picard's CRAM of the BAM and bammetrics' read alike under
+    samtools, and Picard and bammetrics read each CRAM as the BAM. Converted from SAM text,
+    both CRAMs hold the UTF-8 of the text, and both tools write the SAM text back. A
+    character above U+00FF in SAM text is test_sam_format_converter.py's
+    test_header_text_outside_ascii."""
+    head = FIXTURE_HEAD + "@RG\tID:g1\tSM:s\tDS:café über\n@CO\tcafé\n"
     body = "r1\t0\tchr1\t10\t60\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\tRG:Z:g1\n"
     bam = sam_to_bam(tmp_path, "header", head + body)
-    outs = {kind: tmp_path / f"out.{kind}" for kind in ("bam", "cram")}
-    for out in outs.values():
-        done = ours("SortSam", f"I={bam}", f"O={out}", "SO=coordinate", f"R={FIXTURE_REFERENCE}")
-        assert done.returncode == 0, done.stderr.decode()[-300:]
-    samtools_side = {kind: header_lines(samtools_view(out, FIXTURE_REFERENCE)) for kind, out in outs.items()}
-    assert samtools_side["cram"] == samtools_side["bam"]
-    assert "@CO\t" + "café ✓".encode().decode("latin-1") in samtools_side["cram"]
-    ours_side = {kind: header_lines(ours_view(out, FIXTURE_REFERENCE)) for kind, out in outs.items()}
-    assert ours_side["cram"] == ours_side["bam"]
-    picard_side = {kind: header_lines(picard_view(out, FIXTURE_REFERENCE)) for kind, out in outs.items()}
-    assert picard_side["cram"] != picard_side["bam"], "Picard now reads the two headers alike"
+    sam = tmp_path / "header.sam"
+    sam.write_text(head + body, encoding="utf-8")
+    for source in (bam, sam):
+        outs = {}
+        for who, run_tool in (("ours", ours), ("picard", picard)):
+            out = tmp_path / f"{who}.{source.suffix[1:]}.cram"
+            done = run_tool("SortSam", f"I={source}", f"O={out}", "SO=coordinate",
+                            f"R={FIXTURE_REFERENCE}")
+            assert done.returncode == 0, done.stderr.decode()[-300:]
+            outs[who] = out
+        samtools_side = {who: header_lines(samtools_view(out, FIXTURE_REFERENCE))
+                         for who, out in outs.items()}
+        assert samtools_side["ours"] == samtools_side["picard"], source.name
+        source_lines = header_lines(samtools_view(source, FIXTURE_REFERENCE))
+        for who_reads, view in (("bammetrics", ours_view), ("Picard", picard_view)):
+            for who, out in outs.items():
+                read = header_lines(view(out, FIXTURE_REFERENCE))
+                expected = header_lines(view(source, FIXTURE_REFERENCE))
+                assert read == expected, f"{who_reads} reading {who}'s CRAM of {source.name}"
+        if source == sam:
+            assert "@CO\t" + "café".encode().decode("latin-1") in samtools_side["ours"]
+        else:
+            assert samtools_side["ours"] != source_lines
     RESULTS.append(("cram-writer header text outside ASCII", 1, 1,
-                    "samtools and bammetrics read the BAM's header; Picard reads the two otherwise"))
+                    "both CRAMs alike under samtools, each read as its source by both tools"))

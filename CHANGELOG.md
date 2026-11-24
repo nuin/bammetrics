@@ -80,6 +80,27 @@
 - 12 golden records (`SAM_FORMAT_CONVERTER_CASES`), two fixture and two scale rows in
   `benches/memgate.toml`. `docs/cli.md` says that `convert` converts metrics files and
   `sam-format-converter` converts reads.
+- `SamFormatConverter` after its review (docs/07 W15-23 to W15-27):
+  - A BAM followed by bytes after its end-of-file block (zeros, `0xFF`, a gzip member, a
+    cut block header) is read to that block, as htsjdk reads it, by every tool. 32 of 40
+    such conversions exited 1 (`truncated BAM`, `invalid frame size`).
+  - A CIGAR of more than 65,535 operators is read from SAM text into the BAM form htsjdk
+    writes (`<n>S<m>N` and `CG:B:i`), and written to SAM text as the operators of the
+    tag. SAM text holding one exited 1; a BAM of one gave a SAM line with the
+    placeholder. The CRAM writer takes the operators of `CG:B:i`, htsjdk's form, as it
+    took `CG:B:I`, and fails a `CG` tag of 65,535 operators or fewer as htsjdk does. A
+    CRAM record of one gets `MD` and `NM` from its operators.
+  - A CRAM header is stored and read as UTF-8 of the characters htsjdk holds. A SAM
+    header with `DS:café` gave a CRAM with the byte `0xE9`, and a CRAM header in UTF-8
+    gave SAM text and BAM headers with two bytes per letter.
+  - A record without the paired flag read from a CRAM has no mate reference and no mate
+    start, as in htsjdk.
+  - Documented in KNOWN_DIFFERENCES.md, with a test each: a BAM cut inside its records, a
+    repeated `@RG` ID, a mapped record without bases in Picard's CRAM, a CRAM read with
+    a shorter FASTA, `MD` and `NM` of a CRAM with an embedded reference or none, a
+    header character above U+00FF from SAM text into a CRAM.
+  - The golden record `verb_sam_format_converter_other_name` holds the decoded BAM in
+    place of its compressed bytes: a BAM under any name is recorded as a `.bam` is.
 
 ### Changed
 

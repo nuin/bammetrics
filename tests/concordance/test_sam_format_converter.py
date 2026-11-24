@@ -21,7 +21,7 @@ Both tools convert each form to the other two, reading at `VALIDATION_STRINGENCY
 
 `reader_gaps` names the records the two readers give otherwise from one source, for any
 writer, and `CRAM_LOSES` what no CRAM holds; the test fails when a set changes either way
-(docs/07 W15-23). SAM text with a CIGAR of 70,000 operators is refused by bammetrics.
+(docs/07 W15-23). A CIGAR of 70,000 operators converts as in Picard in all six.
 
 Round trips: each form converted by bammetrics to each other form and back holds the
 records of the form it started from (samtools, the tags as a multiset: htsjdk orders
@@ -36,7 +36,9 @@ CRAM out or in without a reference, `CREATE_INDEX` on a header that is not coord
 sorted, records out of the header's order, `ASSUME_SORTED`, `OUTPUT` equal to `INPUT`
 (Picard truncates it; bammetrics refuses, docs/07 W15-20).
 """
+import gzip
 import hashlib
+import random
 import re
 import subprocess
 from collections import Counter
@@ -49,7 +51,7 @@ from cases import BAMMETRICS, CORPUS, FIXTURES
 from compare import bam_records, diff_bam, diff_bam_bytes, first_difference
 from conftest import RESULTS
 from run_picard import picard_env
-from test_cram_writer import NO_REFERENCE, header_lines, same_records, samtools_view
+from test_cram_writer import NO_REFERENCE, Decoded, header_lines, same_records, samtools_view
 from test_view_sam import BAD, HEADER, VALID
 
 TOOL = "SamFormatConverter"
@@ -66,25 +68,19 @@ INPUTS = (*CORPORA, *(f"data/{name}" for name in FIXTURE_BAMS), *(f"edge/{name}"
 
 # Records the two readers give otherwise from one source, whoever writes the output
 # (KNOWN_DIFFERENCES.md). The test fails when a set changes either way.
-#   long_cigar: a CIGAR of 70,000 operators, held in a BAM as the `<n>S<m>N` placeholder
-#     and a `CG` tag. htsjdk writes SAM text with the CIGAR of the tag, bammetrics with the
-#     placeholder and the tag; from a CRAM bammetrics also rebuilds MD and NM from the
-#     placeholder. SAM text holding that CIGAR is refused by bammetrics (`SAM_REFUSED`).
-#   unpaired_mate_fields: mate fields on an unpaired record. From a CRAM htsjdk reads the
-#     mate reference and start as `*` and 0; bammetrics returns what the CRAM stores.
+#   long_cigar (edges, no_hd): a CIGAR of 70,000 operators (`1M1I` repeated) that ends
+#     the reference span of its slice. From a CRAM htsjdk rebuilds NM against that span
+#     and leaves out the insertion after its last base (34,999); bammetrics counts it
+#     (35,000). The CIGAR itself converts as in Picard in all six (docs/07 W15-23).
 LONG_CIGAR = {"edge/edges", "edge/no_hd"}
 # The record of each input with an `H` tag.
 HEX_TAG = {"edge/edges": {"tags_all"}, "edge/no_hd": {"tags_all"}}
-SAM_REFUSED = "more than 65535 CIGAR operators"
 
 
 def reader_gaps(name, source_kind, target_kind):
-    gaps = set()
-    if name in LONG_CIGAR and (target_kind == "sam" or (source_kind, target_kind) == ("cram", "bam")):
-        gaps.add("long_cigar")
-    if name == "edge/limits" and source_kind == "cram" and target_kind != "cram":
-        gaps.add("unpaired_mate_fields")
-    return gaps
+    if name in LONG_CIGAR and source_kind == "cram":
+        return {"long_cigar"}
+    return set()
 
 
 # Records a CRAM gives back otherwise under samtools whoever writes it (cram_writer.rs):
@@ -305,13 +301,6 @@ def test_conversion(name, source_kind, target_kind, corpus, exome, edge, work):
     if source_kind not in item.forms or (target_kind == "cram" and item.reference is None):
         pytest.skip(f"{name}: no reference, so no CRAM")
     what = f"{TOOL} {name} {source_kind} -> {target_kind}"
-    if name in LONG_CIGAR and source_kind == "sam":
-        refused, out = item.run("bammetrics", source_kind, target_kind)
-        assert refused.returncode == 1 and SAM_REFUSED.encode() in refused.stderr, refused.stderr[:400]
-        assert not out.exists()
-        item.convert("picard", source_kind, target_kind)
-        RESULTS.append((what, 0, 0, "SAM line of 70,000 operators: Picard reads it, bammetrics exits 1"))
-        return
     ours_out = item.convert("bammetrics", source_kind, target_kind)
     allow = reader_gaps(name, source_kind, target_kind)
     if target_kind == "sam":
@@ -332,8 +321,6 @@ def test_round_trip(name, source_kind, target_kind, corpus, exome, edge, work):
     item = the_input(name, corpus, exome, edge, work)
     if source_kind not in item.forms or target_kind not in item.forms:
         pytest.skip(f"{name}: no reference, so no CRAM")
-    if name in LONG_CIGAR and source_kind == "sam":
-        pytest.skip(f"{name}: bammetrics refuses the SAM text (test_conversion)")
     there = item.convert("bammetrics", source_kind, target_kind)
     back = item.directory / f"back.{source_kind}_{target_kind}.{source_kind}"
     done = ours(*item.args(there, back))
@@ -344,7 +331,11 @@ def test_round_trip(name, source_kind, target_kind, corpus, exome, edge, work):
     # A CRAM in the loop: MD and NM rebuilt, unsigned arrays read signed, and what no CRAM
     # holds lost on the way, unless the first form was a CRAM already.
     rules = ("rebuilt", "signed") if "cram" in (source_kind, target_kind) else ()
-    allow = CRAM_LOSES.get(name, set()) - {"unpaired_mate_fields"} if target_kind == "cram" else set()
+    allow = set(CRAM_LOSES.get(name, set())) if target_kind == "cram" else set()
+    # From a CRAM samtools reads the mate start of an unpaired record that bammetrics,
+    # as htsjdk, reads as 0.
+    if source_kind == "cram" and "unpaired_mate_fields" in CRAM_LOSES.get(name, set()):
+        allow.add("unpaired_mate_fields")
     # An `H` tag comes back as `B:c` over the same bytes: htsjdk holds it so, and Picard's
     # conversion writes it so (test_conversion holds the first step to Picard's file).
     allow |= HEX_TAG.get(name, set())
@@ -601,6 +592,184 @@ def test_output_equal_to_input(tmp_path):
             assert copy.read_bytes() == original
             assert b"writing it would destroy it" in done.stderr
     RESULTS.append((f"{TOOL} OUTPUT=INPUT", 0, 0, "both exit 1; Picard empties the input"))
+
+
+# The 28-byte BGZF end-of-file block.
+EOF_BLOCK = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+TAILS = {
+    "zero_1": b"\0", "zero_17": b"\0" * 17, "zero_18": b"\0" * 18, "zero_1000": b"\0" * 1000,
+    "ff_10": b"\xff" * 10, "header_4": EOF_BLOCK[:4], "header_18": EOF_BLOCK[:18],
+    "random_100": random.Random(15).randbytes(100), "gzip_member": gzip.compress(b"text\n"),
+    "eof_twice": EOF_BLOCK,
+}
+
+
+@pytest.mark.parametrize("target", ["out.sam", "out.cram"])
+@pytest.mark.parametrize("tail", sorted(TAILS))
+def test_bytes_after_the_end_of_file_block(tmp_path, tail, target):
+    """htsjdk reads an empty BGZF block as the end of the stream: the bytes after the
+    end-of-file block are never read. Both convert every record (docs/07 W15-24)."""
+    source = tmp_path / "in.bam"
+    source.write_bytes((FIXTURES / "markdup.bam").read_bytes() + TAILS[tail])
+    sides = both_with(tmp_path, source, target, f"R={FIXTURE_REFERENCE}")
+    for side, (done, _) in sides.items():
+        assert done.returncode == 0, f"{side}: {done.stderr.decode('latin-1')[-400:]}"
+    picard_out, ours_out = (sides[side][1] / target for side in ("picard", "bammetrics"))
+    if target == "out.sam":
+        count = same_sam_text(f"{TOOL} tail {tail}", picard_out, ours_out)
+    else:
+        theirs = samtools_view(picard_out, FIXTURE_REFERENCE)
+        count = len(theirs.records)
+        same_records(f"{TOOL} tail {tail} CRAM", without_md_nm(theirs),
+                     without_md_nm(samtools_view(ours_out, FIXTURE_REFERENCE)))
+    assert count > 0
+    RESULTS.append((f"{TOOL} bytes after the EOF block: {tail} -> {target}", count, count,
+                    "equal to Picard's"))
+
+
+@pytest.mark.parametrize("size", [400, 1000])
+def test_a_bam_cut_inside_its_first_block(tmp_path, size):
+    """KNOWN_DIFFERENCES.md: markdup.bam cut to `size` bytes. Picard exits 0 and writes the
+    header alone; bammetrics exits 1 (`truncated BAM`) and writes nothing."""
+    source = tmp_path / "cut.bam"
+    source.write_bytes((FIXTURES / "markdup.bam").read_bytes()[:size])
+    sides = both_with(tmp_path, source, "out.sam")
+    done, directory = sides["picard"]
+    assert done.returncode == 0, "Picard now fails on a cut BAM"
+    assert all(line.startswith(b"@") for line in (directory / "out.sam").read_bytes().splitlines())
+    done, directory = sides["bammetrics"]
+    assert done.returncode == 1 and b"truncated BAM" in done.stderr, done.stderr[-300:]
+    assert names(directory) == []
+    RESULTS.append((f"{TOOL} BAM cut at {size} bytes", 0, 0, "Picard 0 and a header, bammetrics 1"))
+
+
+HEAD_UTF8 = ("@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:chr1\tLN:100000\n"
+             "@RG\tID:g1\tSM:s\tDS:café über\n@CO\tcafé\n@CO\tcheck ✓\n")
+BODY_UTF8 = "r1\t0\tchr1\t10\t60\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\tRG:Z:g1\n"
+
+
+@pytest.mark.parametrize("source_kind,target_kind", CONVERSIONS, ids=lambda c: c)
+def test_header_text_outside_ascii(tmp_path, source_kind, target_kind):
+    """A header in UTF-8 (samtools' BAM and CRAM of the text hold its bytes). htsjdk holds
+    a header one character per byte of a BAM, per character of SAM text or of a CRAM's
+    UTF-8, writes SAM text and a BAM as the low byte of each character and a CRAM as UTF-8.
+    Every header is Picard's, but one line: SAM text to a CRAM, where bammetrics holds `✓`
+    (U+2713) as its low byte 0x13 and Picard stores its UTF-8 (docs/07 W15-13)."""
+    sam = tmp_path / "in.sam"
+    sam.write_bytes((HEAD_UTF8 + BODY_UTF8).encode())
+    sources = {"sam": sam, "bam": tmp_path / "in.bam", "cram": tmp_path / "in.cram"}
+    for kind in ("bam", "cram"):
+        made = run(["samtools", "view", "--no-PG", "-T", FIXTURE_REFERENCE, "--output-fmt", kind,
+                    "-o", sources[kind], sam])
+        assert made.returncode == 0, made.stderr.decode()[-300:]
+    target = f"out.{target_kind}"
+    sides = both_with(tmp_path, sources[source_kind], target, f"R={FIXTURE_REFERENCE}")
+    headers = {}
+    for side, (done, directory) in sides.items():
+        assert done.returncode == 0, f"{side}: {done.stderr.decode('latin-1')[-400:]}"
+        headers[side] = run(["samtools", "view", "-H", "--no-PG", directory / target]).stdout
+    picard_lines, ours_lines = (headers[side].split(b"\n") for side in ("picard", "bammetrics"))
+    if (source_kind, target_kind) == ("sam", "cram"):
+        differ = [(a, b) for a, b in zip(picard_lines, ours_lines) if a != b]
+        assert differ == [(b"@CO\tcheck \xe2\x9c\x93", b"@CO\tcheck \x13")], differ
+    else:
+        assert ours_lines == picard_lines
+    assert b"@RG\tID:g1\tSM:s\tDS:caf" in headers["bammetrics"]
+    RESULTS.append((f"{TOOL} header outside ASCII {source_kind} -> {target_kind}", 1, 1,
+                    "Picard's header" + (", but U+2713" if source_kind == "sam" and target_kind == "cram" else "")))
+
+
+def test_a_repeated_read_group_id(tmp_path):
+    """KNOWN_DIFFERENCES.md: a header with two `@RG` lines of one ID. Picard keeps both;
+    bammetrics' header (noodles' `sam::Header`, read groups keyed by ID) holds one, so it
+    exits 1 naming the line and writes nothing (docs/07 W15-25)."""
+    source = tmp_path / "in.sam"
+    source.write_text("@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:chr1\tLN:100000\n@RG\tID:rgA\tSM:s\n"
+                      "@RG\tID:rgA\tSM:other\nr1\t0\tchr1\t10\t60\t4M\t*\t0\t0\tACGT\tIIII\tRG:Z:rgA\n")
+    for target in ("out.sam", "out.bam"):
+        sides = both_with(tmp_path / target, source, target)
+        done, directory = sides["picard"]
+        assert done.returncode == 0, "Picard now refuses a repeated read group ID"
+        text = run(["samtools", "view", "-H", "--no-PG", directory / target]).stdout
+        assert text.count(b"@RG\tID:rgA") == 2
+        done, directory = sides["bammetrics"]
+        assert done.returncode == 1 and b"duplicate read group ID: rgA" in done.stderr, done.stderr
+        assert names(directory) == []
+    RESULTS.append((f"{TOOL} repeated @RG ID", 0, 0, "Picard keeps both lines, bammetrics exits 1"))
+
+
+def test_a_record_without_bases_in_a_cram(tmp_path):
+    """KNOWN_DIFFERENCES.md, docs/07 W15-26: a mapped record with SEQ `*`, `100M`. Picard
+    reads its own CRAM of it as `0M`; Picard and samtools read bammetrics' CRAM as `100M`,
+    and samtools reads Picard's as `100M` too."""
+    source = tmp_path / "in.sam"
+    source.write_text("@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:chr1\tLN:100000\n"
+                      "r1\t0\tchr1\t49\t30\t100M\t*\t0\t0\t*\t*\tXA:Z:x\n"
+                      "r2\t0\tchr1\t60\t30\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\n")
+    sides = both_with(tmp_path, source, "out.cram", f"R={FIXTURE_REFERENCE}")
+    cigars = {}
+    for side, (done, directory) in sides.items():
+        assert done.returncode == 0, f"{side}: {done.stderr.decode('latin-1')[-400:]}"
+        cram = directory / "out.cram"
+        cigars[side] = ([r[5] for r in picard_view(cram).records],
+                        [r[5] for r in samtools_view(cram, FIXTURE_REFERENCE).records])
+    assert cigars == {"picard": (["0M", "8M"], ["100M", "8M"]),
+                      "bammetrics": (["100M", "8M"], ["100M", "8M"])}, cigars
+    RESULTS.append((f"{TOOL} SEQ * record to CRAM", 2, 2, "Picard reads its own as 0M"))
+
+
+def picard_view(path):
+    env = picard_env()
+    env.setdefault("JAVA_OPTS", "-Xmx8g")
+    return Decoded("Picard", run(["picard", "ViewSam", f"I={path}", f"R={FIXTURE_REFERENCE}", SILENT,
+                                  "QUIET=true", "VERBOSITY=ERROR"], env), header=True)
+
+
+def test_a_cram_read_against_a_shorter_fasta(tmp_path):
+    """KNOWN_DIFFERENCES.md: markdup.bam (reads at 1001 to 9550) as a CRAM, read with a FASTA
+    whose chr1 is the first 19,620 bases. Picard converts it; bammetrics exits 1 naming the
+    two lengths (docs/07 D52)."""
+    bases = "".join(FIXTURE_REFERENCE.read_text().split("\n", 1)[1].split())[:19_620]
+    short = tmp_path / "short.fa"
+    short.write_text(">chr1\n" + "\n".join(bases[i:i + 60] for i in range(0, len(bases), 60)) + "\n")
+    subprocess.run(["samtools", "faidx", str(short)], check=True)
+    cram = tmp_path / "in.cram"
+    made = run(["samtools", "view", "--no-PG", "-C", "-T", FIXTURE_REFERENCE, "-o", cram,
+                FIXTURES / "markdup.bam"])
+    assert made.returncode == 0, made.stderr.decode()[-300:]
+    sides = both_with(tmp_path, cram, "out.sam", f"R={short}")
+    assert sides["picard"][0].returncode == 0, "Picard now refuses the shorter FASTA"
+    done, directory = sides["bammetrics"]
+    assert done.returncode == 1 and b"(19620 bp) in the reference" in done.stderr, done.stderr
+    assert names(directory) == []
+    RESULTS.append((f"{TOOL} CRAM with a shorter FASTA", 0, 0, "Picard 0, bammetrics 1"))
+
+
+@pytest.mark.parametrize("kind", ["embed_ref", "no_ref"])
+def test_a_cram_with_its_own_reference_or_none(tmp_path, kind):
+    """KNOWN_DIFFERENCES.md: samtools' CRAM of markdup.bam with `embed_ref=1`, read without
+    `R=`, and with `no_ref=1`, read with it. The records are Picard's; `MD` and `NM` are
+    not. htsjdk rebuilds both from an embedded reference and none without a reference;
+    bammetrics rebuilds both from `R=` alone."""
+    cram = tmp_path / "in.cram"
+    made = run(["samtools", "view", "--no-PG", "-T", FIXTURE_REFERENCE, "--output-fmt",
+                f"cram,{kind}=1", "-o", cram, FIXTURES / "markdup.bam"])
+    assert made.returncode == 0, made.stderr.decode()[-300:]
+    extra = [f"R={FIXTURE_REFERENCE}"] if kind == "no_ref" else []
+    sides = both_with(tmp_path, cram, "out.sam", *extra)
+    lines = {}
+    for side, (done, directory) in sides.items():
+        assert done.returncode == 0, f"{side}: {done.stderr.decode('latin-1')[-400:]}"
+        lines[side] = [line.split("\t") for line in (directory / "out.sam").read_text().splitlines()
+                       if not line.startswith("@")]
+    with_md = {side: sum(any(f.startswith("MD:Z:") for f in fields) for fields in records)
+               for side, records in lines.items()}
+    expected = {"picard": 33, "bammetrics": 0} if kind == "embed_ref" else {"picard": 0, "bammetrics": 33}
+    assert with_md == expected, with_md
+    strip = lambda records: [[f for f in fields if f[:3] not in ("MD:", "NM:")] for fields in records]
+    assert strip(lines["picard"]) == strip(lines["bammetrics"])
+    RESULTS.append((f"{TOOL} CRAM {kind}", len(lines["picard"]), len(lines["picard"]),
+                    "records equal; MD and NM differ"))
 
 
 def test_verb_forms(tmp_path):

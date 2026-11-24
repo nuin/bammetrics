@@ -349,7 +349,14 @@ impl RawRecord {
     /// encodes a record that was not read from a BAM: the indexing bin
     /// computed from the start and the CIGAR, the tags in the order and
     /// types of [`Tags`].
+    ///
+    /// A CIGAR of more than [`MAX_CIGAR_OPERATORS`] operators is stored as
+    /// htsjdk stores it: the placeholder `<read length>S<reference
+    /// length>N` in the CIGAR field and the operators in a `CG:B:i` tag.
     pub fn from_fields(fields: &Fields<'_>) -> io::Result<Self> {
+        if fields.cigar.len() > MAX_CIGAR_OPERATORS {
+            return Self::from_long_cigar(fields);
+        }
         let name_len =
             u8::try_from(fields.name.len() + 1).map_err(|_| invalid("read name over 254 bytes"))?;
         let cigar_ops = u16::try_from(fields.cigar.len())
@@ -391,6 +398,32 @@ impl RawRecord {
         }
         fields.tags.encode(&mut buf)?;
         Self::from_bytes(buf)
+    }
+
+    /// [`RawRecord::from_fields`] for a CIGAR over [`MAX_CIGAR_OPERATORS`]
+    /// operators: `BAMRecordCodec.encode` sets `CG` to the operators (an
+    /// `int[]`, so `B:i`) and writes `makeSentinelCigar`.
+    fn from_long_cigar(fields: &Fields<'_>) -> io::Result<Self> {
+        let mut operators = Vec::with_capacity(4 * fields.cigar.len());
+        for &(len, op) in fields.cigar {
+            if len >= 1 << 28 || op > 8 {
+                return Err(invalid("CIGAR operator out of the BAM range"));
+            }
+            operators.extend_from_slice(&(len << 4 | u32::from(op)).to_le_bytes());
+        }
+        let count = u32::try_from(fields.cigar.len()).map_err(|_| invalid("CIGAR too long"))?;
+        let read_length =
+            u32::try_from(fields.bases.len()).map_err(|_| invalid("read too long"))?;
+        let skip = u32::try_from(reference_length(fields.cigar.iter().copied()))
+            .map_err(|_| invalid("CIGAR operator out of the BAM range"))?;
+        let placeholder = [(read_length, 4), (skip, 3)];
+        let mut tags = fields.tags.clone();
+        tags.set(*b"CG", TagValue::Array(b'i', count, operators));
+        Self::from_fields(&Fields {
+            cigar: &placeholder,
+            tags: &tags,
+            ..*fields
+        })
     }
 
     /// The reference bases the CIGAR covers (`M`, `D`, `N`, `=`, `X`).
@@ -598,6 +631,64 @@ fn base_code(base: u8) -> u8 {
         b'B' => 14,
         _ => 15,
     }
+}
+
+/// The most CIGAR operators a BAM record's `n_cigar_op` holds.
+pub const MAX_CIGAR_OPERATORS: usize = 65_535;
+
+/// The CIGAR htsjdk 5.0.0's `BAMRecord.getCigar` gives a record whose
+/// CIGAR field holds the placeholder of a longer one: two operators,
+/// `<l>S<m>N` with `l` the read length (or any `l` for a read of no base),
+/// and the operators in a `CG:B:i` or `CG:B:I` tag
+/// (`extractCigarFromCGAttribute`). `None` for any other record, the
+/// placeholder without the tag included. A tag of at most
+/// [`MAX_CIGAR_OPERATORS`] operators, or whose reference length is not the
+/// placeholder's, is htsjdk's `IllegalStateException`.
+pub fn long_cigar(record: &RawRecord, tags: &Tags) -> io::Result<Option<Vec<(u32, u8)>>> {
+    if record.cigar_ops() != 2 {
+        return Ok(None);
+    }
+    let mut cigar = record.cigar();
+    let (Some((clip, 4)), Some((skip, 3))) = (cigar.next(), cigar.next()) else {
+        return Ok(None);
+    };
+    let read_length = record.sequence_length();
+    if clip as usize != read_length && read_length != 0 {
+        return Ok(None);
+    }
+    let Some(TagValue::Array(b'i' | b'I', _, bytes)) = tags.get(*b"CG") else {
+        return Ok(None);
+    };
+    let operators: Vec<(u32, u8)> = bytes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|op| {
+            let op = u32::from_le_bytes(*op);
+            (op >> 4, (op & 0xF) as u8)
+        })
+        .collect();
+    if operators.len() <= MAX_CIGAR_OPERATORS {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Only Cigar with > {MAX_CIGAR_OPERATORS} operators should be placed in CG tag. \
+                 Found {} operators.",
+                operators.len()
+            ),
+        ));
+    }
+    let reference = reference_length(operators.iter().copied());
+    if reference != skip as i32 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Sentinel cigar and CG cigar should have the same reference length. Found \
+                 {skip} and {reference}."
+            ),
+        ));
+    }
+    Ok(Some(operators))
 }
 
 /// The reference bases the operators cover: `M`, `D`, `N`, `=` and `X`.
@@ -986,266 +1077,7 @@ impl HtsjdkTags {
     }
 }
 
-/// Build a record from its parts, for tests.
 #[cfg(test)]
-pub(crate) fn build(
-    name: &str,
-    flags: u16,
-    reference_id: i32,
-    pos0: i32,
-    cigar: &[(u32, u8)],
-    quals: &[u8],
-    tags: &[u8],
-) -> RawRecord {
-    let mut buf = Vec::new();
-    buf.extend_from_slice(&reference_id.to_le_bytes());
-    buf.extend_from_slice(&pos0.to_le_bytes());
-    buf.push((name.len() + 1) as u8);
-    buf.push(60);
-    buf.extend_from_slice(&0u16.to_le_bytes());
-    buf.extend_from_slice(&(cigar.len() as u16).to_le_bytes());
-    buf.extend_from_slice(&flags.to_le_bytes());
-    buf.extend_from_slice(&(quals.len() as i32).to_le_bytes());
-    buf.extend_from_slice(&(-1i32).to_le_bytes());
-    buf.extend_from_slice(&(-1i32).to_le_bytes());
-    buf.extend_from_slice(&0i32.to_le_bytes());
-    buf.extend_from_slice(name.as_bytes());
-    buf.push(0);
-    for (len, op) in cigar {
-        buf.extend_from_slice(&(len << 4 | u32::from(*op)).to_le_bytes());
-    }
-    buf.extend(std::iter::repeat_n(0x11, quals.len().div_ceil(2)));
-    buf.extend_from_slice(quals);
-    buf.extend_from_slice(tags);
-    RawRecord::from_bytes(buf).expect("valid test record")
-}
-
+mod tests;
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fields_read_at_their_offsets() {
-        let record = build("r1", 0x63, 2, 99, &[(5, 4), (90, 0)], &[30; 95], b"RGZa\0");
-        assert_eq!(record.name(), b"r1");
-        assert_eq!(record.flags(), 0x63);
-        assert_eq!(record.reference_id(), 2);
-        assert_eq!(record.alignment_start(), 100);
-        assert_eq!(record.cigar().collect::<Vec<_>>(), [(5, 4), (90, 0)]);
-        assert_eq!(record.qualities().len(), 95);
-        assert_eq!(
-            record.tag(*b"RG").expect("tags"),
-            Some(TagValue::String(b"a".to_vec()))
-        );
-        let mut out = Vec::new();
-        record.write_to(&mut out).expect("write");
-        let mut back = RawRecord::default();
-        assert!(back.read_from(&mut out.as_slice()).expect("read"));
-        assert_eq!(back, record);
-        assert!(!back.read_from(&mut [].as_slice()).expect("end"));
-    }
-
-    #[test]
-    fn a_new_cigar_keeps_every_other_field() {
-        let mut record = build("r1", 0, 0, 9, &[(20, 0)], &[30; 20], b"RGZa\0NMC\x01");
-        record.set_mapping_quality(0);
-        record
-            .set_cigar(&[(11, 0), (9, 4), (5, 5)])
-            .expect("a valid CIGAR");
-        assert_eq!(
-            record.cigar().collect::<Vec<_>>(),
-            [(11, 0), (9, 4), (5, 5)]
-        );
-        assert_eq!(record.mapping_quality(), 0);
-        assert_eq!(record.name(), b"r1");
-        assert_eq!(record.qualities(), &[30; 20]);
-        assert_eq!(record.tag_bytes(), b"RGZa\0NMC\x01");
-        RawRecord::from_bytes(record.as_bytes().to_vec()).expect("consistent");
-        record.set_cigar(&[]).expect("no operator");
-        assert_eq!(record.cigar().count(), 0);
-        assert!(record.set_cigar(&[(1 << 28, 0)]).is_err());
-        assert!(record.set_cigar(&vec![(1, 0); 65536]).is_err());
-    }
-
-    #[test]
-    fn a_block_size_the_stream_does_not_back_costs_one_step() {
-        // block_size 0xFFFFFF00, then the 100 bytes the file holds.
-        let mut stream = 0xFFFF_FF00u32.to_le_bytes().to_vec();
-        stream.extend_from_slice(&[0u8; 100]);
-        let mut record = RawRecord::default();
-        let error = record
-            .read_from(&mut stream.as_slice())
-            .expect_err("the stream ends inside the record");
-        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
-        assert!(
-            record.buf.capacity() <= 2 * READ_STEP,
-            "{} bytes held for a 100-byte stream",
-            record.buf.capacity()
-        );
-    }
-
-    #[test]
-    fn a_record_longer_than_one_step_is_read_whole() {
-        let quals = vec![30u8; 2 * READ_STEP + 17];
-        let record = build("long", 4, -1, -1, &[], &quals, b"");
-        let mut stream = Vec::new();
-        record.write_to(&mut stream).expect("write");
-        record.write_to(&mut stream).expect("write");
-        let mut reader = stream.as_slice();
-        let mut back = RawRecord::default();
-        for _ in 0..2 {
-            assert!(back.read_from(&mut reader).expect("read"));
-            assert_eq!(back, record);
-        }
-        assert!(!back.read_from(&mut reader).expect("end"));
-    }
-
-    #[test]
-    fn read_append_keeps_what_the_buffer_held() {
-        let mut buf = b"head".to_vec();
-        read_append(&mut b"abcdef".as_slice(), &mut buf, 4).expect("read");
-        assert_eq!(buf, b"headabcd");
-        let short = read_append(&mut b"xy".as_slice(), &mut buf, 3).expect_err("two bytes left");
-        assert_eq!(short.kind(), io::ErrorKind::UnexpectedEof);
-    }
-
-    /// `block_size` and `body`, as a BAM record stream holds them.
-    fn framed(body: &[u8]) -> Vec<u8> {
-        let mut bytes = u32::try_from(body.len()).unwrap().to_le_bytes().to_vec();
-        bytes.extend_from_slice(body);
-        bytes
-    }
-
-    #[test]
-    fn bounded_records_pass_the_stream_unchanged() {
-        let short = build("r", 0, 0, 0, &[], b"ACGT", &[]);
-        let long = vec![7u8; READ_STEP * 2 + 5];
-        let mut stream = framed(short.as_bytes());
-        stream.extend(framed(&long));
-        stream.extend(framed(short.as_bytes()));
-        stream.extend(&[1, 2]);
-        let mut out = Vec::new();
-        let error = BoundedRecords::new(stream.as_slice())
-            .read_to_end(&mut out)
-            .err();
-        assert!(error.is_none(), "{error:?}");
-        assert_eq!(out, stream);
-
-        let one = framed(short.as_bytes());
-        let mut reader = noodles::bam::io::Reader::from(BoundedRecords::new(one.as_slice()));
-        let mut record = noodles::bam::Record::default();
-        assert_eq!(
-            reader.read_record(&mut record).expect("a record"),
-            short.as_bytes().len()
-        );
-        assert_eq!(reader.read_record(&mut record).expect("the end"), 0);
-    }
-
-    #[test]
-    fn a_block_size_past_the_stream_is_a_cut_record() {
-        for size in [
-            0x7fff_ff00u32,
-            (-5i32).cast_unsigned(),
-            READ_STEP as u32 + 1,
-        ] {
-            let mut stream = size.to_le_bytes().to_vec();
-            stream.extend([0u8; 100]);
-            let mut reader = noodles::bam::io::Reader::from(BoundedRecords::new(stream.as_slice()));
-            let error = reader
-                .read_record(&mut noodles::bam::Record::default())
-                .expect_err("cut");
-            assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof, "{size}");
-        }
-        let mut reader = noodles::bam::io::Reader::from(BoundedRecords::new(&[1u8, 0][..]));
-        let error = reader
-            .read_record(&mut noodles::bam::Record::default())
-            .expect_err("a cut block_size");
-        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
-    }
-
-    #[test]
-    fn edited_tags_come_out_in_htsjdk_order_with_small_integer_types() {
-        // RG, then XS (int 300 as 'i'), NM 'C' 2, then a repeated XS.
-        let mut tags = Vec::new();
-        tags.extend_from_slice(b"RGZa\0");
-        tags.extend_from_slice(b"XSi");
-        tags.extend_from_slice(&300i32.to_le_bytes());
-        tags.extend_from_slice(b"NMC\x02");
-        tags.extend_from_slice(b"XSc\x07");
-        let mut record = build("r", 0, 0, 0, &[], &[], &tags);
-        let mut decoded = record.tags().expect("tags");
-        assert_eq!(decoded.get(*b"XS"), Some(&TagValue::Int(7)));
-        decoded.set(*b"DT", TagValue::String(b"LB".to_vec()));
-        decoded.remove(*b"NM");
-        record.set_tags(&decoded).expect("encode");
-        // Ordered by second character, then first: RG (G), XS (S), DT (T).
-        assert_eq!(record.tag_bytes(), b"RGZa\0XSc\x07DTZLB\0");
-    }
-
-    #[test]
-    fn unsigned_arrays_of_a_cram_record_become_signed() {
-        let mut tags = Vec::new();
-        tags.extend_from_slice(b"XBBC\x03\0\0\0\x01\x02\xc8");
-        tags.extend_from_slice(b"XZZB:C\0");
-        tags.extend_from_slice(b"XSBS\x01\0\0\0\x40\x9c");
-        tags.extend_from_slice(b"XIBI\x01\0\0\0\0\x5e\xd0\xb2");
-        tags.extend_from_slice(b"XFBf\x01\0\0\0\0\0\xc0\x3f");
-        tags.extend_from_slice(b"XbBc\x01\0\0\0\xff");
-        let record = build("r", 0, 0, 0, &[], b"ACGT", &tags);
-        let mut bytes = record.as_bytes().to_vec();
-        sign_unsigned_arrays(&mut bytes).expect("arrays");
-        let signed = RawRecord::from_bytes(bytes).expect("a record");
-        let mut want = tags.clone();
-        for at in [3, 21, 31] {
-            want[at] = want[at].to_ascii_lowercase();
-        }
-        assert_eq!(signed.tag_bytes(), want.as_slice());
-        let cut = &mut record.as_bytes().to_vec()[..record.as_bytes().len() - 1];
-        assert!(
-            sign_unsigned_arrays(cut).is_err(),
-            "a cut array is an error"
-        );
-    }
-
-    #[test]
-    fn integers_take_the_smallest_type() {
-        let cases: [(i64, &[u8]); 7] = [
-            (5, b"c\x05"),
-            (200, b"C\xc8"),
-            (-5, b"c\xfb"),
-            (1000, b"s\xe8\x03"),
-            (40000, b"S\x40\x9c"),
-            (-40000, b"i\xc0\x63\xff\xff"),
-            (3_000_000_000, b"I\x00\x5e\xd0\xb2"),
-        ];
-        for (value, bytes) in cases {
-            let mut out = Vec::new();
-            encode_int(value, &mut out).expect("in range");
-            assert_eq!(out, bytes, "{value}");
-        }
-    }
-
-    #[test]
-    fn htsjdk_tags_follow_read_tags() {
-        let mut tags = HtsjdkTags::default();
-        // Picard 3.5.0 reads the last `qa` of each of the first two blocks.
-        tags.load([*b"qa", *b"qc", *b"qg", *b"qt", *b"qa"]);
-        assert_eq!(tags.position(*b"qa"), Some(4));
-        assert_eq!(tags.position(*b"qt"), Some(3));
-        tags.load([*b"qt", *b"qg", *b"qc", *b"qa", *b"qa"]);
-        assert_eq!(tags.position(*b"qa"), Some(4));
-        assert_eq!(tags.position(*b"qc"), Some(2));
-        // The second `qa` replaces the append point: `qc` to `qt` are lost.
-        tags.load([*b"qa", *b"qa", *b"qc", *b"qg", *b"qt"]);
-        assert_eq!(tags.position(*b"qa"), Some(1));
-        assert_eq!(tags.position(*b"qc"), None);
-        assert_eq!(tags.position(*b"qt"), None);
-        // An insert that sorts before the lost tail is kept again.
-        tags.load([*b"XA", *b"XA", *b"RX", *b"BQ"]);
-        assert_eq!(tags.position(*b"RX"), None);
-        assert_eq!(tags.position(*b"BQ"), Some(3));
-        tags.load([*b"RX", *b"BQ"]);
-        assert_eq!(tags.position(*b"RX"), Some(0));
-        assert_eq!(tags.position(*b"XA"), None);
-    }
-}
+pub(crate) use tests::build;

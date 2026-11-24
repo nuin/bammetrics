@@ -59,7 +59,12 @@ pub fn restore(record: &RawRecord, tags: &mut Tags, cache: &mut ContigCache) -> 
         return Ok(());
     };
     let reference = cache.contig(id)?;
-    let (md, nm) = compute(record, &bases, reference);
+    // htsjdk's CRAM decoder rebuilds both on the CIGAR the CRAM holds, which
+    // a BAM record over 65,535 operators keeps in its `CG` tag.
+    let (md, nm) = match crate::bam_raw::long_cigar(record, tags)? {
+        Some(cigar) => compute(record, cigar.into_iter(), &bases, reference),
+        None => compute(record, record.cigar(), &bases, reference),
+    };
     if need_md {
         tags.set(*b"MD", TagValue::String(md));
     }
@@ -69,7 +74,12 @@ pub fn restore(record: &RawRecord, tags: &mut Tags, cache: &mut ContigCache) -> 
     Ok(())
 }
 
-fn compute(record: &RawRecord, bases: &[u8], reference: &[u8]) -> (Vec<u8>, i64) {
+fn compute(
+    record: &RawRecord,
+    cigar: impl Iterator<Item = (u32, u8)>,
+    bases: &[u8],
+    reference: &[u8],
+) -> (Vec<u8>, i64) {
     let mut md = Vec::new();
     let mut nm = 0i64;
     let mut run = 0u32;
@@ -80,7 +90,7 @@ fn compute(record: &RawRecord, bases: &[u8], reference: &[u8]) -> (Vec<u8>, i64)
         md.extend_from_slice(run.to_string().as_bytes());
         *run = 0;
     };
-    for (length, op) in record.cigar() {
+    for (length, op) in cigar {
         let length = length as usize;
         match op {
             0 | 7 | 8 => {
@@ -160,7 +170,7 @@ mod tests {
             b"",
         );
         let reference = b"ACGTACGTACGT";
-        let (md, nm) = compute(&record, &record.bases(), reference);
+        let (md, nm) = compute(&record, record.cigar(), &record.bases(), reference);
         // Aligned reference C G T, A C, deleted G T, then A C G, against
         // reads of A: 3 + 1 + 2 mismatches, 1 inserted and 2 deleted bases.
         assert_eq!(String::from_utf8(md).expect("ascii"), "0C0G0T1C0^GT1C0G0");
@@ -171,7 +181,7 @@ mod tests {
     fn an_insertion_at_the_contig_end_adds_nothing() {
         // 4M2I2M at position 1 of ACGT: the insertion starts at the end.
         let record = build("r", 0, 0, 0, &[(4, 0), (2, 1), (2, 0)], &[30; 8], b"");
-        let (md, nm) = compute(&record, &record.bases(), b"ACGT");
+        let (md, nm) = compute(&record, record.cigar(), &record.bases(), b"ACGT");
         assert_eq!(String::from_utf8(md).expect("ascii"), "1C0G0T0");
         assert_eq!(nm, 3);
     }
@@ -180,7 +190,7 @@ mod tests {
     fn md_holds_upper_case_reference_bases() {
         // 2M1D2M at position 1 of a soft-masked reference, reads of A.
         let record = build("r", 0, 0, 0, &[(2, 0), (1, 2), (2, 0)], &[30; 4], b"");
-        let (md, nm) = compute(&record, &record.bases(), b"acgtn");
+        let (md, nm) = compute(&record, record.cigar(), &record.bases(), b"acgtn");
         assert_eq!(String::from_utf8(md).expect("ascii"), "1C0^G0T0N0");
         assert_eq!(nm, 4);
     }

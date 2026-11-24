@@ -1459,6 +1459,13 @@ fn record(case: &Case) -> String {
             text.push_str(&bam_text(&path, Some(&reference)));
             continue;
         }
+        // A BAM under another name (`SamFormatConverter` writes one for
+        // any name but `.sam` and `.cram`, as htsjdk) is recorded as a
+        // `.bam` is. The `.cram` names that hold BAM bytes stay as before.
+        if !name.ends_with(".cram") && holds_bam(&path) {
+            text.push_str(&bam_text(&path, None));
+            continue;
+        }
         if name.ends_with(".bai") && wrote_bam {
             text.push_str("<index not recorded>\n");
             continue;
@@ -1486,6 +1493,19 @@ fn record(case: &Case) -> String {
     }
     let _ = fs::remove_dir_all(&out_dir);
     normalize(&text, out)
+}
+
+/// True when the first gzip member of `path` inflates to the BAM magic.
+fn holds_bam(path: &Path) -> bool {
+    use std::io::Read;
+    let Ok(file) = fs::File::open(path) else {
+        return false;
+    };
+    let mut magic = Vec::new();
+    let _ = bammetrics_core::gzip::GzipReader::new(std::io::BufReader::new(file))
+        .take(4)
+        .read_to_end(&mut magic);
+    magic == b"BAM\x01"
 }
 
 /// The pages of a PDF: its `/Type/Page` objects (krilla writes no object

@@ -158,6 +158,58 @@ fn not_bam_or_cram() -> io::Error {
     )
 }
 
+/// The SAM header of a CRAM, read from the start of the file as htsjdk's
+/// `CramIO.readSAMFileHeader` reads it: the text decoded as UTF-8, each
+/// character held as the low byte of its UTF-16 code unit
+/// ([`crate::java::decode_utf8`]), the one-byte-per-character form a BAM
+/// or SAM header is held in. `café` stored as UTF-8 is held as `caf\xE9`,
+/// which a SAM or BAM writer writes back as htsjdk's does. The text is read
+/// whole, at most [`crate::doctor::input::MAX_HEADER_BYTES`] bytes.
+pub(crate) fn read_header<R: Read>(reader: &mut cram::io::Reader<R>) -> io::Result<sam::Header> {
+    let cap = crate::doctor::input::MAX_HEADER_BYTES;
+    let mut definition = reader.header_reader();
+    definition.read_magic_number()?;
+    definition.read_format_version()?;
+    definition.read_file_id()?;
+    let mut container = definition.container_reader()?;
+    let mut text = Vec::new();
+    {
+        let mut raw = container.raw_sam_header_reader()?;
+        (&mut raw).take(cap as u64 + 1).read_to_end(&mut text)?;
+        if text.len() > cap {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("the CRAM header text is over the {cap}-byte cap"),
+            ));
+        }
+        raw.discard_to_end()?;
+    }
+    container.discard_to_end()?;
+    if !text.is_ascii() {
+        let decoded = crate::java::decode_utf8(&text);
+        text = decoded.encode_utf16().map(|unit| unit as u8).collect();
+    }
+    let mut parser = sam::header::Parser::default();
+    // Lines as noodles' `read_sam_header` cuts them: at each line feed,
+    // with a carriage return before it dropped.
+    let mut rest: &[u8] = &text;
+    while !rest.is_empty() {
+        let end = rest.iter().position(|&b| b == b'\n');
+        let (mut line, after) = match end {
+            Some(i) => (&rest[..i], &rest[i + 1..]),
+            None => (rest, &[][..]),
+        };
+        if end.is_some() {
+            line = line.strip_suffix(b"\r").unwrap_or(line);
+        }
+        rest = after;
+        parser
+            .parse_partial(line)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    }
+    Ok(parser.finish())
+}
+
 /// The error of a BAM header read: noodles' `invalid BAM header` (a BGZF
 /// file without the BAM magic that holds no SAM text either) named as
 /// [`not_bam_or_cram`] names it; any other failure (an empty file, a file
@@ -648,11 +700,20 @@ fn decode_container(
                     &texts,
                 )?;
             }
-            if sam::alignment::Record::flags(record)?.is_unmapped() {
+            let flags = sam::alignment::Record::flags(record)?;
+            if flags.is_unmapped() {
                 // CRAM stores no mapping quality for an unmapped record.
                 // htsjdk gives it 0; noodles leaves it missing, which BAM
                 // writes as 255.
                 writer.get_mut()[start + BAM_MAPQ_OFFSET] = 0;
+            }
+            if !flags.is_segmented() {
+                // htsjdk's `CRAMCompressionRecord.toSAMRecord` gives a
+                // record without the paired flag no mate reference and
+                // no mate start, whatever the CRAM stores; noodles keeps
+                // them. The template length stays in both.
+                let mate = start + BAM_MATE_OFFSET;
+                writer.get_mut()[mate..mate + 8].copy_from_slice(&[0xFF; 8]);
             }
             crate::bam_raw::sign_unsigned_arrays(&mut writer.get_mut()[start + 4..])?;
         }
@@ -663,6 +724,10 @@ fn decode_container(
 /// The mapping quality byte of a BAM record, after `block_size`, `refID`,
 /// `pos` and `l_read_name`.
 const BAM_MAPQ_OFFSET: usize = 13;
+
+/// `next_refID` then `next_pos` of a BAM record (-1 and -1 for none),
+/// after `block_size`.
+const BAM_MATE_OFFSET: usize = 24;
 
 /// The slice MD5 check in the words of htsjdk's `CRAMException`.
 fn checksum(e: io::Error) -> io::Error {
