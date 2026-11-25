@@ -142,7 +142,7 @@ No Picard tool computes per-exon depth from an annotation. Three checks hold the
   (genes of three exons, every other gene on the minus strand, a shifted second transcript, a
   one-base exon, a gene off the BAM), splits the exons into layers where no two touch (Picard
   merges overlapping and abutting targets), and runs `CollectHsMetrics PER_TARGET_COVERAGE`
-  of Picard 3.5.0 and of bammetrics once per layer. Each exon's `MEAN_DEPTH` and
+  of Picard 3.5.0 and of BAMmetrics once per layer. Each exon's `MEAN_DEPTH` and
   `MINIMUM_DEPTH` must print as `mean_coverage` and `min_coverage`. Ten cases: the foundation
   corpus, the exome slice at the defaults, `MQ=0 Q=0`, `CLIP_OVERLAPPING_READS=false` and
   `INCLUDE_INDELS=true Q=30`, the `hs_bams.py` BAMs `deep`, `first_empty` and `unknown`, and

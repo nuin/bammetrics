@@ -29,7 +29,7 @@ A record counts when it is primary (not secondary, not supplementary), not QC-fa
 holds at least one base. A record with no bases (`SEQ` `*`) counts in no column, so
 `READ_LENGTH` is never 0. Unmapped records count: most telomeric reads do not map, or map at MAPQ 0 to a
 subtelomere. Duplicates count only with `COUNT_DUPLICATES=true`. TelSeq reads every
-record, secondary, supplementary, QC-failed and duplicate ones included; bammetrics
+record, secondary, supplementary, QC-failed and duplicate ones included; BAMmetrics
 leaves those out so that each sequenced read counts once.
 
 Each counted read is first put back on the strand it was sequenced on: a record with flag
@@ -85,7 +85,7 @@ telomere.
 Read length. TelSeq assumes every read has the length it is given (`-r`, default 100). A
 read reaches k copies only when at least 42 of its bases lie in the telomere, and that
 chance depends on the read length, so the estimate holds for one read length. TelSeq also
-drops a read whose repeat count is above `READ_LENGTH / 6` from both counts; bammetrics has
+drops a read whose repeat count is above `READ_LENGTH / 6` from both counts; BAMmetrics has
 no read length option and keeps every read. `READ_LENGTH` is the most common read length
 (the shorter on a tie). `PCT_OFF_LENGTH` is the fraction of reads whose length differs
 from it by more than 10 percent. `ESTIMATED_LENGTH_KB` is empty when `PCT_OFF_LENGTH` is

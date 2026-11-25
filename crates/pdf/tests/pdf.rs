@@ -316,7 +316,7 @@ fn the_structure_is_tagged_for_pdf_ua() {
     let info = dict(&pdf, pdf.trailer.get(b"Info").expect("Info"));
     assert_eq!(
         text(info.get(b"Title").expect("Title")),
-        "S1: FAIL (bammetrics)"
+        "S1: FAIL (BAMmetrics)"
     );
 
     let (elems, tops) = struct_tree(&pdf);
@@ -591,7 +591,7 @@ fn a_cyrillic_sample_needs_pdf_font() {
     let info = dict(&pdf, pdf.trailer.get(b"Info").expect("Info"));
     assert_eq!(
         text(info.get(b"Title").expect("Title")),
-        "Пример-7: FAIL (bammetrics)"
+        "Пример-7: FAIL (BAMmetrics)"
     );
     assert!(
         String::from_utf8_lossy(&bytes).contains("DejaVuSans"),

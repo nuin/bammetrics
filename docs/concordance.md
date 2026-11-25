@@ -47,7 +47,7 @@ python3 tests/data/make_corpus.py out_dir   # seeded multi-sample corpus: 2 samp
 ```
 
 `tests/concordance/compare.py` has `compare_metrics(tool, bam, picard_args)`: it runs Picard and
-bammetrics on one BAM and asserts every column of every row, and the histogram section,
+BAMmetrics on one BAM and asserts every column of every row, and the histogram section,
 equal as printed strings. `CLAUDE.md` lists the steps for adding a tool.
 
 Needs samtools, bwa, `picard` (3.5.0, checked) and uv. Nothing in
@@ -97,7 +97,7 @@ Each library is aligned with `bwa mem -R`, run through `samtools fixmate -m`
 The harness (`tests/concordance/`):
 
 - `cases.py` lists every case: BAM, metric, Picard arguments and the matching
-  bammetrics arguments. `run_picard.py` and the tests both read it.
+  BAMmetrics arguments. `run_picard.py` and the tests both read it.
 - `run_picard.py` runs Picard per case and records in `manifest.json` whether Picard
   wrote a file. `CollectInsertSizeMetrics` will not start without `Rscript`, so a
   no-op one in `target/fakeR` goes first on `PATH`; `H=/dev/null` is accepted.
@@ -144,7 +144,7 @@ VCF outputs are tier B (next two sections).
 
 `compare_bam(tool, inputs, picard_args, bam_args=None, workdir=None, outcome="equal",
 input_key="I", output_key="O", metrics_key=None, suffix=".bam", reference=None, label=None,
-record_bytes=False)` in `tests/concordance/compare.py` runs Picard and bammetrics with
+record_bytes=False)` in `tests/concordance/compare.py` runs Picard and BAMmetrics with
 `O=<dir>/<side><suffix>` and reads both files back with `samtools view --no-PG`, one character
 per byte.
 
@@ -162,7 +162,7 @@ per byte.
 - The failure names the first differing header line or record by its index, from 0, with both
   lines.
 - `metrics_key="M"` also compares a metrics file as `compare_metrics` does.
-- `outcome="fail"` requires both tools to fail, bammetrics to leave no output, and neither to
+- `outcome="fail"` requires both tools to fail, BAMmetrics to leave no output, and neither to
   write a metrics file. `outcome="same"` lets Picard decide between the two.
 - `record_bytes=True` also compares each record as bytes after BGZF inflation. That catches
   what `samtools view` does not print: the `bin` field and the width of an integer tag.
@@ -184,14 +184,14 @@ such line and write `##FORMAT` before `##contig`. No registered tool writes a VC
 
 Decision (2026-11-10, wave W02 of the full parity program plan): a tool that writes a BAM is
 compared at tier B,
-decoded records. BAM bytes are not compared and bammetrics does not try to write Picard's
+decoded records. BAM bytes are not compared and BAMmetrics does not try to write Picard's
 bytes. The same holds for CRAM and for a gzip VCF.
 
 The spike that decided it is `make deflater-spike`
 (`benches/deflater_spike.py` and the package `benches/deflater_spike`, which is outside the
 workspace, so no shipped crate depends on it). It runs `MarkDuplicates` three times per input:
 Picard at its defaults (`COMPRESSION_LEVEL=5`), Picard with `USE_JDK_DEFLATER=true`, and
-bammetrics. It then inflates every BGZF block Picard wrote, deflates it again with each
+BAMmetrics. It then inflates every BGZF block Picard wrote, deflates it again with each
 candidate at each level, and counts the blocks that come out byte for byte.
 
 Run of 2026-11-10: Mac Studio M1 Ultra, OpenJDK 27.0.1 aarch64, Picard 3.5.0, zlib-rs 0.6.8,
@@ -214,10 +214,10 @@ Whole files:
 |---|---|---:|---:|---:|---|
 | markdup.bam | Picard defaults | 2,022 | 1 | 9,461 | equal |
 | markdup.bam | Picard `USE_JDK_DEFLATER=true` | 2,000 | 1 | 9,443 | differ at byte 16 |
-| markdup.bam | bammetrics | 1,355 | 1 | 7,331 | differ at byte 16 |
+| markdup.bam | BAMmetrics | 1,355 | 1 | 7,331 | differ at byte 16 |
 | t2.bam | Picard defaults | 8,375,031 | 585 | 65,498 | equal |
 | t2.bam | Picard `USE_JDK_DEFLATER=true` | 8,414,929 | 585 | 65,498 | differ at byte 16 |
-| t2.bam | bammetrics | 8,180,379 | 585 | 65,495 | differ at byte 16 |
+| t2.bam | BAMmetrics | 8,180,379 | 585 | 65,495 | differ at byte 16 |
 
 Blocks each candidate reproduces, at its best level:
 
@@ -235,7 +235,7 @@ Blocks each candidate reproduces, at its best level:
 Why tier B:
 
 1. Neither pure-Rust deflater writes a single Picard block. zlib-rs is the deflater under
-   noodles-bgzf 0.52, so every BAM bammetrics writes goes through it.
+   noodles-bgzf 0.52, so every BAM BAMmetrics writes goes through it.
 2. Picard has no one byte stream. Picard at its defaults and with `USE_JDK_DEFLATER=true`
    differ by 39,898 bytes on t2, on one machine. Two runs of the same command write the same
    blocks. The default stream depends on the platform (Intel GKL on x86_64, the machine's libz
@@ -248,33 +248,33 @@ Why tier B:
 
 What tier B still proves, and what it does not:
 
-- Records after inflation, bammetrics against Picard defaults: 101,099 of 101,099 byte-equal on
+- Records after inflation, BAMmetrics against Picard defaults: 101,099 of 101,099 byte-equal on
   t2, 34 of 36 on markdup.bam. `compare_bam(record_bytes=True)` is that check.
 - `test_mark_duplicates.py` with `record_bytes=True` fails 93 of its 160 tests, all on one
   field: `bin` of a record without a reference (`refID` -1). The inputs carry 4680 there
   (`reg2bin(-1, 0)`, as samtools and pysam write it; two foundation records carry 4683),
-  Picard writes 0, bammetrics copies the input. A probe planted `bin` 1 on two placed records
-  of markdup.bam: Picard wrote 4681, bammetrics 1. So htsjdk computes `bin` for every record
-  it writes and bammetrics copies it, which KNOWN_DIFFERENCES.md already lists under
+  Picard writes 0, BAMmetrics copies the input. A probe planted `bin` 1 on two placed records
+  of markdup.bam: Picard wrote 4681, BAMmetrics 1. So htsjdk computes `bin` for every record
+  it writes and BAMmetrics copies it, which KNOWN_DIFFERENCES.md already lists under
   MarkDuplicates. `samtools view` does not print `bin`. `MarkDuplicates` therefore keeps
   `record_bytes` off; a later writer that computes `bin` can turn it on.
 - A BAI that Picard writes beside its BAM (`CREATE_INDEX=true`) holds virtual offsets into
-  Picard's compressed blocks. It cannot be byte-equal to an index of a BAM bammetrics wrote.
+  Picard's compressed blocks. It cannot be byte-equal to an index of a BAM BAMmetrics wrote.
   `BuildBamIndex` on one given BAM can be tier A. It is: the next section.
 
 A CRAM is tier B too (wave W15, `tests/concordance/test_cram_writer.py`, inputs from
 `cram_bams.py`). No writer is a registry tool of its own, so the registration rule names
 no module for it: the module holds `crates/core/src/cram_writer.rs` through SortSam,
 MergeSamFiles, MarkDuplicates, AddOrReplaceReadGroups, CleanSam, DownsampleSam and the
-chain `write` step. Each CRAM bammetrics writes is read by samtools (`decode_md=0`), by
-Picard `ViewSam` and by bammetrics `ViewSam`, and held to the BAM bammetrics writes of
+chain `write` step. Each CRAM BAMmetrics writes is read by samtools (`decode_md=0`), by
+Picard `ViewSam` and by BAMmetrics `ViewSam`, and held to the BAM BAMmetrics writes of
 the same stream and to samtools' own CRAM of that BAM. The module also holds: a FASTA
 whose contigs are in another order, are more than the header's, are longer than their
 `@SQ` line, or lack a contig no record lies on (both tools write; both fail with one
 sentence on a record whose contig the FASTA lacks); a tag text and a read name with
 bytes outside printable ASCII; a mate reference index the header lacks (both fail); a
 read that starts past its contig end and an unmapped record with a CIGAR (Picard fails,
-bammetrics writes what samtools writes).
+BAMmetrics writes what samtools writes).
 
 ## BAM index
 
@@ -303,12 +303,12 @@ What running Picard 3.5.0 showed, each pinned by a test:
    `INPUT`. The help says beside the BAM (`test_default_output_name`).
 3. At the default `VALIDATION_STRINGENCY=STRICT` Picard refuses the foundation corpus (a
    supplementary flag on an unmapped read). The corpora run with `SILENT` on both sides,
-   as in every other module. The three `lenient` BAMs show that bammetrics, which
+   as in every other module. The three `lenient` BAMs show that BAMmetrics, which
    validates nothing, writes the index Picard writes under `SILENT`.
 4. An end past position 2^29 is `Read position too high for BAI bin indexing.`, so no
    bin above 37448 and no window above 32767 is ever written.
 5. An empty BGZF block in the middle of a file ends htsjdk's read: Picard indexes 101 of
-   300 records and exits 0. bammetrics indexes all 300 (KNOWN_DIFFERENCES.md).
+   300 records and exits 0. BAMmetrics indexes all 300 (KNOWN_DIFFERENCES.md).
 6. Picard's writer and its reader disagree on one offset. `MarkDuplicates
    CREATE_INDEX=true` on corpus t2 ends the last chunk at `8374551:1514`, inside the
    last block; `BuildBamIndex` of that BAM ends it at `8375239:0`, the EOF block. A BAM
@@ -318,26 +318,26 @@ What running Picard 3.5.0 showed, each pinned by a test:
    length as a non-zero number and its header reader refuses it, so `bai/header.rs`
    reads the header for `BuildBamIndex` (`empty_reference_between`,
    `empty_reference_last`, `empty_reference_only`). Picard at `STRICT` refuses a record
-   placed on such a reference and indexes it under `SILENT`, as bammetrics does
+   placed on such a reference and indexes it under `SILENT`, as BAMmetrics does
    (`records_on_an_empty_reference`). samtools 1.x prints no header with `LN:0` and
-   finds no region of the file; `samtools idxstats` reads the bammetrics index.
+   finds no region of the file; `samtools idxstats` reads the BAMmetrics index.
 
 16 BAMs both tools refuse (`index_bams.refused`): each of the five headers that are not
 `SO:coordinate`, references out of order, five alignments past 2^29, a position without
 a reference, a start past the reference, a reference the header lacks, a truncated file,
 a record whose `block_size` is 0xFFFFFF00 in a file of 227 bytes (Picard: `Invalid
-record length: -256`; bammetrics: `truncated BAM`). Picard leaves an empty `OUTPUT`;
-bammetrics leaves none and keeps the file that was there.
+record length: -256`; BAMmetrics: `truncated BAM`). Picard leaves an empty `OUTPUT`;
+BAMmetrics leaves none and keeps the file that was there.
 `test_a_block_size_past_the_file_costs_the_bytes_present` runs `build-bam-index`,
 `mark-duplicates` and `chain + write --index` on that file and fails above 64 MiB of
 peak RSS: each takes 5 MiB. A buffer of `block_size` bytes took 4.3 GB.
 
 samtools reads each index as its own (`cross_check`): `samtools idxstats` and `samtools
-view -c` on four regions per reference give the same numbers through the bammetrics
+view -c` on four regions per reference give the same numbers through the BAMmetrics
 index and through `samtools index`. The two files differ: samtools writes 195,448 bytes
-for the 573 MB exome slice, Picard and bammetrics 346,128.
+for the 573 MB exome slice, Picard and BAMmetrics 346,128.
 
-A BAM bammetrics wrote holds its own compressed bytes (tier B), and its index is tier A
+A BAM BAMmetrics wrote holds its own compressed bytes (tier B), and its index is tier A
 against Picard's `BuildBamIndex` of that file: `chain BAM + write OUT --index` on five
 corpora at compression levels 1 and 5, and `MarkDuplicates CREATE_INDEX=true` on five
 inputs (`test_mark_duplicates.py`). The `.md5` beside it is the MD5 of the BAM, 32 hex

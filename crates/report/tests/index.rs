@@ -236,7 +236,7 @@ fn four_sample_index_matches_its_snapshot() {
             date: DATE,
         },
     );
-    assert!(html.contains("<title>4 samples: FAIL (bammetrics)</title>"));
+    assert!(html.contains("<title>4 samples: FAIL (BAMmetrics)</title>"));
     assert!(html.contains("1 fail, 1 incomplete, 1 warn, 1 pass"));
     assert!(html.contains("preset clinical-panel v1 (3d0bcd)"));
     assert!(html.contains("<a href=\"S-fail.report.html\">S-fail</a>"));
@@ -265,7 +265,7 @@ fn four_sample_index_matches_its_snapshot() {
 #[test]
 fn an_empty_index_renders() {
     let html = render_index(&[], &Options::default());
-    assert!(html.contains("<title>0 samples: PASS (bammetrics)</title>"));
+    assert!(html.contains("<title>0 samples: PASS (BAMmetrics)</title>"));
     assert!(html.contains("No samples."));
 }
 

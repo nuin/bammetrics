@@ -1576,7 +1576,7 @@ bammetrics chain: step 1 (reorder-sam): SEQUENCE_DICTIONARY: the dictionary is t
 ```
 
 A dictionary read from a `.fai` holds `SN` and `LN` alone; the `.dict` adds `M5` and `UR`.
-Picard 3.5.0 refuses a `.fai` as `SEQUENCE_DICTIONARY`; bammetrics reads one
+Picard 3.5.0 refuses a `.fai` as `SEQUENCE_DICTIONARY`; BAMmetrics reads one
 (KNOWN_DIFFERENCES.md). A `reorder-sam` step with no dictionary and no reference is a
 usage error that names the ways to give one (`--sequence-dictionary`, `--from-bam`,
 `--dict`, `-R`, `reference` in the config file, `BAMMETRICS_REFERENCE`). The step's own `-R` comes first, then the chain's: in

@@ -93,7 +93,7 @@ On every tool verb:
 
 `--level` and `--stop-after` exist on a verb whose tool has the option; elsewhere they are
 unknown options, as the Picard face rejects them. `insert-size` has no `--stop-after`:
-Picard's `CollectInsertSizeMetrics` takes `STOP_AFTER`, bammetrics does not implement it
+Picard's `CollectInsertSizeMetrics` takes `STOP_AFTER`, BAMmetrics does not implement it
 yet, and `quality-yield` has no `--level`, as in Picard. `-R` on a tool that reads no
 reference is accepted and noted, as `R=` is on the Picard face. Records are decoded and counted
 on one thread in file order, so the metrics do not depend on `--threads`.
@@ -465,7 +465,7 @@ value.
   `--include-indels`, `--coverage-cap` (`covMax`, 200), `--near-distance` (250) and
   `--sample-size` (10000). An interval file is an interval list when its first line starts
   with `@` (the `@SQ` lines must equal the BAM's), otherwise BED (0-based, read against the
-  BAM header). Picard 3.5.0 refuses BED files; bammetrics reads them as `BedToIntervalList`
+  BAM header). Picard 3.5.0 refuses BED files; BAMmetrics reads them as `BedToIntervalList`
   would convert them. The `HET_SNP_SENSITIVITY` simulation draws 10000 x 201 qualities from
   the same `java.util.Random(51)` stream as Picard, about 0.7 s. `--per-base-coverage FILE`
   writes Picard's per-base file: a `chrom pos target coverage` header, then one line per base
@@ -521,7 +521,7 @@ option: O`, as in Picard.
   file x.bam`.
 - A reference the index has no metadata for prints `Aligned= 0` and `Unaligned= 0`. A header
   with more `@SQ` lines than the index has references exits 1 (Picard throws
-  `ArrayIndexOutOfBoundsException` after printing the lines it could; bammetrics prints
+  `ArrayIndexOutOfBoundsException` after printing the lines it could; BAMmetrics prints
   nothing and names both counts). An index with more references than the header prints the
   header's references, as Picard does.
 - A CRAM has no `.bai`: with `-R` its records are counted (a record without a reference has
@@ -564,10 +564,10 @@ text is byte for byte what Picard prints (`tests/concordance/test_view_sam.py`).
   header. Both together exit 1 (`Cannot specify both HEADER_ONLY=true and
   RECORDS_ONLY=true.`).
 - `--interval-list FILE` keeps the records that overlap an interval of the list. Picard
-  has two paths and bammetrics follows the one Picard would take. With a `.bai`, `.csi`
+  has two paths and BAMmetrics follows the one Picard would take. With a `.bai`, `.csi`
   or `.crai` beside the input, Picard queries the index: an unmapped record placed with
   its mate matches by its start. Without one (SAM text, a pipe), Picard scans: reading
-  stops after the last interval and an unmapped record never matches. bammetrics opens
+  stops after the last interval and an unmapped record never matches. BAMmetrics opens
   no index. It reads the whole file and applies the same test.
 - Picard has no `OUTPUT` option: `O=` on the Picard face exits 1 (`Unrecognized option:
   O`). `ASSUME_SORTED` is rejected too.
@@ -730,7 +730,7 @@ Picard's `CleanSam`: every record of the input with three fixes
   does, so a line past the end of its reference is read and named on standard error.
 - A read that starts past the end of its reference gets a CIGAR longer than its bases
   (`20M` at 100050 on a 100000-base contig becomes `69S`). Picard writes that record and
-  samtools refuses the file; bammetrics exits 1 and writes nothing.
+  samtools refuses the file; BAMmetrics exits 1 and writes nothing.
 - `--create-index` writes `out.bai`; `-o` ending in `.cram` writes a CRAM against `-R`
   and takes no index.
 - In a chain the step cleans the stream at its position: `bammetrics chain in.bam +
@@ -852,10 +852,10 @@ Picard's `SplitSamByLibrary`: one file per library of the header's `@RG` lines
   groups that have no `LB`.
 - A header with no `LB` on any read group exits 2, `No individual libraries are specified
   in the header of INPUT`, as Picard does, and writes nothing.
-- Picard writes a CRAM per library for a CRAM input; bammetrics exits 2.
+- Picard writes a CRAM per library for a CRAM input; BAMmetrics exits 2.
 - Two libraries with one safe name (`a b` and `a_b`), a library `unknown` beside records
   without a library, and names that differ in case only on a file system that ignores case
-  make Picard write one file over the other. bammetrics exits 1 and leaves no file.
+  make Picard write one file over the other. BAMmetrics exits 1 and leaves no file.
 - Every file is written under a temporary name and renamed into place after the last
   record, with its `.bai` (`--create-index`, a coordinate-sorted BAM) and `.md5`. A run that
   fails leaves none. At most 64 files are open at once; a file closed to make room is
@@ -914,7 +914,7 @@ header of the first (`tests/concordance/test_gather_bam_files.py`).
 - When every input name ends in `.bam`, the BGZF blocks are copied as bytes, as Picard
   copies them: the first file whole, each later file from the block of its first record,
   one end-of-file block at the end. Picard deflates that one block per later file again;
-  bammetrics deflates it with zlib-rs, so at `--compression-level` 1 to 9 those blocks hold
+  BAMmetrics deflates it with zlib-rs, so at `--compression-level` 1 to 9 those blocks hold
   other bytes than Picard's and inflate to the same. At level 0, and with one input, the
   file is Picard's byte for byte.
 - An input with records whose sequence dictionary (names and lengths) is not the first
@@ -1764,7 +1764,7 @@ Picard's `MergeSamFiles` (`tests/concordance/test_merge_sam_files.py`, inputs fr
   duplicate order exits 2: htsjdk merges them with a comparator that numbers libraries as
   it meets them.
 - `--intervals` (an interval list) keeps the records that overlap an interval, as an
-  index query returns them; every input needs an index beside it, or exit 1. bammetrics
+  index query returns them; every input needs an index beside it, or exit 1. BAMmetrics
   reads each input whole.
 - `--create-index` needs `--sort-order coordinate`. A `--comment` with a line end exits 2.
   At most 1,000 inputs, all open at once.
@@ -1866,7 +1866,7 @@ Picard's `FilterSamReads` (`tests/concordance/test_filter_sam_reads.py`):
   when both are aligned (`includeAligned`), or when either is unmapped (`excludeAligned`).
   The records must come in queryname order of their names (exit 1 otherwise): a
   coordinate-sorted input with pairs fails, as in Picard.
-- `includeJavascript` and `--javascript-file` are refused (exit 2): bammetrics runs no
+- `includeJavascript` and `--javascript-file` are refused (exit 2): BAMmetrics runs no
   JavaScript (docs/07 Q6). An option for another filter is a usage error, as Picard's
   checks give it: `--tag` with `includeAligned`, `--read-list-file` with `includeTagValues`.
 - `--write-reads-files` writes the SAM line of each record read to `<INPUT basename>.reads`
@@ -1900,7 +1900,7 @@ metrics file.
 - The header gains one `@PG` line per distinct `PG` value of the input records, chained
   with `PP` to that value, and each record's `PG` tag names its new line. The ID is
   `MarkDuplicates`, then `MarkDuplicates.1` and so on when the ID is taken, as Picard
-  numbers them. `VN` is `bammetrics` and the version, `CL` the bammetrics command line;
+  numbers them. `VN` is `bammetrics` and the version, `CL` the BAMmetrics command line;
   `--program-group-version` and `--program-group-command-line` replace them.
   `--program-record-id null` adds no line and changes no `PG` tag;
   `--no-add-pg-tag-to-reads` keeps the lines and leaves the tags.
@@ -2188,7 +2188,7 @@ suppressed.`, then the summary at `ERROR` or `INFO`.
   `SAMRecordQueryNameComparator` order (name by bytes, first of pair before second,
   paired before unpaired, forward before reverse, primary before supplementary before
   secondary, `HI` ascending after records without one, file order between ties).
-  bammetrics keeps the sort keys in memory and writes no temporary file.
+  BAMmetrics keeps the sort keys in memory and writes no temporary file.
 - `--mode` (`MODE`) is `ALL` (default), `PRIMARY_ONLY` (secondary and supplementary records
   dropped), `PRIMARY_MAPPED_ONLY` (unmapped records dropped too) or
   `PRIMARY_PROPER_PAIR_ONLY` (proper pairs only; an unpaired record is an error, as
@@ -2349,7 +2349,7 @@ The type is htsjdk's `VariantContext.getType`; `INDEL` is asked first.
 - `--create-index` (default true) needs a dictionary: the input's `##contig` lines or
   `--sequence-dictionary` (a `.dict`, a SAM, BAM or CRAM header, an interval list). Without
   one the run exits 1 before any record, as Picard does, even for plain outputs.
-- A plain output gets no index. Picard writes tribble's `.idx` there; bammetrics does not
+- A plain output gets no index. Picard writes tribble's `.idx` there; BAMmetrics does not
   (docs/07 decision D238). With `--create-index` left at its default the VCF is written
   and a note says so; `CREATE_INDEX=true` given for a plain name exits 1.
 - `--create-md5-file` is accepted and ignored: Picard's VCF writers write no `.md5`.
@@ -2505,7 +2505,7 @@ Parquet. XLSX and DOCX are written only: an input whose first 4 bytes are a zip'
 with that reason. Neither goes to standard output when it is a terminal (exit 2). An SQL dump does not read
 back: `convert` refuses one (exit 1) and names `sqlite3`. Picard
 text to JSON or Parquet to Picard text is byte for byte the first file, for a file Picard
-or bammetrics wrote.
+or BAMmetrics wrote.
 
 ```bash
 bammetrics convert S1.hs_metrics --format csv > S1.hs_metrics.csv
@@ -2804,7 +2804,7 @@ and `unfiltered_base_quality` are the two histograms) and `collect(path, metrics
 reference=None, hs=None, output_prefix=None, threads=None, hs_per_base=False)` (`{name:
 result}`, writing the files when `output_prefix` is given).
 
-`bammetrics.read_metrics(path)` reads a metrics file written by Picard or bammetrics:
+`bammetrics.read_metrics(path)` reads a metrics file written by Picard or BAMmetrics:
 `{"headers": [...], "classes": [{"class", "columns", "rows"}], "histogram": {"key_class",
 "columns", "rows"} or None}`, every row a dict keyed by column. Cells are typed from
 their text: int, float, str, or None for an empty field; `?` is `nan`, and `0,5` from a

@@ -109,11 +109,11 @@ fn report_on_a_picard_directory_writes_three_files_and_exits_zero() {
     );
 
     let page = fs::read_to_string(out.join("NA12878.report.html")).expect("page");
-    assert!(page.contains("<title>NA12878: FAIL (bammetrics)</title>"));
+    assert!(page.contains("<title>NA12878: FAIL (BAMmetrics)</title>"));
     assert!(page.contains("2026-01-02 03:04:05 UTC"));
     assert!(page.contains("id=\"plot-coverage\""));
     let index = fs::read_to_string(out.join("index.html")).expect("index");
-    assert!(index.contains("<title>1 sample: FAIL (bammetrics)</title>"));
+    assert!(index.contains("<title>1 sample: FAIL (BAMmetrics)</title>"));
     assert!(index.contains("<a href=\"NA12878.report.html\">NA12878</a>"));
     assert!(index.contains("2026-01-02 03:04:05 UTC"));
 

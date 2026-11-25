@@ -156,7 +156,7 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
          <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">\n\
          <meta name=\"color-scheme\" content=\"light dark\">\n\
-         <title>{} {}: {} (bammetrics)</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n",
+         <title>{} {}: {} (BAMmetrics)</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n",
         samples.len(),
         if samples.len() == 1 {
             "sample"
@@ -167,7 +167,7 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
     );
     let _ = write!(
         out,
-        "<header class=\"top\"><p class=\"kicker muted\">bammetrics report</p><h1>Run index</h1><p class=\"meta muted\">\
+        "<header class=\"top\"><p class=\"kicker muted\">BAMmetrics report</p><h1>Run index</h1><p class=\"meta muted\">\
          <span>{} sample{}</span>",
         samples.len(),
         if samples.len() == 1 { "" } else { "s" }
@@ -183,7 +183,7 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
     }
     let _ = write!(
         out,
-        "<span>bammetrics {}</span>",
+        "<span>BAMmetrics {}</span>",
         escape(env!("CARGO_PKG_VERSION"))
     );
     if !options.date.is_empty() {
