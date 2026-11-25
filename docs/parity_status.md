@@ -121,7 +121,7 @@ Role counts on a BAM stream: 14 transforms, 20 taps, 2 splits, 17 materialized, 
 - Picard face (`KEY=VALUE` and `--KEY VALUE`) and one kebab verb per tool, with `--help`, completions and `tools`.
 - Python API through PyO3 and maturin: one function per tool, typed stubs, `read_metrics`, `read_table`, `qc`, `check`, `report`, `collect`, `chain`, `step`, `recipe`, `doctor`.
 - `qc` and `plan` (0.12.0): the collectors a preset needs on one read, manifest, `--resume`, `--also`, exit codes 10 and 11.
-- Verdict presets (0.7.0): generic, clinical-panel, rna-seq, wgs. Each is marked "starting values". `verdict.json` schema is `bammetrics.verdict/1`.
+- Verdict presets (0.7.0): generic, clinical-panel, rna-seq, wgs. generic, wgs and rna-seq are marked `starting values`. clinical-panel is marked `reviewed defaults; gap and sex rules are starting values`. `verdict.json` schema is `bammetrics.verdict/1`.
 - `check` and `report`: HTML page and run index (axe-core clean, 0.16.0). PDF/UA-1 report behind cargo feature `pdf` (0.24.0, docs/pdf.md).
 - Output formats (0.20.0): Picard text, JSON, TSV, CSV, JSON Lines, Markdown, JUnit, MultiQC, `convert`. Parquet, XLSX, DOCX and SQL since 0.31.0 (W21).
 - `chain` (0.22.0, W04): `+` grammar, TOML plan file, planner, free-space refusal. Stage layer since 0.21.0 (W03).
@@ -145,7 +145,6 @@ Role counts on a BAM stream: 14 transforms, 20 taps, 2 splits, 17 materialized, 
 | CollectWgsMetrics family | `THEORETICAL_SENSITIVITY_OUTPUT`, `ALLELE_FRACTION`. Exit 1 naming the option. |
 | CollectMultipleMetrics | `PROGRAM=RnaSeqMetrics` (`NOT_IMPLEMENTED` in `multiple_metrics.rs`). |
 | EstimateLibraryComplexity | `ElcHashBasedDuplicatesFinder` for groups of 100 or more. No spill past `MAX_RECORDS_IN_RAM`. |
-| CheckDuplicateMarking | `MAX_RECORDS_IN_RAM` and `TMP_DIR` do nothing on an unsorted header. |
 | All collectors | `FLOW_MODE=true` exits 1. `CHART` and `HISTOGRAM_FILE` draw no plot. |
 | CRAM output | CRAM 3.1, `CREATE_INDEX`, `.crai`. Block copies refuse a `.cram` name. |
 | VCF writer, SplitVcfs, MakeSitesOnlyVcf | Tribble `.idx` for a plain `.vcf` (D238), CSI index, BCF, `.md5` from the two tools. |
@@ -254,7 +253,7 @@ Real-data check gaps: 6 scale memgate rows are skipped (`TIER=scale make memgate
 ### 5.3 Open problems
 
 - 0.34.0 is unmerged: PR #65 into release/0.34.0, then PR #64 into main. A fix PR comes before each release merge. No CI minutes exist, so local checks are the gate.
-- Clinical-panel preset review is open. Gap and sex rules and all thresholds of generic, wgs and rna-seq are starting values.
+- Clinical-panel gap and sex rules, and every threshold of generic, wgs and rna-seq, are starting values. The rest of clinical-panel is marked reviewed defaults.
 - D255 (no sink finishes until every sink took every batch) does not cover a sink that fails while closing its files.
 - CRAM writer departures D206 to D223 stay. One input was written at scale (HG002 exome). Output is 16.6 percent larger and 3.7 times slower than samtools' CRAM. CRAM bytes are never compared with Picard's.
 - BAM bytes are never compared: zlib-rs and miniz_oxide reproduce 0 of 585 Picard blocks. `.tbi` bytes differ from Picard's and are checked by `tabix` queries.
@@ -277,11 +276,11 @@ Recount commands:
 
 ```bash
 git fetch -q origin
-git grep -c '&crate::.*::TOOL,' origin/fix/0.34.0-review -- crates/core/src/registry.rs   # 77
+git grep -cE '^    &crate::' origin/fix/0.34.0-review -- crates/core/src/registry.rs   # 77, the rows of TOOLS
 cargo test -p bammetrics-cli --test registration                      # every tool has a verb, glossary row, concordance module, doc line
 cargo test -p bammetrics-cli --test chain_positions                   # asserts (53, 24)
 git grep -n 'REFUSED' crates/cli/tests/chain_positions.rs
-git grep -nE '^\| [A-Z][A-Za-z]+ \|' origin/fix/0.34.0-review -- docs/04_picard_parity_plan.md   # tool rows of docs/04
+git show origin/fix/0.34.0-review:docs/04_picard_parity_plan.md | awk 'NR>=28 && NR<=163' | grep -E '^\| [A-Z][A-Za-z]+ \|'   # section 1.2, the tool table: 124 lines, a header and 123 rows (docs/04 states 121 Picard tools; the 2 extra rows are not traced here)
 ```
 
 To recount the remaining 52, list the docs/04 tool names, remove every `Tool.name` in `TOOLS` and the 8 non-Picard rows, and match the rest against the Items cells of docs/07 section 5.
