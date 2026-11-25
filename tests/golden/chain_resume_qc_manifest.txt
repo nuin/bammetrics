@@ -58,7 +58,7 @@ insert_size	All_Reads.fr_count
 ## file s.manifest.json
 {
   "schema": "bammetrics.manifest/2",
-  "tool_version": "0.33.0",
+  "tool_version": "0.34.0",
   "verb": "chain",
   "sample": "insert_size",
   "directory": "<directory>",
@@ -124,7 +124,7 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
 ## file s.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.33.0",
+  "tool_version": "0.34.0",
   "sample": "insert_size",
   "preset": {
     "name": "generic",

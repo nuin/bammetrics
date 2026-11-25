@@ -52,9 +52,10 @@ A tap or `write` does not change the stream, so the step after it sees the same 
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
 the second tap and the writer the marked records.
 
-Every registered tool that reads a BAM is a step at any position, 53 of the 74 (section
-31), but the four named below. The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
-`compare-metrics`, `fifo-buffer`) are refused with exit 2 and the reason. So is
+Every registered tool that reads a BAM is a step at any position, 53 of the 77 (section
+31), but the four named below. The 20 tools that read no BAM (interval, VCF, FASTA and text tools,
+`compare-metrics`, `fifo-buffer`) are refused with exit 2 and the reason; four of them are
+steps of a chain whose source is a VCF (sections 33 and 34). So is
 `build-bam-index`: it names `write --index`, which writes the `.bai` of the BAM a chain
 writes. So is `sam-format-converter` (wave W15): it writes the records it reads in the
 format its name gives, which is what `write out.sam`, `write out.bam` and `write
@@ -673,7 +674,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input` (except on `merge_sam_files`, `gather_bam_files` and `jumping_library`, where it names the further inputs) and `output` of `mark_duplicates` are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 55 names `step` takes, snake case: the 53 tool verbs in `bammetrics tools` order, then `write` and `qc` |
+| `step_names()` | The 59 names `step` takes, snake case: the 57 tool verbs in `bammetrics tools` order (53 steps of a BAM stream, 4 of a VCF stream), then `write` and `qc` |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 
@@ -1900,7 +1901,8 @@ files and `verdict.json` of `chain_qc_step` equal those of `qc_generic`),
 
 Every registered tool that reads a BAM runs at any position of a chain: 53 of the 71
 tools at 0.32.0, 53 of the 74 at 0.33.0, whose three new tools are refused as steps with
-their reasons (section 3; docs/07 D224 and D233). A tool with a stage is a transform, a one-pass tool is a tap, a split tool is a
+their reasons (section 3; docs/07 D224 and D233), 53 of the 77 at 0.34.0, whose three VCF
+tools are refused on a BAM stream (sections 33 and 34). A tool with a stage is a transform, a one-pass tool is a tap, a split tool is a
 split. A tool with neither a stage nor a collector is materialized (docs/07 section
 2.3): it runs on a file that holds the records of its position.
 

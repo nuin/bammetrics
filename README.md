@@ -123,9 +123,11 @@ verbs), a tap (20 one-pass tool verbs), a split (`split-sam-by-library`,
 `split-sam-by-number-of-reads`), a materialized tool (17 verbs such as `wgs`,
 `targeted-pcr`, `library-complexity` and `merge-sam-files`, each run on a file of the
 records of its position), `write [PATH]` (`-` is standard output) or `qc`, the last step.
-Every tool that reads a BAM is a step at any position, 53 of the 74, but four with a
+Every tool that reads a BAM is a step at any position, 53 of the 77, but four with a
 reason of their own: `build-bam-index`, `sam-format-converter` (`write` does each), and
-`compare-s-a-ms` and `check-terminator-block`, which read whole files. Transforms may follow
+`compare-s-a-ms` and `check-terminator-block`, which read whole files. A chain whose source
+is a VCF carries its records to `write`, `variant-calling`, `genotype-concordance`,
+`make-sites-only-vcf` and `split-vcfs` (docs/chaining.md sections 33 and 34). Transforms may follow
 one another:
 `+ sort-sam --sort-order queryname + mark-duplicates + sort-sam --sort-order coordinate +
 write out.bam --index` sorts, marks and sorts back in one process, a sort holding at most

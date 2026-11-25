@@ -74,13 +74,16 @@ user config file, the recipes `prep`, `qc-only` and `downsample`, manifest 2 wit
 as a step at any position (53 of the 71) through the materialize fallback, and the CRAM
 writer behind every `OUTPUT` and `write` step ending in `.cram`, `SamFormatConverter`,
 `CompareSAMs` and `CheckTerminatorBlock` (tools 72 to 74, 0.33.0, wave W15; docs/07 D206
-to D235). CHANGELOG.md has each.
+to D235), and the VCF writer with the variant stream of `chain`, the header inventory of
+21 Picard VCF tools, `SplitVcfs`, `MakeSitesOnlyVcf` and `MakeVcfSampleNameMap` (tools 75 to
+77, 0.34.0, wave W16; docs/chaining.md sections 33 and 34, docs/07 D236 to D254).
+CHANGELOG.md has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, further formats and DOCX reports: the program plan
-  `docs/07_full_parity_program.md` (waves W16 onward);
+  `docs/07_full_parity_program.md` (waves W17 onward);
   docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.

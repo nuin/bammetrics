@@ -2,8 +2,19 @@
 
 ## Unreleased
 
+## 0.34.0
+
+Wave W16 of docs/07, 77 tools: the VCF writer, the variant stream of `chain`, the VCF header inventory, and `SplitVcfs`, `MakeSitesOnlyVcf` and `MakeVcfSampleNameMap` (tools 75 to 77); decisions D236 to D254.
+
 ### Added
 
+- The VCF header inventory (wave W16, `tests/concordance/vcf_header_inventory.py`): 21 Picard
+  3.5.0 VCF tools run once each through the Picard queue on
+  the corpus of `variant_vcfs.py` and `array_vcfs.py`; each case records the header lines
+  added, removed, rewritten, reordered and volatile, the output kind and the index in
+  `tests/concordance/vcf_headers.json`. `test_vcf_header_inventory.py` checks its shape,
+  and reruns Picard against it with `VCF_INVENTORY=1`. The writer tests hold every
+  pure-rewrite case to it.
 - The VCF writer (wave W16 of docs/07, `crates/core/src/vcf_writer.rs`): the header and
   each record line as htsjdk 5.0.0's `VCFWriter` writes them for Picard 3.5.0
   (`crates/core/src/vcf/full_header.rs`, `encode.rs`, `encode_genotypes.rs`): the header

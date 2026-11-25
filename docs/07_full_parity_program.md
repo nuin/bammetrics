@@ -559,7 +559,7 @@ D160 to D205 are the rows of wave W14 and of the simpler chain grammar (0.32.0):
 
 D206 to D235 are the rows of wave W15 (0.33.0), numbered W15-1 to W15-30 on their branches and renumbered after D205 when the three branches merged: D206 to D223 the CRAM writer (feat/cram-writer), D224 to D232 `SamFormatConverter` (feat/sam-format-converter), D233 to D235 what the release decided where the branches met (the chain refusals of `CompareSAMs` and `CheckTerminatorBlock`, one fix of a CRAM read, `-o r.cram`). The `CompareSAMs` and `CheckTerminatorBlock` branch recorded no departure row of its own.
 
-D236 to D245 are the rows of wave W16 (branch feat/vcf-writer), D246 to D254 those of its tools (branch feat/vcf-tools; D252 to D254 from its review), numbered after the last D row when the wave merges.
+D236 to D254 are the rows of wave W16 (0.34.0), numbered W16-1 to W16-19 on their branches and renumbered after D235 when the release merged them: D236 to D245 the VCF writer and the variant stream (feat/vcf-writer), D246 to D254 its tools (feat/vcf-tools; D252 to D254 from its review). The header inventory branch (feat/vcf-header-inventory) recorded no departure row.
 
 D145 to D159 are the rows of wave W21, numbered D200 to D214 on their branch and renumbered after the W13 rows when the two waves merged for 0.31.0.
 

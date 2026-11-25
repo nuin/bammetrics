@@ -1162,6 +1162,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.32.0 pdf | the same with `--features pdf` | 16,096,304 | 13,552,448 |
 | 0.33.0 | 2026-11-23, release/0.33.0: feat/cram-writer, feat/sam-format-converter and feat/compare-terminator merged on release/0.32.0, the version set, rustc 1.100.0, default features (feature `parquet` on) | 12,693,488 | 10,703,568 |
 | 0.33.0 pdf | the same with `--features pdf` | 16,655,648 | 14,048,760 |
+| 0.34.0 | 2026-11-24, release/0.34.0: feat/vcf-tools (with feat/vcf-writer and feat/vcf-header-inventory) merged on main at 0.33.0, the version set, rustc 1.100.0, default features (feature `parquet` on) | 13,120,800 | 11,084,168 |
+| 0.34.0 pdf | the same with `--features pdf` | 17,067,024 | 14,412,792 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -1239,6 +1241,13 @@ writer pieces), `SamFormatConverter`, `CompareSAMs` with its three record walks,
 `CheckTerminatorBlock`. With `--features pdf` it grew 496,312 bytes stripped, and the
 PDF build is 3,345,192 bytes over the default build. The owner accepts binary growth
 (2026-11-22); `make budgets` checks the formats and report rows.
+
+From 0.33.0 to 0.34.0 the default binary grew 380,600 bytes stripped (3.6%), both built
+with rustc 1.100.0: the VCF writer (`vcf_writer.rs`, the header, the record and genotype
+encoders, the `.tbi`), the variant stream of `chain` (`stage/variant.rs`,
+`chain/prepare/variant.rs`), `SplitVcfs`, `MakeSitesOnlyVcf` and `MakeVcfSampleNameMap`.
+With `--features pdf` it grew 364,032 bytes stripped, and the PDF build is 3,328,624
+bytes over the default build.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
