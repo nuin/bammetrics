@@ -138,7 +138,7 @@ fn failing_page_matches_its_snapshot() {
             date: DATE,
         },
     );
-    assert!(html.contains("<title>S1: FAIL (bammetrics)</title>"));
+    assert!(html.contains("<title>S1: FAIL (BAMmetrics)</title>"));
     assert!(html.contains("7 fail, 0 warn, 10 pass, 1 not measured"));
     assert!(html.contains("Mean target coverage is 0.377778, below the fail limit of 100"));
     // A text check shows its text in the checks table.

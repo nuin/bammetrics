@@ -24,7 +24,7 @@ wrote 2 files to OUT
 the verdict does not change the exit code; bammetrics check gates on it
 ## stderr
 ## file NA12878.report.pdf
-<pdf not recorded: 31 pages, 682391 bytes>
+<pdf not recorded: 31 pages, 682520 bytes>
 ## file NA12878.verdict.json
 {
   "schema": "bammetrics.verdict/1",

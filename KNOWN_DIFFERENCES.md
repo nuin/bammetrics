@@ -1,6 +1,6 @@
 # Known differences from Picard 3.5.0
 
-bammetrics matches Picard 3.5.0 byte for byte after the `StringHeader` lines, for
+BAMmetrics matches Picard 3.5.0 byte for byte after the `StringHeader` lines, for
 every case in the concordance harness (the harness compares the whole file body, so files
 without a `## METRICS CLASS` block are covered too), and writes `PER_BASE_COVERAGE` and
 `PER_TARGET_COVERAGE` files identical to Picard's, whole file. This file lists where it differs on purpose,
@@ -13,7 +13,7 @@ behaves how.
   (for example `MDT`). The harness skips the header and checks only the `# Started on: `
   prefix.
 - The command line in the first header line mimics Picard's (`# CollectInsertSizeMetrics INPUT=...`)
-  so MultiQC-style parsers read it. It lists the options bammetrics implements with their values, not every
+  so MultiQC-style parsers read it. It lists the options BAMmetrics implements with their values, not every
   Picard option.
 - An output path that names a file the run reads (`INPUT`, `REFERENCE_SEQUENCE`, any input
   path option, or a detail file `ConvertSequencingArtifactToOxoG` reads) fails with
@@ -81,13 +81,13 @@ behaves how.
   `IGNORE_SEQUENCE` name the header lacks with `Unrecognized sequence X passed as
   argument to IGNORE_SEQUENCE`. A negative `RRNA_FRAGMENT_PERCENTAGE` without
   `RIBOSOMAL_INTERVALS` makes every fragment ribosomal and Picard adds to a null
-  `RIBOSOMAL_BASES` (`NullPointerException`, no file); bammetrics exits 1 and writes none
+  `RIBOSOMAL_BASES` (`NullPointerException`, no file); BAMmetrics exits 1 and writes none
   (`test_negative_percentage_without_intervals_fails_in_both`).
 - `CollectVariantCallingMetrics` takes `DBSNP`, `TARGET_INTERVALS` (`TI`),
   `SEQUENCE_DICTIONARY` (`SD`), `GVCF_INPUT` and `THREAD_COUNT`, each with a non-default
   case in `tests/concordance/test_variant_tools.py`. `THREAD_COUNT` changes no number in
   either tool (Picard merges its per-thread accumulators by adding; the cases run Picard at
-  2, 3 and 8 threads against bammetrics' one pass) and a value under 1 exits 1 in both with
+  2, 3 and 8 threads against BAMmetrics' one pass) and a value under 1 exits 1 in both with
   `Multithreading value must exceed 0.`. `OUTPUT` is the prefix of the two files, as in
   Picard; a missing `OUTPUT` or `DBSNP` exits 1 with Picard's `Option 'X' is required.`.
 - `GenotypeConcordance` takes `TRUTH_VCF`, `CALL_VCF`, `TRUTH_SAMPLE`, `CALL_SAMPLE`,
@@ -119,7 +119,7 @@ behaves how.
   (the two columns repeat), and `calculateTheoreticalHetSensitivity` throws
   `numbers of bases in the base quality histogram and the coverage histogram are not
   equal` in every unit that finishes after a unit with a base counted under the cap,
-  so no file is written. bammetrics reproduces all of it (`hs_metrics.rs`, `Shared`):
+  so no file is written. BAMmetrics reproduces all of it (`hs_metrics.rs`, `Shared`):
   `LEVEL=SAMPLE` on a BAM with one on-target sample exits 1 in both tools
   (`ALL_READS` finishes first), `LEVEL=null LEVEL=SAMPLE` completes with one sample
   and fails with two, and a unit with no counted base before the covered one
@@ -167,7 +167,7 @@ behaves how.
   and `ALLELE_FRACTION`, which exit 1 naming the option: Picard writes a second file from
   `TheoreticalSensitivity.calculateSensitivities`
   (`test_theoretical_sensitivity_output_is_not_implemented` checks Picard writes both
-  files and bammetrics exits 1). The model is ported for the capture tools
+  files and BAMmetrics exits 1). The model is ported for the capture tools
   (`sensitivity::calculate_sensitivities`); the three WGS tools do not call it yet.
   `ASSUME_SORTED` is rejected in both tools.
   `CollectWgsMetricsWithNonZeroCoverage` accepts `CHART_OUTPUT` and draws nothing.
@@ -180,7 +180,7 @@ behaves how.
   `CONTEXT_SIZE` above 4 without `CONTEXTS` exits 1 naming the option, and so does a
   `CONTEXTS` list whose `HashMap` would turn a bin into a tree: Picard 3.5.0 writes
   1,048,576 contexts per library at `CONTEXT_SIZE=5` (a 306 MB file in about a minute) in
-  an order its tree bins decide, which bammetrics does not reproduce
+  an order its tree bins decide, which BAMmetrics does not reproduce
   (`test_context_size_5_is_refused`; a short `CONTEXTS` list at that size runs).
 - `CollectGcBiasMetrics` accepts `MINIMUM_GENOME_FRACTION` (`MGF`) and changes nothing
   with it: Picard 3.5.0 declares the option and never reads it (`CollectGcBiasMetrics.java`,
@@ -189,7 +189,7 @@ behaves how.
 - `CollectMultipleMetrics`:
   - `EXTRA_ARGUMENT=<PROGRAM>::<KEY=VALUE>` is the only form. Picard 3.5.0 hands the text to
     the program's legacy parser, which rejects `--KEY VALUE` (`ERROR: Invalid argument
-    '--HISTOGRAM_WIDTH'` on the foundation corpus); bammetrics exits 1 on it too.
+    '--HISTOGRAM_WIDTH'` on the foundation corpus); BAMmetrics exits 1 on it too.
   - `INPUT`, `REFERENCE_SEQUENCE`, `ASSUME_SORTED` and `STOP_AFTER` in an `EXTRA_ARGUMENT`
     are dropped without a word, as Picard's `makeItSo` uses the run's own values. `OUTPUT`
     in one moves that program's file, as it does in Picard (`test_extra_output_override`).
@@ -197,7 +197,7 @@ behaves how.
     Picard every program shares one `Set` with the run (`program.METRIC_ACCUMULATION_LEVEL
     = metricAccumulationLevel`), so `CollectAlignmentSummaryMetrics::LEVEL=SAMPLE` also adds
     `SAMPLE` rows to the insert size file: on the foundation corpus Picard's
-    `.insert_size_metrics` then has 369 rows with `S1` and `S2` rows, bammetrics' has the
+    `.insert_size_metrics` then has 369 rows with `S1` and `S2` rows, BAMmetrics' has the
     `ALL_READS` rows only. The harness runs the option on a single program, where the two
     agree (`extra_level_one_program`).
   - `PROGRAM=RnaSeqMetrics` exits 1 (not implemented). `REF_FLAT` and `IGNORE_SEQUENCE`
@@ -212,10 +212,10 @@ behaves how.
   - `STOP_AFTER` and `ASSUME_SORTED` exit 1 (`Unrecognized option`) in both tools.
   - Picard compares the pairs of a group of 100 or more through 32-bit hashes of
     interleaved bases (`ElcHashBasedDuplicatesFinder`) and compares bases only where the
-    hashes differ, so a hash collision could hide a difference; bammetrics compares the
+    hashes differ, so a hash collision could hide a difference; BAMmetrics compares the
     bases of every group. The `illumina` BAM has a 130-pair group and matches.
   - Picard sorts the pairs in a `SortingCollection` that spills to disk past
-    `MAX_RECORDS_IN_RAM` (about 18 million pairs with the default heap); bammetrics sorts
+    `MAX_RECORDS_IN_RAM` (about 18 million pairs with the default heap); BAMmetrics sorts
     in memory, stably. Pairs equal on their first `MIN_IDENTICAL_BASES` bases keep file
     order in both until Picard spills; a spilled merge may interleave them differently,
     which can change which pair of a set is the keeper and so the optical count.
@@ -234,13 +234,13 @@ behaves how.
   Picard's `KEY=VALUE` parser takes the next argument as the value of an empty `KEY=`.
 - An option Picard takes once, given twice on the Picard face (`SP=a SP=b`), exits 1 in
   both tools. Picard's message names the spelling given (`Option 'SP' cannot be specified
-  more than once.`), bammetrics the long name (`Option 'SPECIES' ...`). The verbs keep the
+  more than once.`), BAMmetrics the long name (`Option 'SPECIES' ...`). The verbs keep the
   last value.
 
 - `CompareMetrics` prints Picard's log lines on standard error without the date and time
   field (`INFO\tCompareMetrics\t<summary>`, `ERROR\tCompareMetrics\t<difference>`), so
   the rest of each line matches. Picard's start-up lines, its command-line echo and its
-  `To get help, see ...` line are not printed. Where Picard throws, bammetrics prints
+  `To get help, see ...` line are not printed. Where Picard throws, BAMmetrics prints
   `bammetrics: <the exception's message>` with no stack trace; where Picard's parser
   refuses the arguments, the error lines without the usage text. The exit codes match.
 - The `compare-metrics` verb writes the comparison to standard output without `-o`; the
@@ -253,10 +253,10 @@ behaves how.
   flag, the numbers `samtools index` stores; a BAM on standard input is counted the same
   way. A header with more `@SQ` lines than the index has references exits 1 in both:
   Picard prints the lines up to the missing reference and throws
-  `ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 1`, bammetrics prints
+  `ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 1`, BAMmetrics prints
   nothing and says `the index holds 1 reference sequences, the header 2 (Picard: Index 1
   out of bounds for length 1)`. The index file as `INPUT` is Picard's warning `INPUT
-  should be the BAM file name, not its index file` followed by a read error; bammetrics
+  should be the BAM file name, not its index file` followed by a read error; BAMmetrics
   exits 1 with that line as the error. A truncated index exits 1 in both with each
   reader's own message. Both ignore an `x.bam.crai` beside a BAM where htsjdk would pick
   it before `x.bam.bai` and fail.
@@ -293,7 +293,7 @@ behaves how.
   (`TAIL_LIMIT=ten`) or does not fit a Java `int` (`CHIMERA_KB_MIN=2147483648`) exits 2 on
   the verb and 1 on the Picard face, as every usage error does; Picard exits 1. Picard's
   `--help` says the chimera size is `2 times the mode`; its code takes the greater of
-  `CHIMERA_KB_MIN` and the mode itself, and so does bammetrics. The tool reads each input
+  `CHIMERA_KB_MIN` and the mode itself, and so does BAMmetrics. The tool reads each input
   twice (the mode pass, then the counts), so `jumping-library -`, `jumping-library
   <(cat in.bam)` and `I=/dev/stdin` are refused with a usage error (exit 2 on the verb, 1
   on the Picard face) where every other verb reads standard input; the verb's `--help`
@@ -313,7 +313,7 @@ behaves how.
     output thread.
   - A negative size, `null`, and a `BUFFER_SIZE` above 2147483645 exit 1 in both: Picard
     with `NegativeArraySizeException`, `Can not set int field ... to null value` and
-    `Requested array size exceeds VM limit`, bammetrics with its own line. A value that is
+    `Requested array size exceeds VM limit`, BAMmetrics with its own line. A value that is
     no Java `int` carries Picard's `Problem constructing Integer from the string 'abc'.`
   - The first log line of `DEBUG_FREQUENCY` is printed before the first read and always
     reads `used 0`. Picard starts its log thread beside the copy, so its first line holds
@@ -360,7 +360,7 @@ behaves how.
     every tool. Picard at its default `STRICT` refuses a BAM with a record that has a
     reference and no position, a mapped record without a CIGAR, a record placed on a
     reference of length 0, or a supplementary flag on an unmapped read (the foundation
-    corpus). bammetrics writes the index Picard
+    corpus). BAMmetrics writes the index Picard
     writes under `VALIDATION_STRINGENCY=SILENT`. Both fail where the indexer fails: a
     reference out of order (`Unexpected reference 0 when constructing index for 1`), an
     alignment that ends past position 2^29 (`Read position too high for BAI bin
@@ -370,7 +370,7 @@ behaves how.
   - A failed run writes nothing and keeps an earlier `OUTPUT`: the index is written
     under a temporary name and renamed. Picard leaves an empty `OUTPUT`.
   - htsjdk reads an empty BGZF block in the middle of a file as its end. Picard indexes
-    the records before it and exits 0 (101 of 300 in `index_bams.py`). bammetrics
+    the records before it and exits 0 (101 of 300 in `index_bams.py`). BAMmetrics
     indexes every record, and samtools reads all 300 through that index. The offset
     before the first record after the empty block is the block that holds the record.
   - `OUTPUT` naming `INPUT`, by name or by a hard link, is refused. Picard has no such
@@ -463,7 +463,7 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
   other version fails in both tools (Picard: `CRAM version 4.1 is not supported`).
   The records reach the tools in file order exactly as the BAM of the same data gives them;
   `test_cram.py` checks every tool against Picard on the CRAMs of t1, the foundation corpus
-  and the exome slice, and against bammetrics on the BAMs. The reference bases are upper
+  and the exome slice, and against BAMmetrics on the BAMs. The reference bases are upper
   cased, as htsjdk's `ReferenceSource` gives them. On a tool whose metrics read no
   reference, `R=` decodes the CRAM and no `ignoring R=` note is written; nor for an input
   on a pipe or `/dev/stdin`, whose format is known only once the pass reads it.
@@ -475,20 +475,20 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
   unmapped CRAM record has mapping quality 0, as htsjdk gives it (noodles leaves 255).
 - An input whose records return to an earlier contig (queryname-sorted, or unsorted) with
   `R=` fails in Picard (`SAMException: Requesting earlier reference sequence: 0 < 1`: Picard
-  walks the reference in file order) and runs in bammetrics, which reads no reference for
+  walks the reference in file order) and runs in BAMmetrics, which reads no reference for
   these tools on a BAM and decodes a CRAM container by container. A BAM given `R=` shows the
   same difference; a CRAM needs `R=`, so it always does. `CollectAlignmentSummaryMetrics`
   and `CollectWgsMetrics` fail on such input in both tools.
-- bammetrics never opens a `.crai`; the whole file is read in order. Picard 3.5.0 (htsjdk
+- BAMmetrics never opens a `.crai`; the whole file is read in order. Picard 3.5.0 (htsjdk
   4) opens the `.crai` beside the CRAM and fails on some: on NA12878.final.cram (1000
   Genomes high coverage, GRCh38) it throws `Attempt to create a bai entry for an unmapped
   slice with unexpected alignment start (0) or span (150) values` before the first record.
-  Without the `.crai` beside it, Picard and bammetrics agree on that file
+  Without the `.crai` beside it, Picard and BAMmetrics agree on that file
   (`CollectQualityYieldMetrics STOP_AFTER=5000000`, every cell).
 - The reference for a CRAM is checked where htsjdk checks it: per slice, by the slice's
   MD5, when the slice needs bases. A FASTA whose `@SQ` lengths differ from the CRAM header
   still decodes the slices it matches, as in Picard.
-- `R=` needs a `.fai` next to the FASTA. Picard needs a `.dict`. bammetrics checks the
+- `R=` needs a `.fai` next to the FASTA. Picard needs a `.dict`. BAMmetrics checks the
   BAM `@SQ` lines against the `.fai` (names, lengths, order); Picard checks them against
   the dictionary.
 - BED interval files are read for `CollectHsMetrics` and `CollectTargetedPcrMetrics`, converted the way
@@ -501,7 +501,7 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
   to end and never open an index. Picard's `CollectVariantCallingMetrics` queries `INPUT`
   through its index for every contig of the header dictionary, so a `.vcf` without a
   `.idx`, or a `.vcf.gz` without a `.tbi`, fails there with `An index is required`; the
-  dbSNP file needs an index there only with `TARGET_INTERVALS`. bammetrics writes the files
+  dbSNP file needs an index there only with `TARGET_INTERVALS`. BAMmetrics writes the files
   the indexed run writes (`test_variant_calling_metrics_reads_an_unindexed_input`,
   `test_target_intervals_need_an_indexed_dbsnp`). The records visited are the same: a
   record on a contig the header lacks is skipped on both sides, and with
@@ -509,7 +509,7 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
   checks the index files exist when Picard does (`USE_VCF_INDEX`, `INTERVALS`) and then
   reads the files whole, so a sorted file gives Picard's order. Both VCF headers need
   `##contig` lines: Picard builds its contig order from them and fails with a
-  `NullPointerException` without; bammetrics exits 1 naming the file.
+  `NullPointerException` without; BAMmetrics exits 1 naming the file.
 - `CollectInsertSizeMetrics` has no reference argument, so it reads none.
 - `CollectWgsMetrics`, `CollectRawWgsMetrics` and `CollectWgsMetricsWithNonZeroCoverage`
   read `R=` through its `.fai`; Picard also needs the `.dict` next to it. `INTERVALS` takes
@@ -561,17 +561,17 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
   that `.dict`, Picard writes `LN:5` for a 12-base sequence and the MD5 of 5 bases.
   With a current `.fai` and no `.dict` both read the same bases (`test_options` on
   `indexed` and `bgzip_indexed`). Further sidecar cases, each exit 0 in Picard:
-  - An empty `.fai` gives Picard a dictionary of `@HD` alone; bammetrics writes every
+  - An empty `.fai` gives Picard a dictionary of `@HD` alone; BAMmetrics writes every
     sequence.
   - A `.fai` that lists fewer sequences than the FASTA drops the others in Picard.
   - The `.dict` beside the FASTA cuts each sequence to its `LN` whatever names it holds: a
     `.dict` of `SN:z LN:2` cuts sequence `a` to `LN:2`.
   - A corrupt `.fai` fails Picard after it has written `@HD`.
   - `samtools faidx` leaves a byte `0xA0` inside a sequence line out of the length, so
-    with that `.fai` Picard writes `LN:4` for `AC\xA0GT`. bammetrics counts it as a base
+    with that `.fai` Picard writes `LN:4` for `AC\xA0GT`. BAMmetrics counts it as a base
     (`LN:5`), as Picard does without a `.fai`.
 - `CreateSequenceDictionary` `R=` takes a file name. Picard 3.5.0 also takes a `file://`
-  URI there (`PicardHtsPath`) and writes the same `UR` as for the plain path; bammetrics
+  URI there (`PicardHtsPath`) and writes the same `UR` as for the plain path; BAMmetrics
   exits 1 (`No such file or directory`). `ALT_NAMES=file://...` fails in both tools.
 - `--arguments_file FILE` (Picard's options read from a file) is not read: every tool
   exits 1 with `option arguments_file is not implemented`.
@@ -584,15 +584,15 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
   `Could not locate class` here and `Could not get field with name ...` in Picard; both
   exit 1. The two `Iso8601Date` fields (`AUTOCALL_DATE` and `IMAGING_DATE` of
   `ArraysVariantCallingDetailMetrics`) are compared as their text.
-- `CompareMetrics` options parse as every bammetrics tool's do. A single-valued option
+- `CompareMetrics` options parse as every BAMmetrics tool's do. A single-valued option
   given twice (`O`, `OUTPUT_TABLE`, `IHD`, `VERBOSITY`, `R`) keeps the last value; Picard
   refuses it. A boolean takes `true` or `false` in any case, and anything else exits 1
   naming the option; Picard's parser reads any other text as false, so `IHD=yes` compares
   histograms there. A mix of `-I a` and `I=b` is read; Picard refuses the mix. The common options
-  bammetrics ignores are not checked: `COMPRESSION_LEVEL=99`, `MAX_RECORDS_IN_RAM=abc` and
+  BAMmetrics ignores are not checked: `COMPRESSION_LEVEL=99`, `MAX_RECORDS_IN_RAM=abc` and
   `VALIDATION_STRINGENCY=LOUD` exit 0 here and 1 in Picard, and `GA4GH_CLIENT_SECRETS` is
   accepted where Picard's `CompareMetrics` does not list it. `-h` and `--help` print the
-  bammetrics help and exit 0, where Picard prints its usage and exits 1; `--version` and
+  BAMmetrics help and exit 0, where Picard prints its usage and exits 1; `--version` and
   `--arguments_file` are not read.
 - `CompareMetrics` on the Picard face and `compare_metrics()` in Python write `OUTPUT` and
   `OUTPUT_TABLE` even when one names an `INPUT`, as Picard does, so the input is replaced.
@@ -601,8 +601,8 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
 
 ## Validation
 
-- bammetrics does not validate the records of a BAM or a CRAM. Where Picard's STRICT
-  validation aborts, for example on a read that runs off the end of a contig, bammetrics
+- BAMmetrics does not validate the records of a BAM or a CRAM. Where Picard's STRICT
+  validation aborts, for example on a read that runs off the end of a contig, BAMmetrics
   writes metrics. `AddOATag` writes its `OUTPUT` the same way: Picard at `STRICT` refuses
   an unmapped placed read with MAPQ 37, or a CIGAR whose length differs from `SEQ`. The
   `t0_asm` and `t0_hs` cases run Picard with `VALIDATION_STRINGENCY=SILENT` for this
@@ -621,7 +621,7 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
   shortest round-trip digits and ties by exact binary value. 200000 random doubles match
   the jar. Rust's `{:.6}` would differ in about 1% of values. A double exactly on a
   7th-decimal tie rounds down (`RoundingMode.HALF_DOWN`): Picard prints 123/128 as
-  `0.960937`. Up to 0.3.0 bammetrics rounded that case half-even (`0.960938`); random
+  `0.960937`. Up to 0.3.0 BAMmetrics rounded that case half-even (`0.960938`); random
   doubles never hit it, the `mix` alignment-summary cases did (`PCT_PF_READS`).
 - `HS_LIBRARY_SIZE`, `ESTIMATED_LIBRARY_SIZE` and the `CollectDuplicateMetrics` ROI
   histogram use Rust `f64::exp`. Java uses `Math.exp`. A last-ulp difference could
@@ -629,7 +629,7 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
 - `HET_SNP_SENSITIVITY` draws from a port of `java.util.Random(51)`, the stream Picard uses.
   It costs a fixed 0.7 s per `CollectHsMetrics` run.
 - A one-pair orientation prints SD `?` in both tools. The Python attribute is NaN.
-- `t2` carries 2% adapter read-through but PCT_ADAPTER is 0 in Picard and bammetrics.
+- `t2` carries 2% adapter read-through but PCT_ADAPTER is 0 in Picard and BAMmetrics.
   `AdapterUtility` matches read starts only. The `mix` BAM of
   `tests/concordance/asm_bams.py` has adapter dimers (unmapped, and MAPQ 0 forward and
   reverse reads that start with adapter); there PCT_ADAPTER is non-zero in both tools and
@@ -739,7 +739,7 @@ output reproduced from Picard 3.5.0, each checked by a case in
   3.5.0 at the first non-N locus that holds an alignment event: the tool keeps its own
   `WgsMetricsCollector` whatever the flag says, `doWork` still reads with the
   `EdgeReadIterator`, and the collector's `addInfo` casts each `EdgingRecordAndOffset` to
-  `SamLocusIterator.RecordAndOffset` (`ClassCastException`, no file). bammetrics exits 1
+  `SamLocusIterator.RecordAndOffset` (`ClassCastException`, no file). BAMmetrics exits 1
   and writes no file at the same locus (`test_non_zero_fast_algorithm_fails_in_both`, 6
   cases). A BAM in which no record reaches a locus completes in both tools with every depth
   0 (`test_non_zero_fast_algorithm_on_an_empty_bam`, `rl_empty` and `asm_empty`).
@@ -1026,11 +1026,11 @@ context whose reverse complement or bait-bias row is missing, which a `CONTEXTS_
 run leaves out (Picard: `NullPointerException`). The concordance module checks each.
 
 A unit whose reads all fail QC (`no PF_READS`) makes Picard throw and write no file, at any
-accumulation level. bammetrics exits 1 and writes no file; three concordance cases check
+accumulation level. BAMmetrics exits 1 and writes no file; three concordance cases check
 both tools fail (`test_no_pf_reads_fails_like_picard`).
 
 `CollectHsMetrics` with an empty quality distribution, zero target bases, or a base
-quality of 127 returns an error in bammetrics, where Picard fails; unit tests cover these.
+quality of 127 returns an error in BAMmetrics, where Picard fails; unit tests cover these.
 
 `CollectAlignmentSummaryMetrics` with `IS_BISULFITE_SEQUENCED=true` and a reference, on a
 read longer than its contig, returns a malformed-record error. Picard throws
@@ -1046,14 +1046,14 @@ Picard's `logCounter < 100` test does; a mapped one with alignment blocks is the
 in both tools.
 
 A CRAM without `R=` fails in both tools at the first slice that needs reference bases:
-Picard with `Failure getting reference bases for sequence chr1`, bammetrics with `the records
+Picard with `Failure getting reference bases for sequence chr1`, BAMmetrics with `the records
 on chr1 need reference bases: a CRAM input needs REFERENCE_SEQUENCE (R)`. A FASTA whose bases
 fail a slice's MD5 fails both (Picard: `The MD5 for the reference failed to validate`;
-bammetrics: `the MD5 of the reference bases does not match the CRAM slice`), and so does a
+BAMmetrics: `the MD5 of the reference bases does not match the CRAM slice`), and so does a
 FASTA without the CRAM's contig (`no contig chr1 in the reference`). Both exit 1 and write
 no file (`test_cram.py`). `qc` and `plan` refuse a CRAM without `-R` before the pass.
 A CRAM cut at a container boundary, so that it ends without its EOF container, fails in
-both tools (Picard: `RuntimeEOFException`; bammetrics: `truncated CRAM: the file ends
+both tools (Picard: `RuntimeEOFException`; BAMmetrics: `truncated CRAM: the file ends
 without its EOF container`); one cut inside a container fails in both (`truncated CRAM: the
 file ends inside a container`). A cut inside the EOF container itself is read to the end by
 both, since neither reads the EOF container's block.
@@ -1069,17 +1069,17 @@ written the `@HD` line and every `@SQ` line before the failing sequence by then 
 leaves that file; it deletes it only after an I/O or argument error. Both exit non-zero
 with the same message (`test_bad_fasta_fails_in_both`, `test_alt_name_errors`).
 With `CREATE_MD5_FILE=true` and a directory at `OUTPUT.md5`, Picard writes `OUTPUT` and
-then exits 1 (`Can't write to or close output file`); bammetrics exits 1 with that message
+then exits 1 (`Can't write to or close output file`); BAMmetrics exits 1 with that message
 before it writes anything (`test_md5_path_is_a_directory`).
 
 `CheckDuplicateMarking MODE=PRIMARY_PROPER_PAIR_ONLY` on an unpaired record exits 1 in both
 tools with `Inappropriate call if not paired read` (htsjdk's `getProperPairFlag`). Picard
 has opened `OUTPUT` before the first record and leaves the names written up to that
-record, after the warnings it logged; bammetrics writes no file and prints no log line.
+record, after the warnings it logged; BAMmetrics writes no file and prints no log line.
 A bad `MODE` exits 1 in both with `'X' is not a valid value for Mode.`; Picard follows it
 with its usage text. An `OUTPUT` whose directory does not exist exits 1 in both before the
 read with `Neither file nor parent directory exist.`; a missing `INPUT` exits 1 in both
-(Picard: `Cannot read non-existent file`; bammetrics: the path and `No such file or
+(Picard: `Cannot read non-existent file`; BAMmetrics: the path and `No such file or
 directory`).
 
 ## Threads
@@ -1097,14 +1097,14 @@ the differences below are on purpose or cannot be avoided.
 
 - `@PG`: the lines added carry the IDs and `PP` links Picard gives them, and the records'
   `PG` tags name them, so the records match. `VN` is `bammetrics` and its version (Picard
-  writes `3.5.0`) and `CL` is the bammetrics command line (`MarkDuplicates INPUT=in.bam
+  writes `3.5.0`) and `CL` is the BAMmetrics command line (`MarkDuplicates INPUT=in.bam
   OUTPUT=...`), not Picard's line with every default.
   `PROGRAM_GROUP_VERSION` and `PROGRAM_GROUP_COMMAND_LINE` set them as in Picard.
   Text from the command line (`COMMENT`, `PROGRAM_RECORD_ID`, `PROGRAM_GROUP_NAME`,
   `PROGRAM_GROUP_VERSION`, `PROGRAM_GROUP_COMMAND_LINE`) is written one byte per UTF-16
   unit, the low byte, as htsjdk writes a Java string: `COMMENT=café` becomes `caf` and
   the byte 0xE9 in both tools. An empty value (`PROGRAM_RECORD_ID=`) is the empty
-  string in bammetrics; Picard's parser takes the next argument as the value.
+  string in BAMmetrics; Picard's parser takes the next argument as the value.
 - Header values are copied byte for byte, UTF-8 letters and tabs in `@CO` included,
   as htsjdk copies them.
 - The `@HD` line gets `VN:1.6` whatever the input said, as htsjdk's BAM writer gives
@@ -1120,13 +1120,13 @@ the differences below are on purpose or cannot be avoided.
   tags were set or removed (always, under the default `CLEAR_DT=true`) is written with
   its tags in htsjdk's list order and integers in the smallest BAM type; any other
   record keeps its bytes, as htsjdk keeps them.
-- `CREATE_MD5_FILE` writes the MD5 of bammetrics' bytes. The index of `CREATE_INDEX` is
+- `CREATE_MD5_FILE` writes the MD5 of BAMmetrics' bytes. The index of `CREATE_INDEX` is
   the `.bai` Picard `BuildBamIndex` writes for those bytes, byte for byte
   (`crates/core/src/bai.rs`). Both are named as Picard names them (`OUT.bam.md5`,
   `OUT.bai`). Picard's own `CREATE_INDEX` file differs from its `BuildBamIndex` of the
   same BAM in one offset: the end of the last record of the file, when that record has a
   position. Picard's writer reports the offset inside the last block (`8374551:1514` on
-  corpus t2), its reader the EOF block after it (`8375239:0`). bammetrics writes the
+  corpus t2), its reader the EOF block after it (`8375239:0`). BAMmetrics writes the
   reader's value, so the `.bai` beside a BAM is always `BuildBamIndex` of that BAM.
 - `OUTPUT` is always BAM. A name ending in `.sam` or `.cram` exits 1 on the Picard face and 2 on the verb before anything is
   read (`bammetrics writes BAM only`); Picard writes SAM or CRAM by the extension.
@@ -1143,7 +1143,7 @@ the differences below are on purpose or cannot be avoided.
   created at the first spill, so a run that spills nothing never needs it. A pipe or
   standard input is copied there first, so it can be read twice; Picard cannot read one.
 - Spill files and the temporary `OUTPUT` are removed on SIGINT, SIGTERM and SIGHUP, as
-  Picard's `deleteOnExit` removes its own. bammetrics does not remove directories that
+  Picard's `deleteOnExit` removes its own. BAMmetrics does not remove directories that
   other runs left after a SIGKILL: a `TMP_DIR` shared between hosts holds directories
   of processes this host cannot see.
 - The flow-based options (`FLOW_MODE` and the other `FLOW_*`) are accepted at their
@@ -1154,19 +1154,19 @@ the differences below are on purpose or cannot be avoided.
   `\b`, `\p{Alpha}`, alternation and lazy quantifiers. Look-ahead, look-behind and
   `\Q...\E` exit 1 (`regex parse error`), where Picard runs.
 - Booleans take `true` or `false` in any case. Picard reads any other word
-  (`REMOVE_DUPLICATES=yes`) as false; bammetrics exits 1, so a misspelt `true` never
+  (`REMOVE_DUPLICATES=yes`) as false; BAMmetrics exits 1, so a misspelt `true` never
   turns an option off.
 - SAM text input is read (section SAM text) and `VALIDATION_STRINGENCY` applies to it.
   `OUTPUT` is a BAM: a name ending in `.sam` or `.cram` exits 1, where Picard writes
   that kind.
 - CRAM input: htsjdk rebuilds `MD` and `NM` on each mapped record that lacks them while
-  it decodes, and gives every record its tags in list order. bammetrics computes both
+  it decodes, and gives every record its tags in list order. BAMmetrics computes both
   from the reference given with `R=`, so the records match Picard's (`test_cram`).
   The last two contigs are held in memory, so a query-name sorted CRAM reloads contigs
   often.
 - CRAM input with adjacent deletions. A BAM CIGAR `2S50D36D60M` stored in a CRAM holds
   two deletion features; both decoders give the CIGAR `2S86D60M`. htsjdk builds `MD` from
-  the features (`0^<50 bases>0^<36 bases>60`, as samtools does); bammetrics builds it
+  the features (`0^<50 bases>0^<36 bases>60`, as samtools does); BAMmetrics builds it
   from the decoded CIGAR (`0^<86 bases>60`). `NM` agrees. `ViewSam`, `CleanSam` and every
   other tool that writes a CRAM's records differ in that tag (26 of 1942 records of one
   probe file).
@@ -1188,19 +1188,19 @@ the differences below are on purpose or cannot be avoided.
   one file, exits 1 before anything is read; Picard writes over the input and destroys
   it. The verb exits 2 for the same.
 - A record with more than 65,535 CIGAR operations keeps its real CIGAR in the `CG`
-  tag; htsjdk reads that one, bammetrics reads the placeholder in the record, so such a
+  tag; htsjdk reads that one, BAMmetrics reads the placeholder in the record, so such a
   read's unclipped 5' end can differ. SAM text holds the CIGAR of the tag, as Picard's
   does (`ViewSam`, `SamFormatConverter`). One such read, of 70,000 operators, is in
   `tests/concordance/cram_bams.py`; none is in the `MarkDuplicates` harness.
 - Picard 3.5.0 accepts every combination of `REMOVE_DUPLICATES`,
-  `REMOVE_SEQUENCING_DUPLICATES` and `TAGGING_POLICY`; so does bammetrics, and the
+  `REMOVE_SEQUENCING_DUPLICATES` and `TAGGING_POLICY`; so does BAMmetrics, and the
   harness compares each.
 
 ## Chains
 
 `bammetrics chain` ([docs/chaining.md](docs/chaining.md)) runs `mark-duplicates`, one-pass
 tools and `write` in one process. Picard has no chain, so the reference is the staged
-sequence of the same bammetrics tools: `MarkDuplicates` to a file, then each tool on that
+sequence of the same BAMmetrics tools: `MarkDuplicates` to a file, then each tool on that
 file. `crates/cli/tests/chain.rs` compares the two on the fixture, corpus t1 and the
 foundation corpus: every metrics file after its `StringHeader` lines and every BAM record
 are equal byte for byte. A chain without a transform writes the metrics files `qc` writes,
@@ -1271,15 +1271,15 @@ as htsjdk's `SAMTextReader` reads it (`crates/core/src/sam_text.rs`). Each line 
 the record htsjdk's `BAMRecordCodec` writes for it, so a tool sees a SAM file as it sees
 the BAM Picard makes of it. `tests/concordance/test_view_sam.py` compares 15 valid and
 40 bad lines, each at `STRICT`, `LENIENT` and `SILENT`, and 8 lines of the second item
-below. bammetrics differs here:
+below. BAMmetrics differs here:
 
 - What a file is. htsjdk reads any file that is no BAM, no CRAM and no gzip file as SAM
-  text, an empty file included (an empty SAM: `ViewSam` prints `@HD VN:1.6`). bammetrics
+  text, an empty file included (an empty SAM: `ViewSam` prints `@HD VN:1.6`). BAMmetrics
   reads it as SAM text when it starts with `@` or with a line of at least 11
   tab-separated fields. Any other file exits 1 (`not a BAM or CRAM file (and not SAM
   text: ...)`), where Picard fails later with `Not enough fields`. An empty file exits 1.
 - A record a BAM cannot hold. Under `LENIENT` or `SILENT` htsjdk keeps a bad field as
-  text and `ViewSam` prints it back. bammetrics holds BAM records, as Picard does once it
+  text and `ViewSam` prints it back. BAMmetrics holds BAM records, as Picard does once it
   writes a BAM. A reference name the header lacks is read as no reference (`*`). A base
   outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` outside 0 to 255 keeps its low byte, a
   flag above 65535 its low 16 bits. A tool that writes these records (`SortSam`,
@@ -1288,7 +1288,7 @@ below. bammetrics differs here:
   written as ubyte`, `Bad base passed to charToCompressedBaseHigh`, `Reference index for
   nope not found in sequence dictionary` (for `RNAME` and `RNEXT`). A negative `MAPQ` passes
   `STRICT` in htsjdk (it checks only `MAPQ < 256`), so `ViewSam` and a SAM `SortSam` print
-  `-1` at every stringency where bammetrics prints `255`. These are errors at every stringency: a `QUAL` whose
+  `-1` at every stringency where BAMmetrics prints `255`. These are errors at every stringency: a `QUAL` whose
   length differs from `SEQ`, a `QUAL` without `SEQ`, a CIGAR that does not parse (htsjdk
   reads one under `SILENT`). Those fail at `STRICT` in htsjdk too. Two more are errors
   here at every stringency and read by htsjdk at every stringency, `STRICT` included
@@ -1303,32 +1303,32 @@ below. bammetrics differs here:
   header. @RG line missing SM tag. Line: ...`. Under `LENIENT` the warnings start with
   `Ignoring SAM validation error`, as htsjdk's do; a header warning lacks the
   `ERROR::TYPE:` prefix htsjdk prints. htsjdk reports one `ADJACENT_INDEL_IN_CIGAR`
-  warning per pair of `I` or `D` operators with no `M` or `N` between them; bammetrics
+  warning per pair of `I` or `D` operators with no `M` or `N` between them; BAMmetrics
   reports the first 100 of a record. A line over 1 GiB is an error.
-- The header. bammetrics hands the lines htsjdk keeps to the noodles parser, as it does
+- The header. BAMmetrics hands the lines htsjdk keeps to the noodles parser, as it does
   for a BAM header, so a header noodles refuses fails here where htsjdk reads it: an
   `@HD VN` that is not `major.minor`, two `@HD` lines, an `@CO` line without a tab. An
   `@RG DT` value is not parsed as a date: an unparseable one passes at `STRICT`. Five
   `@SQ` and `@RG` shapes differ at every stringency (Picard 3.5.0 `ViewSam`, probed once):
-  two `@RG` lines with one `ID` (htsjdk keeps both, bammetrics exits 1); an `@SQ LN:0`
+  two `@RG` lines with one `ID` (htsjdk keeps both, BAMmetrics exits 1); an `@SQ LN:0`
   (htsjdk reads the header and fails a record on it at `STRICT` with
-  `CIGAR_MAPS_OFF_REFERENCE`, bammetrics exits 1 at the header); an `@SQ LN` above
+  `CIGAR_MAPS_OFF_REFERENCE`, BAMmetrics exits 1 at the header); an `@SQ LN` above
   2147483647, an `@SQ SN` outside the SAM name pattern (`*x`), and an `@SQ AN` alias
   another line already holds (htsjdk exits 1 with `NumberFormatException`,
-  `SAMException` and `IllegalArgumentException`; bammetrics reads all three).
+  `SAMException` and `IllegalArgumentException`; BAMmetrics reads all three).
 - `@RG DT` on output. htsjdk parses the date and writes it back in the JVM's time zone
   (`2020-01-02T03:04:05+0000` becomes `2020-01-01T20:04:05-0700` in Mountain time).
-  bammetrics writes the value it read. `ViewSam` and `write x.sam` differ from Picard in
+  BAMmetrics writes the value it read. `ViewSam` and `write x.sam` differ from Picard in
   that field only.
 - Characters outside ASCII. htsjdk decodes SAM text as UTF-8 and writes the low byte of
-  each UTF-16 code unit, so `é` (bytes `C3 A9`) comes out as the byte `E9`. bammetrics
+  each UTF-16 code unit, so `é` (bytes `C3 A9`) comes out as the byte `E9`. BAMmetrics
   does the same. htsjdk orders such names by code unit while they are in memory;
-  bammetrics orders the bytes it holds, which differs for characters above U+00FF.
+  BAMmetrics orders the bytes it holds, which differs for characters above U+00FF.
   `CompareSAMs` alone compares names and header values as the file spells them.
 - A header line is split into its fields after it is decoded, as htsjdk splits it, so a
   character whose low byte is a tab or a colon (U+0109, U+013A) stays inside its value.
   Where that low byte is a tab, a line end or a NUL (U+0109, U+010A, U+010D, U+0100 and
-  the like), bammetrics holds `?` for it. htsjdk writes the byte itself into a BAM header
+  the like), BAMmetrics holds `?` for it. htsjdk writes the byte itself into a BAM header
   or `ViewSam` text, which then has a field or a line more than the SAM text had. The
   header text of a CRAM, which htsjdk also decodes as UTF-8, is held the same way
   (`test_cram_header_text.py`).
@@ -1349,13 +1349,13 @@ tiers, the exome slice, CRAM 3.0 and SAM text (`tests/concordance/test_view_sam.
 differs here:
 
 - Picard validates every BAM record at the default `STRICT` and stops at the first one
-  it refuses (the foundation corpus holds a supplementary unmapped record). bammetrics
+  it refuses (the foundation corpus holds a supplementary unmapped record). BAMmetrics
   validates SAM text only (section Validation), so it prints every record of a BAM. The
   harness runs Picard with `SILENT` on BAM and CRAM input.
 - `INTERVAL_LIST`. Picard queries the index when one sits beside the input and scans
   otherwise. The two paths keep different records (an unmapped record placed with its
   mate matches the query and never the scan; the scan stops after the last interval).
-  bammetrics opens no index: it looks for the index as htsjdk does, then reads the whole
+  BAMmetrics opens no index: it looks for the index as htsjdk does, then reads the whole
   file with the test of the path Picard would take. On a coordinate-sorted file the
   records are Picard's. On a file whose index does not describe it they are not.
 - `INTERVAL_LIST` must be an interval list. Its intervals must come in the order of the
@@ -1376,7 +1376,7 @@ differs here:
 An `OUTPUT` whose name ends in `.cram`, lower case, is a CRAM 3.0 against
 `REFERENCE_SEQUENCE` (`crates/core/src/cram_writer.rs`): for `SortSam`, `MarkDuplicates`,
 the record-editing tools that rewrite their records, and the chain `write` step. samtools
-1.25, Picard 3.5.0 and bammetrics read it to the header and the records of the BAM the
+1.25, Picard 3.5.0 and BAMmetrics read it to the header and the records of the BAM the
 same command writes (`tests/concordance/test_cram_writer.py`: `SortSam`, `MergeSamFiles`,
 `MarkDuplicates`, `AddOrReplaceReadGroups`, `CleanSam`, `DownsampleSam` and the chain
 `write` step; `AddOATag` in its own module). The nine other record-editing tools are read
@@ -1388,27 +1388,27 @@ and no unsorted stream was written at scale.
 
 It differs from the CRAM Picard writes:
 
-- Version. Picard writes CRAM 3.1, bammetrics CRAM 3.0.
+- Version. Picard writes CRAM 3.1, BAMmetrics CRAM 3.0.
 - `CREATE_INDEX` is a usage error. Picard writes `<CRAM>.bai`, a BAI over the slices, and
   for another order than coordinate fails after it made both files. `samtools index`
   writes a `.crai` of either file.
-- Tags. bammetrics stores every tag where the BAM has it. Picard's CRAM leaves `MD` and
+- Tags. BAMmetrics stores every tag where the BAM has it. Picard's CRAM leaves `MD` and
   `NM` out, so a reader rebuilds them, gives the tags back in another order, and drops an
   `RG` that names no `@RG` line of the header.
-- Mates. bammetrics stores each record's own mate fields. Picard's CRAM of a file in which
+- Mates. BAMmetrics stores each record's own mate fields. Picard's CRAM of a file in which
   read names repeat (the foundation corpus merged with itself) reads with the
   mate-unmapped flag set on 314 of 25,836 records whose record in Picard's BAM lacks it.
-- A `B:C`, `B:S` or `B:I` array. bammetrics stores the unsigned subtype; samtools reads
+- A `B:C`, `B:S` or `B:I` array. BAMmetrics stores the unsigned subtype; samtools reads
   `B:c`, `B:s`, `B:i` from Picard's CRAM.
-- A read past the end of its contig. bammetrics stores each base past the end. From
+- A read past the end of its contig. BAMmetrics stores each base past the end. From
   Picard's CRAM samtools warns `Ref pos outside of ref sequence boundary`, and for one
   such read rebuilds another `MD` than from its own CRAM of the record; Picard rebuilds an
   empty `MD` from it.
-- `COMPRESSION_LEVEL` sets the gzip level of bammetrics' blocks. Picard's CRAM is the same
+- `COMPRESSION_LEVEL` sets the gzip level of BAMmetrics' blocks. Picard's CRAM is the same
   size at levels 0 and 9.
 - No reference. Both fail at the first record with a reference sequence (`A reference
   must be supplied that includes the reference sequence for <name>.`, exit 1) and both
-  write unplaced records alone without one. bammetrics leaves no file where Picard leaves
+  write unplaced records alone without one. BAMmetrics leaves no file where Picard leaves
   an empty one. A chain that writes a CRAM without `-R` exits 2 before the first read.
 - A block copy (`AddCommentsToBam`, `ReplaceSamHeader` of a BAM, `GatherBamFiles` of BAMs)
   refuses a `.cram` name: Picard writes BAM bytes under it. `out.CRAM` is a BAM in both.
@@ -1416,46 +1416,46 @@ It differs from the CRAM Picard writes:
   may hold more contigs, in another order, a contig longer than its `@SQ` line, and may
   lack a contig no record lies on. Both fail on a record whose contig the FASTA lacks, with
   one sentence (`A reference must be supplied (reference sequence SAMSequenceRecord(name=...)
-  not found).`). Picard also takes `chr1` of the FASTA for `1` of the header. bammetrics
+  not found).`). Picard also takes `chr1` of the FASTA for `1` of the header. BAMmetrics
   fails there with that sentence: samtools reads no record of the CRAM Picard wrote that
   way (`Reference file given, but ref '1' not present`).
-- Two records Picard's CRAM writer fails on, and bammetrics writes as samtools does. A read
+- Two records Picard's CRAM writer fails on, and BAMmetrics writes as samtools does. A read
   that starts past the end of its contig (`Requested start 100000 is beyond the sequence
   length chr1`): every base is stored. An unmapped record with a CIGAR (`9 > 0`): the CRAM
   holds neither its CIGAR nor its mapping quality.
-- A mate reference index the header lacks fails in both (bammetrics: `record <name>: mate
+- A mate reference index the header lacks fails in both (BAMmetrics: `record <name>: mate
   reference index 7 is not in the header`). No reader opens a CRAM that holds one.
 - A mapped record without bases (SEQ `*`) whose CIGAR covers more than 16 Mi read bases
-  fails bammetrics' CRAM writer, naming it (docs/07 D223): the CRAM holds an `N` and a
+  fails BAMmetrics' CRAM writer, naming it (docs/07 D223): the CRAM holds an `N` and a
   missing quality for each. Picard writes it.
-- CIGAR operators of length 0. bammetrics' CRAM leaves each out, so `5M0D5M` reads back
+- CIGAR operators of length 0. BAMmetrics' CRAM leaves each out, so `5M0D5M` reads back
   `10M`. Picard's leaves out `0I` and `0H` alone: samtools reads its `5M0D5M` as `5M5M`
   and fails on the slice of its `10M0S`.
-- Tag texts. bammetrics stores a `Z` or `H` value as the bytes of the BAM. Picard's CRAM
+- Tag texts. BAMmetrics stores a `Z` or `H` value as the bytes of the BAM. Picard's CRAM
   holds an `H` as a `B:c` array (`X5:H:1AE301` reads `X5:B:c,26,-29,1`) and each byte of a
   `Z` over 127 as `?` (`café` in UTF-8 reads `caf??`).
 - Header text that is not ASCII. Both store the header as UTF-8 of the characters htsjdk
   holds: one per byte of a BAM header, so a BAM's `DS:café über` in UTF-8 reads under
   samtools as `DS:cafÃ© Ã¼ber` from either CRAM, and one per character of SAM text. A
-  character above U+00FF in SAM text differs: bammetrics holds its low byte (`✓`, U+2713,
+  character above U+00FF in SAM text differs: BAMmetrics holds its low byte (`✓`, U+2713,
   as 0x13) and stores that, where Picard stores the character's UTF-8 (docs/07 D218).
   Both readers read a CRAM header as UTF-8, one byte per character after.
 - Slices. Both end a slice at 10,000 records, or at 1,000 at a change of reference.
-  bammetrics also ends one at 8 MiB of BAM records, so a container of long reads is no
+  BAMmetrics also ends one at 8 MiB of BAM records, so a container of long reads is no
   larger than one of short reads: Picard's holds 10,000 reads of any length.
 
-A reader does not give these back from a CRAM, bammetrics' or samtools' own:
+A reader does not give these back from a CRAM, BAMmetrics' or samtools' own:
 
 - `=` and `X` operators and neighbouring `M` operators are read as one `M`. An unmapped
   record keeps neither its CIGAR nor its mapping quality.
 - The mate reference and mate start of a record without the paired flag: samtools reads
-  the reference as `*`, Picard and bammetrics both as `*` and 0. The template length
+  the reference as `*`, Picard and BAMmetrics both as `*` and 0. The template length
   stays.
-- Picard, and bammetrics' reader after it, read an unsigned `B` array as signed.
+- Picard, and BAMmetrics' reader after it, read an unsigned `B` array as signed.
 - `NM` of a record whose insertion follows the last reference base its slice spans:
-  htsjdk rebuilds `NM` against that span and leaves the insertion out, bammetrics counts
+  htsjdk rebuilds `NM` against that span and leaves the insertion out, BAMmetrics counts
   it. The `1M1I` x 35,000 read of `cram_bams.py` gets 34,999 from Picard and 35,000 from
-  bammetrics, from samtools' CRAM and bammetrics' alike; `MD` is equal.
+  BAMmetrics, from samtools' CRAM and BAMmetrics' alike; `MD` is equal.
 - A deletion that runs past the end of its contig: `samtools view` fails on the slice
   unless it is given `--input-fmt-option decode_md=0`. Picard reads it.
 
@@ -1469,7 +1469,7 @@ differs here:
 
 - An `OUTPUT` ending in `.cram` is a CRAM, which differs from the one Picard writes (section CRAM output).
 - Records with equal keys keep their input order through every merge, as htsjdk's
-  `SortingCollection` keeps them. bammetrics merges at most 64 run files at once and
+  `SortingCollection` keeps them. BAMmetrics merges at most 64 run files at once and
   merges consecutive runs first when there are more; htsjdk opens every run file at once.
   For a total order the records are the same.
 - Records flagged both first and second of a pair make the queryname order not total.
@@ -1478,13 +1478,13 @@ differs here:
   runs merge through a port of Java's `TreeSet`, keyed by the head record and then the
   run index as htsjdk's `SortingCollection` keys it, so with 64 runs or fewer the order is
   Picard's (300 records in runs of 7, 43 runs, byte for byte; 3000 records with 18 flag
-  shapes at 30, 60 and 64 runs). With more than 64 runs bammetrics merges groups of 64
+  shapes at 30, 60 and 64 runs). With more than 64 runs BAMmetrics merges groups of 64
   first, where htsjdk merges every run at once, and the two merges take different records
   first; both write the same records (300 records in runs of 3, `test_sort_sam.py`).
   `CheckDuplicateMarking` sorts the same way and gives Picard's lines on 20 such records
   in runs of 3. A run of more than 8192 records sorts in Java through `Arrays.parallelSort`,
   whose fork-join merge differs from `TimSort` for such records on a machine with more
-  than one core; bammetrics sorts every run with the `TimSort` port. Those orders were
+  than one core; BAMmetrics sorts every run with the `TimSort` port. Those orders were
   not compared.
 - Sorted runs spill to `TMP_DIR` as BGZF level 3, not as htsjdk's temporary files. Picard's
   log lines (`Finished reading inputs`, the progress lines) are not printed.
@@ -1496,7 +1496,7 @@ SAM text, BAM and CRAM (`tests/concordance/test_sam_format_converter.py`): SAM t
 for byte, a BAM's header and records as samtools prints them and its records as bytes,
 a CRAM decoded to the records of Picard's BAM of the same source. It differs here:
 
-- A CRAM `OUTPUT` is bammetrics' CRAM (section CRAM output): version 3.0, every tag
+- A CRAM `OUTPUT` is BAMmetrics' CRAM (section CRAM output): version 3.0, every tag
   stored, `CREATE_INDEX` refused.
 - `OUTPUT` naming the input exits before the first read (2 on the verb, 1 on the Picard
   face). Picard opens the output over its input: a BAM read in place fails and is left
@@ -1504,7 +1504,7 @@ a CRAM decoded to the records of Picard's BAM of the same source. It differs her
 - `CREATE_INDEX` on a header whose `SO` is not `coordinate` exits 1 with Picard's
   sentence, before any file is made. Picard throws after it made `OUTPUT`, and leaves an
   empty BAM or a SAM header behind.
-- A CRAM out or in without `REFERENCE_SEQUENCE` fails in both; bammetrics leaves no file
+- A CRAM out or in without `REFERENCE_SEQUENCE` fails in both; BAMmetrics leaves no file
   where Picard leaves an empty one.
 - Not a chain step: the `write` step converts (`+ write out.sam`).
 - A BAM cut inside its records exits 1 (`truncated BAM`) and writes nothing. Picard exits
@@ -1512,20 +1512,20 @@ a CRAM decoded to the records of Picard's BAM of the same source. It differs her
   its 5 header lines and no record. Bytes after the end-of-file block (zeros, `0xFF`, a
   gzip member, a cut block header, random bytes) are read by neither tool, as htsjdk
   stops at an empty block (docs/07 D229). An empty block followed by a whole block is
-  read on by bammetrics (section BuildBamIndex).
+  read on by BAMmetrics (section BuildBamIndex).
 - A header with two `@RG` lines of one `ID` exits 1 (`duplicate read group ID`) and
   writes nothing, from SAM text, a BAM or a CRAM. Picard writes both lines (docs/07
-  D230). Every bammetrics tool refuses such a header.
+  D230). Every BAMmetrics tool refuses such a header.
 - A mapped record without bases (SEQ `*`, CIGAR `100M`) in a CRAM: Picard reads its own
-  CRAM of it as `0M`; Picard and samtools read bammetrics' as `100M`, and samtools reads
+  CRAM of it as `0M`; Picard and samtools read BAMmetrics' as `100M`, and samtools reads
   Picard's as `100M` (docs/07 D231).
 - A CRAM read with a FASTA whose contig is shorter than its `@SQ` length exits 1 naming
   both lengths (docs/07 D52), also when every read lies inside the FASTA's contig.
   Picard converts it.
 - `MD` and `NM` of a CRAM input come from `REFERENCE_SEQUENCE` alone (docs/07 D232).
   samtools' CRAM with `embed_ref=1` read without `R=`: Picard rebuilds both from the
-  embedded reference, bammetrics writes neither (33 of the 36 records of `markdup.bam`).
-  With `no_ref=1` and `R=`: Picard writes neither, bammetrics both. The records are
+  embedded reference, BAMmetrics writes neither (33 of the 36 records of `markdup.bam`).
+  With `no_ref=1` and `R=`: Picard writes neither, BAMmetrics both. The records are
   equal.
 
 ## AddCommentsToBam and ReplaceSamHeader
@@ -1694,11 +1694,11 @@ decisions D53 to D57):
 - `SORT_ORDER=unknown` over two records or more exits 1 and writes nothing. Picard throws a
   `ClassCastException` at close and leaves an `OUTPUT` of 0 bytes.
 - `RevertOriginalBaseQualitiesAndAddMateCigar` decides its early exit from the records of
-  its one read. Picard opens `INPUT` a second time, so it fails on a pipe; bammetrics reads
+  its one read. Picard opens `INPUT` a second time, so it fails on a pipe; BAMmetrics reads
   one. A skipped run says Picard's line on standard error and writes nothing, as Picard.
 - A queryname sort of more than 64 runs (`MAX_RECORDS_IN_RAM` times 64 records) of paired
   records flagged neither first nor second can order them differently, as in `SortSam`
-  (section SortSam): bammetrics merges 64 runs into one as they spill, htsjdk merges every
+  (section SortSam): BAMmetrics merges 64 runs into one as they spill, htsjdk merges every
   run at once.
 - A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
   `RevertOriginalBaseQualitiesAndAddMateCigar`, whose `CREATE_INDEX` defaults to true,
@@ -1723,9 +1723,9 @@ are open at once, and a file closed to make room ends its block early. They diff
 - Two libraries whose safe names are one file (`a b` and `a_b`), a library named
   `unknown` beside records without a library, or library names that differ in case only
   on a file system that ignores case: Picard writes one file over the other and exits 0;
-  bammetrics exits 1 and leaves none of the split's files.
+  BAMmetrics exits 1 and leaves none of the split's files.
 - A record whose `RG` names no header read group: Picard fails at `STRICT` after some
-  files are written; bammetrics validates no BAM record and writes it to `unknown.bam`,
+  files are written; BAMmetrics validates no BAM record and writes it to `unknown.bam`,
   as Picard does at `SILENT`.
 - A run that fails leaves none of its files. Picard leaves the files it opened.
 - A split writes at most 100,000 files: the run that would make the 100,001st exits 1 and leaves none. A count above 100,000 is taken when the records give fewer files.
@@ -1749,7 +1749,7 @@ foundation corpora, SAM text and CRAM (`tests/concordance/test_quality_yield_s_n
   `NullPointerException`.
 - A duplicate set of 32 records or more whose records htsjdk's comparator cannot order (a
   record flagged both first and second of a pair) may make Picard's `Collections.sort`
-  throw; bammetrics counts the set. Picard's check that the sorted set starts with its
+  throw; BAMmetrics counts the set. Picard's check that the sorted set starts with its
   representative is not repeated: it holds for every order htsjdk can sort.
 - An SNVQ tag of SAM text with a character above U+00FF is held as the low byte of each
   UTF-16 unit (section SAM text), so the positions after it are not the ones Picard reads.
@@ -1765,7 +1765,7 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
 
 - `##imagingDate` is read with the `AM` and `PM` markers GtcToVcf writes. Picard reads the
   markers of the JVM's locale: an `en_CA` JVM takes `a.m.` and `p.m.` and fails on `AM`
-  with `Unrecognized date`; bammetrics reads `AM` and refuses `a.m.`. The concordance
+  with `Unrecognized date`; BAMmetrics reads `AM` and refuses `a.m.`. The concordance
   module runs Picard with `-Duser.language=en -Duser.country=US`.
 - `##imagingDate` is New York time from the US daylight-saving rules of 1967 on; a date
   before 1967 exits 1. Picard takes any date from the JVM's time zone data.
@@ -1781,21 +1781,21 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   sites may set at most 2,097,152 pages of 4,096 positions (1 GiB of bit set). Each cap
   exits 1 naming it.
 - A tab or line end in a header value exits 1 in both. Picard leaves an empty
-  `.arrays_variant_calling_detail_metrics` behind; bammetrics checks every cell before the
+  `.arrays_variant_calling_detail_metrics` behind; BAMmetrics checks every cell before the
   first file and leaves none.
 - A date more than 292,000,000 years from 1970 exits 1. Java's `long` millisecond count
   wraps there, and Picard prints the wrapped date.
 - Picard writes the detail rows in the order of a `HashMap` filled in reverse header order.
   When more than 8 sample names fall in one bin of a table of 64 bins or more (11 names
   of one hash code, such as `AaAa`, `AaBB`, `BBAa`), Java turns the bin into a tree whose
-  order is not modelled: bammetrics exits 1, Picard writes the files.
+  order is not modelled: BAMmetrics exits 1, Picard writes the files.
 - The VCF reader (noodles) refuses files htsjdk reads: an `##` line without `=`, an
   `##INFO` line without `Description`, a repeated `##FORMAT`, `##FILTER` or `##contig` ID,
   a malformed `##PEDIGREE` or `##META` line, a genotype of `''`, `0/` or `/0`, a record
   with a trailing tab or more genotype columns than samples, a repeated sample name, and a
   byte that is not UTF-8 in a header value or a record ID. Each exits 1 with no file.
   GtcToVcf writes none of them.
-- bammetrics reads files Picard refuses: a `#CHROM` line with `FORMAT` and no sample, a
+- BAMmetrics reads files Picard refuses: a `#CHROM` line with `FORMAT` and no sample, a
   `##fileformat` of `VCFv3.3` or `VCFv9.9`, a `FILTER` value of `0`,
   with a space or with an empty name (`DUPE;;ZEROED_OUT_ASSAY`), and a record whose
   alleles repeat (`A>A`, `A>T,T`) in `INPUT` or `DBSNP`. Each gives the files where Picard
@@ -1836,7 +1836,7 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   whatever its name, where Picard goes by the `.gz` name.
 - A boolean option of `IntervalListTools`, `IntervalListToBed` or `VcfToIntervalList`
   given another word than `true` or `false` (`UNIQUE=T`, `SORT=maybe`,
-  `INCLUDE_FILTERED=yes`) is a usage error, as on every bammetrics tool; Picard's legacy
+  `INCLUDE_FILTERED=yes`) is a usage error, as on every BAMmetrics tool; Picard's legacy
   parser reads it as false. `true` and `false` are read in any case.
 - A VCF header of more than 64 MiB is refused with exit 1. Picard reads it while its
   memory lasts.
@@ -1859,7 +1859,7 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   `O=/dev/stdout` or `-o -` the list is made in the system temporary directory and copied
   to standard output once the walk has finished, so a failed run prints nothing.
 - The Picard face of `NonNFastaSize` without `OUTPUT` prints the count on standard
-  output, as every bammetrics tool does; Picard requires `OUTPUT`.
+  output, as every BAMmetrics tool does; Picard requires `OUTPUT`.
 - `ScatterIntervalsByNs` writes an `OUTPUT` named `.gz` as BGZF, as the interval layer
   writes every interval list (above).
 - Same as Picard: a `.dict` line with bytes that are not UTF-8 is decoded as the JDK
@@ -1896,7 +1896,7 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   beside the input and renames them over it, keeping its mode and any symbolic link to
   it. Picard moves the input to `<input>.old` first (and fails when that name exists),
   writes a new file of the default mode, and leaves the index and MD5 under its temporary
-  name (`x.bam.being_fixed.<n>bam.md5`) with a warning; bammetrics writes `x.bai` and
+  name (`x.bam.being_fixed.<n>bam.md5`) with a warning; BAMmetrics writes `x.bai` and
   `x.bam.md5`. An input that is SAM text, a CRAM, a BAM named `.sam` or `.cram`, or not a
   regular file is a usage error without `OUTPUT` (exit 2 on the verb, 1 on the Picard
   face): Picard writes BAM bytes under that name.
@@ -1914,14 +1914,14 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   is a usage error (exit 2 on the verb, 1 on the Picard face).
 - `FilterSamReads` compares a read list name with a record name byte for byte, a name of
   the list decoded as UTF-8 and each character at most U+00FF taken as one byte. A SAM text
-  record whose name holds a character above U+00FF keeps its low byte (as every bammetrics
+  record whose name holds a character above U+00FF keeps its low byte (as every BAMmetrics
   tool reads SAM text), so no list name matches it; Picard compares the Java strings.
 - `FILTER=includeJavascript` and `JAVASCRIPT_FILE` are a usage error (exit 2 on the verb, 1 on
   the Picard face; docs/07 Q6).
 
 ## DownsampleSam and PositionBasedDownsampleSam
 
-- The `@PG` line holds the bammetrics command line (`CL`) and version (`VN:bammetrics
+- The `@PG` line holds the BAMmetrics command line (`CL`) and version (`VN:bammetrics
   <version>`); its `ID`, `PN`, `rs` and the absence of `PP` are Picard's. The harness
   compares the `@PG` IDs and PP.
 - `DownsampleSam RANDOM_SEED=null` draws its seed from the clock and the process id, where
@@ -1932,7 +1932,7 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   that names `STRATEGY=ConstantMemory`, which holds none. Picard holds every name until
   the JVM runs out of memory (docs/07 D138).
 - A read name from SAM text with a character above U+00FF is hashed (ConstantMemory) and
-  ordered (HighAccuracy) by the low byte of each UTF-16 unit, as bammetrics holds SAM
+  ordered (HighAccuracy) by the low byte of each UTF-16 unit, as BAMmetrics holds SAM
   text; Picard uses the whole unit. The SAM specification allows printable ASCII in a
   name, where the two agree.
 - A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
@@ -1961,7 +1961,7 @@ Picard behavior kept, each checked against Picard 3.5.0
   differs from itself (the foundation corpus does, by its 32 QC-failed copies).
 - A queryname-sorted pair whose right file ends before the left exits 1 with no result.
   Picard counts the left records that remain and then reads the current record of the
-  ended left file, which throws (`Cannot call next() on exhausted iterator`). bammetrics
+  ended left file, which throws (`Cannot call next() on exhausted iterator`). BAMmetrics
   exits 1 there with an error that says so.
 - The queryname walk merges by name in byte order, then unpaired, first, second. A file
   in `samtools sort -n` order (its natural order) is not in that order where the two
@@ -1989,14 +1989,14 @@ Picard behavior kept, each checked against Picard 3.5.0
   text that spells `é` name two reads; a BAM that holds the byte `E9` and that SAM text
   name one. The queryname walk orders names as `String.compareTo` does, by UTF-16 unit.
 
-Where bammetrics differs:
+Where BAMmetrics differs:
 
 - A BAM or a CRAM is not validated, as for every tool: Picard's default `STRICT` stops
   at a record it finds invalid, so the harness runs Picard with
   `VALIDATION_STRINGENCY=SILENT`. SAM text is checked at the stringency given.
 - The header of a BAM or a CRAM is read by noodles and is not checked at the stringency
   given. Picard's default `STRICT` refuses a BAM header with an `SO` value htsjdk does not
-  know; bammetrics prints the difference with `unknown`, as Picard does at `SILENT`.
+  know; BAMmetrics prints the difference with `unknown`, as Picard does at `SILENT`.
 - Three header shapes htsjdk reads and noodles refuses exit 1 (`not a BAM or CRAM file`
   for a BAM, `cannot be read` for SAM text): an `@HD VN` that is not `MAJOR.MINOR`
   (`1.6.1`; Picard prints `File format version differs.` at every stringency), and, in a
@@ -2024,7 +2024,7 @@ Where bammetrics differs:
   `MC`, 418 bytes), where Picard holds the `SAMRecord`. The worst case is the same:
   every primary record of both files in a coordinate walk of two files that share no
   read, every primary record of the left file in an unsorted walk.
-- Error texts are bammetrics' own where Picard prints a Java exception; `Unrecognized sort
+- Error texts are BAMmetrics' own where Picard prints a Java exception; `Unrecognized sort
   order (unknown) found.` and `Mate CIGAR (Tag MC) not found` are Picard's.
 - The verb prints Picard's standard output lines on standard error, so standard output
   holds the metrics file alone; `-q` drops them. The Picard face prints them on standard
@@ -2052,7 +2052,7 @@ Where it differs:
   one.
 - Standard input is never a VCF source: a chain reads alignments from `-` (D241).
 - A record that starts or ends past 536,903,680 fails the `.tbi` in both tools; Picard
-  with an `ArrayIndexOutOfBoundsException`, bammetrics naming the record. Neither writes
+  with an `ArrayIndexOutOfBoundsException`, BAMmetrics naming the record. Neither writes
   a CSI index.
 - `SplitVcfs` and `MakeSitesOnlyVcf` write no `.idx` beside a plain output. With
   `CREATE_INDEX` at its default (true) a note says so; `CREATE_INDEX=true` given for a
@@ -2060,7 +2060,7 @@ Where it differs:
 - A failed `SplitVcfs` or `MakeSitesOnlyVcf` leaves no file; Picard leaves the VCFs it
   began (D249). `SNP_OUTPUT` and `INDEL_OUTPUT` naming one file exits 1.
 - `MakeVcfSampleNameMap` exits 1 when more than 8 inputs fall into one bin of Picard's
-  `HashMap` of 64 slots or more, whose order bammetrics does not model (D250); no real
+  `HashMap` of 64 slots or more, whose order BAMmetrics does not model (D250); no real
   set of paths is known to do so.
 - `SplitVcfs SEQUENCE_DICTIONARY` holds at most 128 MiB of text and 4,000,000 `@SQ`
   lines (D253); a larger one exits 1. Picard reads any size.
@@ -2157,7 +2157,7 @@ never as agreement. On seeds 1, 2 and 3 (10,000 examples, 177,955 templates, 30,
 commands) there were 0 failures and 522 both-fail commands (1.7%). Every both-fail command
 in a 600-example sample of seed 1 (27 of 1,800 commands) was a `CollectMultipleMetrics` run
 whose `CollectAlignmentSummaryMetrics` had a category with reads and no PF read, the
-`Input file contains no PF_READS` throw listed under Failures above, which bammetrics
+`Input file contains no PF_READS` throw listed under Failures above, which BAMmetrics
 reproduces as exit 1.
 
 ## ReorderSam takes a FASTA index as SEQUENCE_DICTIONARY

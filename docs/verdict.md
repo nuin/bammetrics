@@ -244,7 +244,7 @@ nothing else from a run. Written by `Verdict::to_json`, read back by
 | Field | Content |
 |---|---|
 | `schema` | `bammetrics.verdict/1`; a reader rejects any other value |
-| `tool_version` | the bammetrics version that wrote the file |
+| `tool_version` | the BAMmetrics version that wrote the file |
 | `sample` | as given, else the first non-empty `SAMPLE` cell in any class block, else the first file's name up to its first `.` |
 | `preset` | `name`, `version`, `hash` (16 hex digits), `source` (`built-in` or the file path), `note` |
 | `status` | `pass`, `warn`, `fail` or `incomplete` |

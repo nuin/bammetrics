@@ -2,13 +2,13 @@
 
 `bammetrics collect` computes the clinical pipeline's metrics plus insert size in 5.8 s on a
 4-million-read BAM. Picard 3.5.0 takes 83.5 s for the same five runs, one JVM each, so the
-one-pass run is 14.4x faster. Every bammetrics file is byte-identical to Picard's from
+one-pass run is 14.4x faster. Every BAMmetrics file is byte-identical to Picard's from
 `## METRICS CLASS` on, at both thread counts.
 
 ## Setup
 
 - Machine: Mac Studio (`hw.model` Mac13,2), 20 cores (16 performance, 4 efficiency), 64 GB, macOS 27.0.1.
-- bammetrics 0.2.0, rustc 1.99.1 (Homebrew), release profile with `lto = "fat"`, `codegen-units = 1`.
+- BAMmetrics 0.2.0, rustc 1.99.1 (Homebrew), release profile with `lto = "fat"`, `codegen-units = 1`.
 - Picard 3.5.0 (Homebrew `picard-tools`), OpenJDK 27.0.1, default JVM options.
   Each Picard run gets `VALIDATION_STRINGENCY=SILENT VERBOSITY=ERROR QUIET=true`;
   `CollectInsertSizeMetrics` gets `H=/dev/null` and a no-op `Rscript`.
@@ -20,11 +20,11 @@ one-pass run is 14.4x faster. Every bammetrics file is byte-identical to Picard'
   marked by Picard MarkDuplicates, 1% QC-fail, OQ tags on a quarter of the reads.
   4,039,148 records in total.
 - Timing: `/usr/bin/time -l`. Wall time is the median of 3 runs; peak RSS is the
-  largest of the 3. bammetrics runs with its default 8 BGZF threads unless stated.
+  largest of the 3. BAMmetrics runs with its default 8 BGZF threads unless stated.
 
 ## Results
 
-| run | Picard wall s | Picard peak MB | bammetrics wall s | bammetrics peak MB | speed-up | text identical |
+| run | Picard wall s | Picard peak MB | BAMmetrics wall s | BAMmetrics peak MB | speed-up | text identical |
 |---|---:|---:|---:|---:|---:|---|
 | CollectQualityYieldMetrics | 5.25 | 967 | 1.07 | 6 | 4.9x | yes |
 | CollectAlignmentSummaryMetrics R= | 12.11 | 932 | 4.13 | 26 | 2.9x | yes |
@@ -34,13 +34,13 @@ one-pass run is 14.4x faster. Every bammetrics file is byte-identical to Picard'
 | all five, separate runs | 83.48 | | 11.02 | | 7.6x | |
 | `collect`, all five in one pass, 8 threads | | | 5.80 | 73 | 14.4x | yes |
 | `collect`, all five in one pass, `--threads 1` | | | 5.78 | 69 | 14.4x | yes |
-| coverage command, `PER_BASE_COVERAGE` (bammetrics 0.3.0) | 28.74 | 472 | 2.43 | 35 | 11.8x | yes |
+| coverage command, `PER_BASE_COVERAGE` (BAMmetrics 0.3.0) | 28.74 | 472 | 2.43 | 35 | 11.8x | yes |
 
 The clinical pipeline's four runs (quality yield, alignment summary, HS twice) take
-79.6 s in Picard and 10.6 s as four bammetrics runs.
+79.6 s in Picard and 10.6 s as four BAMmetrics runs.
 
 The coverage row is the pipeline's coverage step in Picard syntax, measured on
-2026-10-28 with bammetrics 0.3.0: `CollectHsMetrics BI=targets I=bench.bam
+2026-10-28 with BAMmetrics 0.3.0: `CollectHsMetrics BI=targets I=bench.bam
 PER_BASE_COVERAGE=... MINIMUM_MAPPING_QUALITY=0 MINIMUM_BASE_QUALITY=0
 TARGET_INTERVALS=targets OUTPUT=... R=reference.fa QUIET=true`. The per-base file has
 503,914 lines (one per target base, 14 MB); it and the summary from `## METRICS CLASS` on
@@ -60,17 +60,17 @@ are byte-identical to Picard's. `benches/bench.py --coverage-only` reruns just t
 - HS spends about 0.7 s per run in the `HET_SNP_SENSITIVITY` simulation (10000 x 201
   `java.util.Random` draws). In `collect` the HS runs finish on their own threads, so two
   runs cost the time of one.
-- Picard's peak RSS is the JVM heap (460-970 MB); bammetrics stays under 75 MB.
+- Picard's peak RSS is the JVM heap (460-970 MB); BAMmetrics stays under 75 MB.
 
 ## Coverage tools (T4 scale run)
 
-Measured 2026-11-02 with bammetrics 0.7.0, rustc 1.99.1, Picard 3.5.0 on OpenJDK 27.0.1,
+Measured 2026-11-02 with BAMmetrics 0.7.0, rustc 1.99.1, Picard 3.5.0 on OpenJDK 27.0.1,
 same machine. BAM: `benches/wgs_bench.py`, 200,000 simulated 2x150 pairs (seed 20261102)
 of the same messy kind on chr1 1.2 Mb and chr2 0.8 Mb, 404,088 records. Wall time is the
-median of 3 runs, peak RSS the largest; every bammetrics file is identical to Picard's
+median of 3 runs, peak RSS the largest; every BAMmetrics file is identical to Picard's
 after the header lines.
 
-| run | Picard wall s | Picard peak MB | bammetrics wall s | bammetrics peak MB | speed-up | text identical |
+| run | Picard wall s | Picard peak MB | BAMmetrics wall s | BAMmetrics peak MB | speed-up | text identical |
 |---|---:|---:|---:|---:|---:|---|
 | CollectWgsMetrics | 10.01 | 770 | 1.97 | 41 | 5.1x | yes |
 | CollectWgsMetrics USE_FAST_ALGORITHM=true | 9.00 | 480 | 1.46 | 43 | 6.2x | yes |
@@ -118,14 +118,14 @@ Default options and threads (8), `TMP_DIR` on the same disk, one run each,
 
 | run | wall | max RSS | output BAM |
 |---|---:|---:|---:|
-| bammetrics MarkDuplicates | 303 s | 765 MiB | 10,210,233,747 bytes |
+| BAMmetrics MarkDuplicates | 303 s | 765 MiB | 10,210,233,747 bytes |
 | Picard 3.5.0 MarkDuplicates | 1,364 s | 11,256 MiB | 10,347,171,256 bytes |
 
-bammetrics reads the BAM twice on 8 BGZF workers and compresses on 8; its read ends
+BAMmetrics reads the BAM twice on 8 BGZF workers and compresses on 8; its read ends
 spill to `TMP_DIR` in runs of 4,000,000 entries of about 29 bytes each, and mates
 waiting for a later reference spill to one file per reference. `TMP_DIR` peaked at
 6.5 GiB (6,799,788 KiB, sampled every 10 s) and was empty again at the end. The
-bammetrics row was measured again after the waiting-mate spill (0.18.0 development,
+BAMmetrics row was measured again after the waiting-mate spill (0.18.0 development,
 a concordance test of another tool running on the same machine); the first run took
 299 s and 783 MiB. A 768.6M-record genome CRAM peaked at 2.75 GB and 42.1 GiB of
 `TMP_DIR`.
@@ -175,12 +175,12 @@ given on both sides); the five metrics files are equal after their `StringHeader
 
 ## 0.19.0 tools (HG002 exome)
 
-Same machine and file as the MarkDuplicates run above, bammetrics 0.19.0 (d221376),
+Same machine and file as the MarkDuplicates run above, BAMmetrics 0.19.0 (d221376),
 default options and threads, one run each, `/usr/bin/time -l`, nothing else running.
 Picard 3.5.0 numbers are the ones the feature branches measured on the same file
 (`JAVA_OPTS=-Xmx8g`); a blank cell means Picard was not timed for that tool.
 
-| tool | Picard wall | Picard peak RSS | bammetrics wall | bammetrics peak RSS | output |
+| tool | Picard wall | Picard peak RSS | BAMmetrics wall | BAMmetrics peak RSS | output |
 |---|---:|---:|---:|---:|---|
 | BamIndexStats | 0.74 s | | 0.03 s | 30 MB | 87 lines identical |
 | CollectJumpingLibraryMetrics | | | 31.0 s | 7 MB | 4,653 jump pairs, 74,693,734 non-jump pairs |
@@ -203,7 +203,7 @@ upper-cased copy), which is most of its 3.75 GB; one copy could go.
 
 ## FifoBuffer (4 GiB through a pipe)
 
-Mac Studio (Apple M1 Ultra, 64 GB), bammetrics at the `feat/fifo-buffer` branch, release
+Mac Studio (Apple M1 Ultra, 64 GB), BAMmetrics at the `feat/fifo-buffer` branch, release
 build. A 4 GiB file of zeros on standard input, `/dev/null` as standard output, default
 options, three runs each, `/usr/bin/time -l`. Picard 3.5.0 with `JAVA_OPTS=-Xmx8g`.
 
@@ -215,9 +215,9 @@ options, three runs each, `/usr/bin/time -l`. Picard 3.5.0 with `JAVA_OPTS=-Xmx8
 | `picard FifoBuffer` | 1.54 to 2.16 s | 630 to 646 MiB |
 
 With a reader that takes nothing for 3 seconds the default buffer fills
-(`Fifo buffer used 536,870,912 / 536,870,912 (100%).`) and bammetrics peaks at 515 MiB
+(`Fifo buffer used 536,870,912 / 536,870,912 (100%).`) and BAMmetrics peaks at 515 MiB
 (540,049,408 bytes) for the 512 MiB buffer. Picard allocates the 512 MiB at its start,
-which is its 630 MiB with a reader that keeps up. bammetrics reserves the bytes and
+which is its 630 MiB with a reader that keeps up. BAMmetrics reserves the bytes and
 writes only a window of them, 64 KiB at first, doubled when the bytes held fill it.
 
 ## SAM text (HG002 exome)
@@ -370,7 +370,7 @@ plan now estimates 2.5 GiB at the peak for both chains.
   and 8,703.2 MiB on the exome part, against plan totals of 5.5 and 9.1 GiB.
 - Picard's queryname output and ours hold the same 29,330,868 records and the same 3,394
   header lines under the rules of `compare_bam` (records streamed through `samtools
-  view`, since `compare_bam` holds both texts in memory). bammetrics took 0.27 times
+  view`, since `compare_bam` holds both texts in memory). BAMmetrics took 0.27 times
   Picard's wall time and 0.15 times its peak RSS.
 - The `.bai` of each chain equals `build-bam-index` of the written BAM under `cmp`, and on
   the slice also Picard `BuildBamIndex` of that BAM (342,600 bytes).
@@ -400,9 +400,9 @@ with `JAVA_OPTS=-Xmx8g` and `VALIDATION_STRINGENCY=SILENT`. `samtools index -@ 8
 | | `build-bam-index --threads 1` | 64.66 s | 6.7 MiB | 7,188,776 |
 | | Picard `BuildBamIndex` | 83.07 s | 585 MiB | 7,188,776 |
 
-Each bammetrics index equals Picard's under `cmp`, at 1 thread and at 8. The index of
+Each BAMmetrics index equals Picard's under `cmp`, at 1 thread and at 8. The index of
 HG002.exome.bam also equals the `HG002.exome.bam.bai` that came with the BAM. samtools
-reads the bammetrics index as its own: `samtools idxstats` prints the same text and
+reads the BAMmetrics index as its own: `samtools idxstats` prints the same text and
 `samtools view -c` the same count on four regions (63,188, 65,042, 3,174,573 and 513,783
 records) as through `samtools index`.
 
@@ -470,7 +470,7 @@ Same machine, release build of `feat/interval-bed-vcf`, one run each. Inputs fro
 intervals (72 MB, one name in 1,000 with U+0101, so Picard's sort spills) and a sites-only
 VCF of 2,000,000 records (73 MB, 2 percent filtered, 1 percent symbolic deletions).
 
-| tool | wall bammetrics | peak RSS bammetrics | wall Picard | peak RSS Picard |
+| tool | wall BAMmetrics | peak RSS BAMmetrics | wall Picard | peak RSS Picard |
 |---|---:|---:|---:|---:|
 | `IntervalListToBed` | 1.25 s | 274 MiB | 6.45 s | 1,763 MiB |
 | `VcfToIntervalList` | 1.19 s | 128 MiB | 2.73 s | 603 MiB |
@@ -489,14 +489,14 @@ Mac Studio, Apple M1 Ultra, release build of `feat/scatter-n`, one run each unde
 
 | command | tool | wall | peak RSS | output |
 |---|---|---:|---:|---|
-| `ScatterIntervalsByNs` defaults | bammetrics | 2.68 s | 12.4 MiB | 8,587 lines, identical |
+| `ScatterIntervalsByNs` defaults | BAMmetrics | 2.68 s | 12.4 MiB | 8,587 lines, identical |
 | | Picard | 33.64 s | 650.8 MiB | |
-| `NonNFastaSize` | bammetrics | 1.06 s | 8.4 MiB | `3043453562`, identical |
+| `NonNFastaSize` | BAMmetrics | 1.06 s | 8.4 MiB | `3043453562`, identical |
 | | Picard | 10.78 s | 605.5 MiB | |
 
-Picard holds the longest contig (chr1, 248,956,422 bases) as one array; bammetrics
+Picard holds the longest contig (chr1, 248,956,422 bases) as one array; BAMmetrics
 holds 1 MiB of bases and at most three intervals. On one generated contig of 200,000,000
-bases (`n_run_refs.py --long`, 40,002 lines written) bammetrics peaks at 4.9 MiB in both
+bases (`n_run_refs.py --long`, 40,002 lines written) BAMmetrics peaks at 4.9 MiB in both
 tools.
 
 ## CRAM writer (wave W15, HG002 exome)
@@ -511,11 +511,11 @@ threads. samtools 1.25 with `--output-fmt-option version=3.0` is there for scale
 | `bammetrics chain BAM -R hs37d5.fa + write out.cram`, first run | 181.5 s | 587 MiB | 5,464,644,737 | 52.9% |
 | the same, as the row `chain write cram exome` of `make memgate TIER=scale` | 173.3 s | 688 MiB | | |
 | `samtools view -@ 8 -C --output-fmt-option version=3.0` | 48.7 s | 1,389 MiB | 4,687,059,835 | 45.3% |
-| the bammetrics command after the review fixes, first run | 207.2 s | 360 MiB | 5,464,644,737 | 52.9% |
+| the BAMmetrics command after the review fixes, first run | 207.2 s | 360 MiB | 5,464,644,737 | 52.9% |
 | the same, second run | 191.7 s | 422 MiB | 5,464,644,737 | 52.9% |
 
-The two bammetrics runs are the same command on the same input; their peak RSS differs by
-100 MiB, and why was not looked into. bammetrics' CRAM is 16.6% larger than samtools' and
+The two BAMmetrics runs are the same command on the same input; their peak RSS differs by
+100 MiB, and why was not looked into. BAMmetrics' CRAM is 16.6% larger than samtools' and
 takes 3.7 times as long to write. Every record is detached, every tag is stored where
 the BAM has it, and all blocks but the quality scores are gzip; which of these costs what
 was not measured.
@@ -527,7 +527,7 @@ What was checked on that file:
   by line, 0 differ, and their MD5 is the same (`966e8c70e4a7c4b2f34032abc4b25226`). The
   same comparison with `-x RG` on the CRAM side reports every one of its first 1,000,000
   records, so it sees a difference where there is one.
-- bammetrics `CollectQualityYieldMetrics` gives the same file body from the BAM (34 s)
+- BAMmetrics `CollectQualityYieldMetrics` gives the same file body from the BAM (34 s)
   and from the CRAM (55 s): 150,386,776 reads, 18,948,733,776 bases.
 
 The last two rows are the writer after its review (docs/07 D217 to D222): a slice
@@ -571,10 +571,10 @@ default `--out-root`, so its file was written under the checkout's `target/memga
 collate`, `SO:unsorted`); the default threads; `/usr/bin/time -l`; Picard 3.5.0 with `-Xmx8g`,
 `VALIDATION_STRINGENCY=SILENT` and `QUIET=true`. Every file against itself, so the
 coordinate walk pairs each record at its place and holds none, and the unsorted walk holds
-every primary record of the left file. Picard and bammetrics wrote the same row for both
+every primary record of the left file. Picard and BAMmetrics wrote the same row for both
 slices.
 
-| command | bammetrics | Picard |
+| command | BAMmetrics | Picard |
 |---|---|---|
 | `check-terminator-block` exome | 0.0 s, 8 MiB | not run |
 | `compare-s-a-ms` exome, coordinate | 50.8 s, 45 MiB | not run |
@@ -600,7 +600,7 @@ samples out of sorted order, and a dbSNP of every tenth site; the files were rem
 the run. Default threads, `/usr/bin/time -l`; Picard 3.5.0 `VcfFormatConverter
 REQUIRE_INDEX=false` with `-Xmx8g` (its `CREATE_INDEX` default writes the `.tbi`).
 
-| command | bammetrics | Picard |
+| command | BAMmetrics | Picard |
 |---|---|---|
 | `chain big.vcf -o r.vcf.gz variant-calling --dbsnp dbsnp.vcf` (copy, `.tbi`, tap) | 1.84 s, 60.6 MiB | copy alone 5.3 s, 316 MiB |
 | `chain big_unsorted.vcf -o u.vcf.gz` (every genotype decoded and written anew) | 5.14 s, 16.3 MiB | 8.0 s, 302 MiB |
@@ -637,7 +637,7 @@ No real VCF is under `~/data`; the inputs are those of `benches/vcf_scale.py` an
 `benches/vcf_wide.py`, written for the measurement and removed. Peak RSS by
 `/usr/bin/time -l`, Picard 3.5.0 under `JAVA_OPTS=-Xmx8g`.
 
-| Input | Command | Picard | bammetrics |
+| Input | Command | Picard | BAMmetrics |
 |---|---|---|---|
 | 1,000,000 records, 3 samples (104 MB) | `MakeSitesOnlyVcf O=.vcf.gz` | 3.7 s, 699 MiB | |
 | the same | `SplitVcfs STRICT=false`, two `.vcf.gz` | 5.0 s, 272 MiB | |
@@ -729,7 +729,7 @@ Against Picard 3.5.0 on the same slice (`/usr/bin/time -l`, one run each, output
 `~/data/bammetrics-scale/waves/w10`, removed after; the records of every file equal by
 `samtools view`):
 
-| command | Picard wall s / RSS MiB | bammetrics 8 threads wall s / RSS MiB | bammetrics 1 thread wall s / RSS MiB |
+| command | Picard wall s / RSS MiB | BAMmetrics 8 threads wall s / RSS MiB | BAMmetrics 1 thread wall s / RSS MiB |
 |---|---:|---:|---:|
 | `SplitSamByLibrary` | 48.65 / 321.2 | 6.69 / 26.9 | 24.76 / 10.7 |
 | `SplitSamByNumberOfReads N_FILES=8` | 81.41 / 617.6 | 6.48 / 27.5 | 26.32 / 10.2 |
@@ -803,7 +803,7 @@ pairs`, whose inputs were removed after earlier runs). Scale outputs went under
 The wave W12 rows of ScatterIntervalsByNs and NonNFastaSize (2026-11-20, feat/scatter-n,
 one run each; the scale rows with `--out-root ~/data/bammetrics-scale/waves/w12`). A
 long-contig row's peak is the Python generator's, which runs in the same shell;
-bammetrics alone peaks at 4.9 MiB there:
+BAMmetrics alone peaks at 4.9 MiB there:
 
 | command | tier | peak RSS MiB / limit | wall s |
 |---|---|---|---:|
@@ -1075,7 +1075,7 @@ To add a scale row:
 
 ## Report budgets (docs/05 section 4.8)
 
-Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`
+Measured 2026-11-05 with BAMmetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`
 (`crates/cli/tests/budgets.rs` on a release build). The test fails at twice any target,
 and CI runs it on the Linux and macOS runners after the unit tests.
 
@@ -1424,7 +1424,7 @@ bytes), no hinting and no layout tables, from matplotlib 3.8.0's copies by
 
 ## Report accessibility
 
-Checked 2026-11-05 with bammetrics 0.16.0 by `make a11y` (`benches/a11y.mjs`): axe-core
+Checked 2026-11-05 with BAMmetrics 0.16.0 by `make a11y` (`benches/a11y.mjs`): axe-core
 4.10.2 in Chromium (Playwright 1.64.1) on six pages, the 4-sample index snapshot
 (`tests/report/index.html`), the three fixture pages of `crates/report/examples/fixture_pages.rs`
 and the page and index `bammetrics report` writes for `tests/data/picard`. Each page runs

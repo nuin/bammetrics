@@ -200,7 +200,7 @@ bammetrics convert S1.insert_size_metrics.json | cmp - S1.insert_size_metrics
 `tests/data/picard` and on every metrics file in the golden records (the test prints the
 count). It also fails when an object of the JSON or of the JSON Lines form repeats a
 member. `crates/cli/tests/formats.rs` runs the round trip through the command. It holds for
-a file Picard or bammetrics wrote. What does not come back as it was:
+a file Picard or BAMmetrics wrote. What does not come back as it was:
 
 - A header class other than `StringHeader` is written as a `StringHeader`.
 - `\r\n` line ends come back as `\n`. A row shorter than its column line is filled.
@@ -404,7 +404,7 @@ the text when it is installed.
 
 ## MultiQC
 
-MultiQC reads the Picard metrics files bammetrics writes with its own Picard module; they
+MultiQC reads the Picard metrics files BAMmetrics writes with its own Picard module; they
 need no change. `qc --also multiqc` adds `PREFIX.verdict_mqc.json`, a custom-content table
 MultiQC finds by its `_mqc.json` name: one row per sample with the verdict, the count of
 failed, warned and not-measured checks, and one column per rule with the value judged (no
@@ -542,7 +542,7 @@ polars and pyarrow on every file it writes (910 files at wave W21): each reads t
 types, every row, null and NaN. A reader that is not installed is skipped; the Python
 readers run under `BAMMETRICS_PARQUET_PYTHON` (default `python3`).
 
-`convert` and `read_table` read a file bammetrics wrote: the `bammetrics` metadata, one
+`convert` and `read_table` read a file BAMmetrics wrote: the `bammetrics` metadata, one
 flat level of `INT64`, `DOUBLE` and `BYTE_ARRAY` columns in `PLAIN` data pages version 1.
 The reader reads at most 256 MiB, 8,388,608 cells (about 1 GiB decoded), 64 cells per byte
 of the file and 512 MiB of decompressed pages, all checked from the footer and the page
@@ -559,7 +559,7 @@ not printed. A long file is not read back (exit 1). A file another tool rewrote 
 formats of a `--format` list as one set: each file under a temporary name, then all
 renamed into place. A failed write or rename leaves none of them and puts back each file a
 rename replaced. A new main
-file with no histogram removes a `STEM.histogram.parquet` beside it that a bammetrics run
+file with no histogram removes a `STEM.histogram.parquet` beside it that a BAMmetrics run
 wrote as a companion (its metadata says so), so a glob such as `*.histogram.parquet`
 finds no stale histogram. `qc` removes the companions an earlier run wrote through its
 manifest.
@@ -570,7 +570,7 @@ Parquet: `--format parquet` and `--also parquet` are a usage error there (exit 2
 
 ## Frozen schemas
 
-From wave W14 (0.32.0) the JSON documents bammetrics writes are frozen. Each has a committed
+From wave W14 (0.32.0) the JSON documents BAMmetrics writes are frozen. Each has a committed
 JSON Schema under `docs/schema`:
 
 | Schema | Written by | File |

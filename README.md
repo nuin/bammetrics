@@ -1,8 +1,8 @@
-# bammetrics
+# BAMmetrics
 
 Picard QC metrics in Rust: the same numbers as Picard 3.5.0, 3x to 14x faster, no JVM.
 
-bammetrics is a drop-in for the Picard jar. It takes Picard's `KEY=VALUE` arguments and
+BAMmetrics is a drop-in for the Picard jar. It takes Picard's `KEY=VALUE` arguments and
 writes Picard's metrics files, byte-identical from `## METRICS CLASS` on. It is also a
 Python module that returns the same numbers as typed objects, and a Rust library.
 
@@ -177,10 +177,10 @@ bammetrics report runs/ -o site/ --pdf                     # also site/SAMPLE.re
 `--resume` uses to skip finished collectors; `bammetrics plan` with the same options shows
 what would run. `--sex male|female` declares the sample's sex for the sex check, and a
 panel adds the coverage gap check (`.coverage_gaps` and a BED of the gaps); both are
-bammetrics checks with no Picard counterpart ([docs/06](docs/06_clinical_checks.md)).
+BAMmetrics checks with no Picard counterpart ([docs/06](docs/06_clinical_checks.md)).
 
 `report` finds the metrics files by their `## METRICS CLASS` block in any directory of
-Picard output, no bammetrics run needed, and judges each sample against a preset of
+Picard output, no BAMmetrics run needed, and judges each sample against a preset of
 thresholds: the verdict (pass, warn, fail or incomplete) opens each page, with a plot
 under the failing check it explains. The presets, the rule language and `verdict.json` are in
 [docs/verdict.md](docs/verdict.md); the exit codes of `check` are in [docs/cli.md](docs/cli.md).
@@ -293,16 +293,16 @@ Picard's options as keywords. The build order for the remaining Picard tools is 
 
 ## Speed
 
-4,039,148 records, 2x150 pairs, Mac Studio, 20 cores. Picard 3.5.0 against bammetrics.
+4,039,148 records, 2x150 pairs, Mac Studio, 20 cores. Picard 3.5.0 against BAMmetrics.
 
-| run | Picard | bammetrics | speed-up |
+| run | Picard | BAMmetrics | speed-up |
 |---|---:|---:|---:|
 | CollectAlignmentSummaryMetrics with reference | 12.1 s | 4.1 s | 2.9x |
 | CollectHsMetrics | 32.4 s | 2.7 s | 12.1x |
 | CollectInsertSizeMetrics | 3.9 s | 0.4 s | 10.0x |
 | five metrics in one `collect` pass | 83.5 s | 5.8 s | 14.4x |
 
-Picard's peak memory is its JVM heap, 460 to 970 MB. bammetrics stays under 75 MB.
+Picard's peak memory is its JVM heap, 460 to 970 MB. BAMmetrics stays under 75 MB.
 Method and all rows: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Verify

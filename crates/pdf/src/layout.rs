@@ -618,7 +618,7 @@ impl<'f> Flow<'f> {
             surface.finish();
             page.finish();
         }
-        let creator = format!("bammetrics {}", env!("CARGO_PKG_VERSION"));
+        let creator = format!("BAMmetrics {}", env!("CARGO_PKG_VERSION"));
         let metadata = Metadata::new().title(title.to_owned());
         document.set_metadata(metadata.language(LANG.to_owned()).creator(creator));
         document.set_outline(self.outline());

@@ -1,6 +1,6 @@
-# bammetrics platform — execution roadmap (money + reputation)
+# BAMmetrics platform — execution roadmap (money + reputation)
 
-The committed plan. One open-core platform (bammetrics QC engine + vcfclick variant query), SequenceServer-style: a free core and a citable paper build **reputation**; a paid cloud makes **money**. The two goals are sequenced, not traded off — reputation is the distribution engine that sells the paid layer for you, which matters because building and publishing are your strengths and selling is not.
+The committed plan. One open-core platform (BAMmetrics QC engine + vcfclick variant query), SequenceServer-style: a free core and a citable paper build **reputation**; a paid cloud makes **money**. The two goals are sequenced, not traded off — reputation is the distribution engine that sells the paid layer for you, which matters because building and publishing are your strengths and selling is not.
 
 ## The core principle
 
@@ -9,7 +9,7 @@ In this model you never have to "sell." You **build** (a free tool) and **publis
 ## The one product (no more ideas)
 
 A unified genomics platform with two capabilities that match the workflow — **QC your data, then query it**:
-- **bammetrics** — Picard-concordant alignment/QC + variant-call benchmarking (Rust + PyO3, on noodles). Already v0.1-verified.
+- **BAMmetrics** — Picard-concordant alignment/QC + variant-call benchmarking (Rust + PyO3, on noodles). Already v0.1-verified.
 - **vcfclick** — correctness-first cohort variant query with an NL/SQL interface. Already operational.
 
 Library underneath (permissive, adoption), application + cloud on top (AGPL, monetization).
@@ -20,9 +20,9 @@ Library underneath (permissive, adoption), application + cloud on top (AGPL, mon
 
 Owner direction (2026-11-09): every one of the 121 Picard 3.5.0 tools (23 on main at 0.17.0, 7 in flight, 91 to build), analyses chained in one process without pipes or temp files (`chain`), every output in Picard text and in JSON, CSV, Parquet, XLSX and more, reports in HTML, PDF and DOCX, and 15 analyses beyond Picard (identity, contamination, FASTQ QC, per-exon coverage, doctor, VCF QC, benchmarking, relatedness, cfDNA fragmentomics). `docs/07_full_parity_program.md` holds the 48 waves (0.18.0 to 1.7.0, parity gate at 1.0.0), the machine schedule, the docs/04 and docs/05 changes and the open questions. The 4.9 boundary of docs/05 holds: stored cohorts, history and cross-run comparison stay in the hosted product below.
 
-## Phase 0 — Finish the core  *(bammetrics done in 0.2.0; vcfclick open)*
+## Phase 0 — Finish the core  *(BAMmetrics done in 0.2.0; vcfclick open)*
 
-- [x] bammetrics: `CollectInsertSizeMetrics`, `CollectAlignmentSummaryMetrics`,
+- [x] BAMmetrics: `CollectInsertSizeMetrics`, `CollectAlignmentSummaryMetrics`,
   `CollectQualityYieldMetrics` and `CollectHsMetrics`, concordant with Picard 3.5.0 on 90 cases.
 - [x] `noodles-fasta` reference path (`.fai`, one contig at a time, with `Reference::subsequence`).
 - [x] Picard-format output files and Picard `KEY=VALUE` command-line syntax, a drop-in for a pipeline.
@@ -79,7 +79,7 @@ to D235), and the VCF writer with the variant stream of `chain`, the header inve
 77, 0.34.0, wave W16; docs/chaining.md sections 33 and 34, docs/07 D236 to D256).
 CHANGELOG.md has each.
 
-Remaining for bammetrics:
+Remaining for BAMmetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, further formats and DOCX reports: the program plan
@@ -125,4 +125,4 @@ The clinical validation-report tier (the regulated, highest-willingness-to-pay p
 
 ## The single next action
 
-Finish bammetrics to a shippable, MIT-licensed library, get it on PyPI + bioconda, and draft the JOSS paper. The paper is the reputation engine everything else hangs on, and it's the part you're uniquely equipped to execute. Everything in Phase 2 depends on Phase 1 existing first.
+Finish BAMmetrics to a shippable, MIT-licensed library, get it on PyPI + bioconda, and draft the JOSS paper. The paper is the reputation engine everything else hangs on, and it's the part you're uniquely equipped to execute. Everything in Phase 2 depends on Phase 1 existing first.

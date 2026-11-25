@@ -16,7 +16,7 @@ wrote 4 files to OUT, index OUT/index.html
 ## file NA12878.report.html
 <page not recorded>
 ## file NA12878.report.pdf
-<pdf not recorded: 27 pages, 649888 bytes>
+<pdf not recorded: 27 pages, 650030 bytes>
 ## file NA12878.verdict.json
 {
   "schema": "bammetrics.verdict/1",

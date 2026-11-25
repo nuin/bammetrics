@@ -78,7 +78,7 @@ and the counts.
 
 ### 2.1 What is read
 
-- The kind, from the first bytes, as every bammetrics reader tells it (`cram::sniff`).
+- The kind, from the first bytes, as every BAMmetrics reader tells it (`cram::sniff`).
 - The end: the last 64 KiB and 28 bytes of a BGZF file, the last 38 bytes of a CRAM, the
   last byte of plain SAM text. A BGZF block that starts in that window and ends at the last
   byte is whole. An end-of-file block followed by bytes that start no BGZF block is a file

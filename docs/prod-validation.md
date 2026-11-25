@@ -1,8 +1,8 @@
-# Validating bammetrics against Picard on the pipeline hosts
+# Validating BAMmetrics against Picard on the pipeline hosts
 
 Patient BAMs stay on prod3 and prod4. The comparison therefore runs there:
-a static Linux binary of bammetrics and one Python script are copied to the
-host, and the script compares bammetrics with Picard on a finished run.
+a static Linux binary of BAMmetrics and one Python script are copied to the
+host, and the script compares BAMmetrics with Picard on a finished run.
 
 ## 1. Build the Linux binary (on the Mac)
 
@@ -45,7 +45,7 @@ cd ~/bammetrics && sha256sum -c bammetrics-x86_64-linux-musl.sha256
 - `--out` must lie outside the run directory; the script refuses otherwise.
   Nothing is written into a run.
 - `--samples all` covers the whole run; `--metrics yield,align,hs` limits it.
-- A metric bammetrics does not implement yet shows as `unsupported`.
+- A metric BAMmetrics does not implement yet shows as `unsupported`.
 
 Outputs in `--out`: `report.tsv` (sample, metric, status, fields compared,
 fields differing, wall seconds and peak RSS for each tool) and
@@ -54,7 +54,7 @@ stdout has counts and timings only, no metric values.
 
 ## 4. Picard version
 
-The pipeline runs `/apps/data/src/bin/picard.jar`. bammetrics targets Picard
+The pipeline runs `/apps/data/src/bin/picard.jar`. BAMmetrics targets Picard
 3.5.0. Record the host's version before comparing:
 
 ```bash
@@ -62,10 +62,10 @@ java -jar /apps/data/src/bin/picard.jar CollectHsMetrics --version
 ```
 
 A different version can explain field differences; `--rerun-picard` with a
-3.5.0 jar separates a version difference from a bammetrics bug.
+3.5.0 jar separates a version difference from a BAMmetrics bug.
 
 ## Self-test (on the Mac)
 
 `scripts/selftest_prod_compare.sh` builds a fake run from synthetic data and
-runs the script with Picard standing in for bammetrics. Every metric must
+runs the script with Picard standing in for BAMmetrics. Every metric must
 come back `match`. It needs picard, bwa, samtools and uv.

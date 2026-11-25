@@ -146,13 +146,13 @@ impl<'r, 'f> Report<'r, 'f> {
     fn header(&mut self) {
         let (v, p) = (self.verdict, &self.verdict.preset);
         self.flow.open(Tag::Section);
-        self.flow.paragraph("bammetrics report", muted());
+        self.flow.paragraph("BAMmetrics report", muted());
         self.heading(1, &v.sample, NO_LEAD, Some(1));
         let hash = p.hash.get(..6).unwrap_or(&p.hash);
         let mut meta = vec![format!("preset {} v{} {hash}", p.name, p.version)];
         meta.extend(total_reads(self.inputs).map(|n| format!("{} reads", thousands(n))));
         meta.push(count(self.inputs.len(), "metrics file"));
-        meta.push(format!("bammetrics {}", v.tool_version));
+        meta.push(format!("BAMmetrics {}", v.tool_version));
         self.flow.paragraph(&meta.join("  \u{b7}  "), muted());
         self.flow.close();
         self.flow.y += 6.0;
@@ -386,7 +386,7 @@ impl<'r, 'f> Report<'r, 'f> {
         let (v, p) = (self.verdict, &self.verdict.preset);
         let (name, version, source, note) = (&p.name, p.version, &p.source, &p.note);
         let preset = format!("{name} version {version}, {source} ({note})");
-        let mut rows = vec![("tool", format!("bammetrics {}", v.tool_version), body())];
+        let mut rows = vec![("tool", format!("BAMmetrics {}", v.tool_version), body())];
         rows.push(("preset", preset, body()));
         rows.push(("preset hash", p.hash.clone(), mono()));
         if !self.options.date.is_empty() {

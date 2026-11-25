@@ -328,7 +328,7 @@ impl<'a> Page<'a> {
              <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
              <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">\n\
              <meta name=\"color-scheme\" content=\"light dark\">\n\
-             <title>{}: {} (bammetrics)</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n",
+             <title>{}: {} (BAMmetrics)</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n",
             escape(&self.verdict.sample),
             self.verdict.status.name().to_uppercase()
         );
@@ -342,7 +342,7 @@ impl<'a> Page<'a> {
         let v = self.verdict;
         let _ = write!(
             self.out,
-            "<header class=\"top\"><p class=\"kicker muted\">bammetrics report</p><h1>{}</h1><p class=\"meta muted\">\
+            "<header class=\"top\"><p class=\"kicker muted\">BAMmetrics report</p><h1>{}</h1><p class=\"meta muted\">\
              <span>preset {} v{} <code title=\"{}\">{}</code></span>",
             escape(&v.sample),
             escape(&v.preset.name),
@@ -355,7 +355,7 @@ impl<'a> Page<'a> {
         }
         let _ = write!(
             self.out,
-            "<span>{}</span><span>bammetrics {}</span></p></header>",
+            "<span>{}</span><span>BAMmetrics {}</span></p></header>",
             escape(&count(self.inputs.len(), "metrics file")),
             escape(&v.tool_version)
         );
@@ -789,7 +789,7 @@ impl<'a> Page<'a> {
         let _ = write!(
             self.out,
             "<footer class=\"run\" id=\"run\"><h2>Run</h2><dl>\
-             <dt>tool</dt><dd>bammetrics {}</dd>\
+             <dt>tool</dt><dd>BAMmetrics {}</dd>\
              <dt>preset</dt><dd>{} version {}, {} ({})</dd>\
              <dt>preset hash</dt><dd><code>{}</code></dd>",
             escape(&v.tool_version),

@@ -175,9 +175,9 @@ pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> Result<
         };
         report.build()?;
         let status = verdict.status.name().to_uppercase();
-        let title = format!("{}: {status} (bammetrics)", verdict.sample);
+        let title = format!("{}: {status} (BAMmetrics)", verdict.sample);
         let (sample, version) = (&verdict.sample, &verdict.tool_version);
-        let footer = format!("{sample}  \u{b7}  {status}  \u{b7}  bammetrics {version}");
+        let footer = format!("{sample}  \u{b7}  {status}  \u{b7}  BAMmetrics {version}");
         let style = content::style(fonts::Face::Regular, 7.5, "ink-2");
         report.flow.finish(&title, &footer, style)
     };
