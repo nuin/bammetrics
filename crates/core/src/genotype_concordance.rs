@@ -1082,12 +1082,12 @@ impl Options {
 
 /// The sample to compare: the named one, or the only one.
 fn choose_sample(
-    reader: &VcfReader,
+    path: &Path,
+    samples: &[String],
     wanted: Option<&str>,
     option: &str,
     side: &str,
 ) -> Result<String> {
-    let samples = reader.samples();
     let name = match wanted {
         Some(name) => name.to_owned(),
         None if samples.len() > 1 => {
@@ -1098,14 +1098,14 @@ fn choose_sample(
         None => samples.first().cloned().ok_or_else(|| {
             Error::Usage(format!(
                 "{side} {} has no sample (Picard fails with an IndexOutOfBoundsException)",
-                reader.path().display()
+                path.display()
             ))
         })?,
     };
     if !samples.contains(&name) {
         return Err(Error::Usage(format!(
             "File {} does not contain genotypes for sample {name}",
-            reader.path().display()
+            path.display()
         )));
     }
     Ok(name)
@@ -1184,173 +1184,343 @@ fn load_intervals(opts: &Options) -> Result<Option<Regions>> {
     Ok(combined.map(|r| r.uniqued()))
 }
 
+/// The three metrics files' rows.
+pub type Rows = (Vec<SummaryRow>, Vec<DetailRow>, Vec<ContingencyRow>);
+
 /// `doWork`: the three metrics files' rows.
-pub fn run(opts: &Options) -> Result<(Vec<SummaryRow>, Vec<DetailRow>, Vec<ContingencyRow>)> {
-    let scheme = Scheme::new(opts.missing_sites_hom_ref);
+pub fn run(opts: &Options) -> Result<Rows> {
     let intervals = load_intervals(opts)?;
     let truth_reader = VcfReader::open(&opts.truth_vcf)?;
-    let call_reader = VcfReader::open(&opts.call_vcf)?;
-    let truth_sample = choose_sample(
-        &truth_reader,
-        opts.truth_sample.as_deref(),
-        "TRUTH_SAMPLE",
-        "TRUTH_VCF",
-    )?;
-    let call_sample = choose_sample(
-        &call_reader,
-        opts.call_sample.as_deref(),
-        "CALL_SAMPLE",
-        "CALL_VCF",
-    )?;
-    let truth_dictionary = truth_reader.dictionary();
-    vcf::assert_dictionaries_equal(
-        truth_dictionary.as_ref(),
-        &opts.truth_vcf.display().to_string(),
-        call_reader.dictionary().as_ref(),
-        &opts.call_vcf.display().to_string(),
-    )?;
-    if let Some(intervals) = &intervals {
+    let mut call_reader = VcfReader::open(&opts.call_vcf)?;
+    let call = CallSide {
+        path: &opts.call_vcf,
+        samples: call_reader.samples(),
+        dictionary: call_reader.dictionary(),
+    };
+    let mut concordance = Concordance::new(opts, intervals, truth_reader, &call)?;
+    while let Some(variant) = call_reader.next_variant()? {
+        concordance.push_call(variant)?;
+    }
+    concordance.finish()
+}
+
+/// What the comparison needs of the call VCF before its first record.
+pub struct CallSide<'a> {
+    pub path: &'a Path,
+    pub samples: Vec<String>,
+    pub dictionary: Option<Dictionary>,
+}
+
+/// `doWork` as the call records arrive: the truth VCF read in step with
+/// them, each pair of records at one position (or a record alone) put in
+/// its cell (`PairedVariantSubContextIterator`).
+pub struct Concordance {
+    opts: OwnedOptions,
+    scheme: Scheme,
+    intervals: Option<Regions>,
+    dictionary: Dictionary,
+    truth: Stream,
+    truth_index: usize,
+    call_index: usize,
+    truth_sample: String,
+    call_sample: String,
+    counters: Counters,
+}
+
+/// The options [`Concordance`] keeps.
+struct OwnedOptions {
+    min_gq: i64,
+    min_dp: i64,
+    ignore_filter_status: bool,
+    missing_sites_hom_ref: bool,
+    output_all_rows: bool,
+}
+
+impl Concordance {
+    /// The samples chosen and the dictionaries checked as `doWork` checks
+    /// them, `truth_reader` at its first record.
+    pub fn new(
+        opts: &Options,
+        intervals: Option<Regions>,
+        truth_reader: VcfReader,
+        call: &CallSide,
+    ) -> Result<Self> {
+        let truth_samples = truth_reader.samples();
+        let truth_sample = choose_sample(
+            &opts.truth_vcf,
+            &truth_samples,
+            opts.truth_sample.as_deref(),
+            "TRUTH_SAMPLE",
+            "TRUTH_VCF",
+        )?;
+        let call_sample = choose_sample(
+            call.path,
+            &call.samples,
+            opts.call_sample.as_deref(),
+            "CALL_SAMPLE",
+            "CALL_VCF",
+        )?;
+        let truth_dictionary = truth_reader.dictionary();
         vcf::assert_dictionaries_equal(
-            Some(&intervals.dictionary),
-            "provided intervals",
             truth_dictionary.as_ref(),
             &opts.truth_vcf.display().to_string(),
+            call.dictionary.as_ref(),
+            &call.path.display().to_string(),
         )?;
-    }
-    let dictionary = truth_dictionary.ok_or_else(|| Error::Intervals {
-        path: opts.truth_vcf.clone(),
-        message:
-            "no ##contig line (Picard's VariantContextComparator fails with a NullPointerException)"
-                .to_owned(),
-    })?;
-    let truth_index = truth_reader
-        .samples()
-        .iter()
-        .position(|s| *s == truth_sample)
-        .expect("checked");
-    let call_index = call_reader
-        .samples()
-        .iter()
-        .position(|s| *s == call_sample)
-        .expect("checked");
-    let mut truth = Stream::new(truth_reader, intervals.clone())?;
-    let mut call = Stream::new(call_reader, intervals.clone())?;
-    let mut counters = Counters::default();
-    loop {
-        let (take_truth, take_call) = match (&truth.peeked, &call.peeked) {
-            (None, None) => break,
-            (Some(_), None) => (true, false),
-            (None, Some(_)) => (false, true),
-            (Some(t), Some(c)) => {
-                let ordering = position_key(t, &dictionary)?.cmp(&position_key(c, &dictionary)?);
-                (!ordering.is_gt(), !ordering.is_lt())
-            }
-        };
-        let left = if take_truth {
-            truth.take()?.map(|v| v.sub_context(truth_index))
-        } else {
-            None
-        };
-        let right = if take_call {
-            call.take()?.map(|v| v.sub_context(call_index))
-        } else {
-            None
-        };
-        counters.classify(
-            left.as_ref(),
-            right.as_ref(),
-            opts.min_gq,
-            opts.min_dp,
-            opts.ignore_filter_status,
-        )?;
-    }
-    if opts.missing_sites_hom_ref {
-        let base_count = intervals.as_ref().map_or_else(
-            || {
-                dictionary
-                    .iter()
-                    .map(|c| c.length.unwrap_or(0))
-                    .sum::<i64>()
+        if let Some(intervals) = &intervals {
+            vcf::assert_dictionaries_equal(
+                Some(&intervals.dictionary),
+                "provided intervals",
+                truth_dictionary.as_ref(),
+                &opts.truth_vcf.display().to_string(),
+            )?;
+        }
+        let dictionary = truth_dictionary.ok_or_else(|| Error::Intervals {
+            path: opts.truth_vcf.clone(),
+            message:
+                "no ##contig line (Picard's VariantContextComparator fails with a NullPointerException)"
+                    .to_owned(),
+        })?;
+        let truth_index = truth_samples
+            .iter()
+            .position(|s| *s == truth_sample)
+            .expect("checked");
+        let call_index = call
+            .samples
+            .iter()
+            .position(|s| *s == call_sample)
+            .expect("checked");
+        Ok(Self {
+            opts: OwnedOptions {
+                min_gq: opts.min_gq,
+                min_dp: opts.min_dp,
+                ignore_filter_status: opts.ignore_filter_status,
+                missing_sites_hom_ref: opts.missing_sites_hom_ref,
+                output_all_rows: opts.output_all_rows,
             },
-            Regions::base_count,
-        );
-        for counter in [&mut counters.snp, &mut counters.indel] {
-            let missing = base_count as f64 - counter.size();
-            counter.increment(TruthState::Missing, CallState::Missing, missing);
+            scheme: Scheme::new(opts.missing_sites_hom_ref),
+            truth: Stream::new(truth_reader, intervals.clone())?,
+            intervals,
+            dictionary,
+            truth_index,
+            call_index,
+            truth_sample,
+            call_sample,
+            counters: Counters::default(),
+        })
+    }
+
+    fn classify(&mut self, truth: Option<&Variant>, call: Option<&Variant>) -> Result<()> {
+        self.counters
+            .classify(
+                truth.map(|v| v.sub_context(self.truth_index)).as_ref(),
+                call.map(|v| v.sub_context(self.call_index)).as_ref(),
+                self.opts.min_gq,
+                self.opts.min_dp,
+                self.opts.ignore_filter_status,
+            )
+            .map(|_| ())
+    }
+
+    /// The next record of the call VCF: the truth records in front of it
+    /// alone, then it with the truth record at its position, if any.
+    pub fn push_call(&mut self, call: Variant) -> Result<()> {
+        if let Some(regions) = &self.intervals
+            && !regions.overlaps(&call.contig, call.start, call.end)
+        {
+            return Ok(());
+        }
+        let call_key = position_key(&call, &self.dictionary)?;
+        loop {
+            let ordering = match &self.truth.peeked {
+                None => std::cmp::Ordering::Greater,
+                Some(t) => position_key(t, &self.dictionary)?.cmp(&call_key),
+            };
+            match ordering {
+                std::cmp::Ordering::Less => {
+                    let truth = self.truth.take()?;
+                    self.classify(truth.as_ref(), None)?;
+                }
+                std::cmp::Ordering::Equal => {
+                    let truth = self.truth.take()?;
+                    return self.classify(truth.as_ref(), Some(&call));
+                }
+                std::cmp::Ordering::Greater => return self.classify(None, Some(&call)),
+            }
         }
     }
-    let types = [("SNP", &counters.snp), ("INDEL", &counters.indel)];
-    let summary = types
-        .iter()
-        .map(|(name, counts)| {
-            SummaryRow::new(
-                name,
-                counts,
-                &scheme,
-                &truth_sample,
-                &call_sample,
-                opts.missing_sites_hom_ref,
-            )
-        })
-        .collect();
-    let mut detail = Vec::new();
-    for (name, counts) in &types {
-        for truth_state in TRUTH_STATES {
-            for call_state in CALL_STATES {
-                let count = counts.count(truth_state, call_state);
-                if count > 0 || opts.output_all_rows {
-                    detail.push(DetailRow {
-                        variant_type: name,
-                        truth_sample: truth_sample.clone(),
-                        call_sample: call_sample.clone(),
-                        truth_state,
-                        call_state,
-                        count,
-                        contingency_values: scheme.cell_text(truth_state, call_state),
-                    });
+
+    /// The truth records after the last call record, then the rows.
+    pub fn finish(mut self) -> Result<Rows> {
+        while let Some(truth) = self.truth.take()? {
+            self.classify(Some(&truth), None)?;
+        }
+        let Self {
+            opts,
+            scheme,
+            intervals,
+            dictionary,
+            truth_sample,
+            call_sample,
+            mut counters,
+            ..
+        } = self;
+        if opts.missing_sites_hom_ref {
+            let base_count = intervals.as_ref().map_or_else(
+                || {
+                    dictionary
+                        .iter()
+                        .map(|c| c.length.unwrap_or(0))
+                        .sum::<i64>()
+                },
+                Regions::base_count,
+            );
+            for counter in [&mut counters.snp, &mut counters.indel] {
+                let missing = base_count as f64 - counter.size();
+                counter.increment(TruthState::Missing, CallState::Missing, missing);
+            }
+        }
+        let types = [("SNP", &counters.snp), ("INDEL", &counters.indel)];
+        let summary = types
+            .iter()
+            .map(|(name, counts)| {
+                SummaryRow::new(
+                    name,
+                    counts,
+                    &scheme,
+                    &truth_sample,
+                    &call_sample,
+                    opts.missing_sites_hom_ref,
+                )
+            })
+            .collect();
+        let mut detail = Vec::new();
+        for (name, counts) in &types {
+            for truth_state in TRUTH_STATES {
+                for call_state in CALL_STATES {
+                    let count = counts.count(truth_state, call_state);
+                    if count > 0 || opts.output_all_rows {
+                        detail.push(DetailRow {
+                            variant_type: name,
+                            truth_sample: truth_sample.clone(),
+                            call_sample: call_sample.clone(),
+                            truth_state,
+                            call_state,
+                            count,
+                            contingency_values: scheme.cell_text(truth_state, call_state),
+                        });
+                    }
                 }
             }
         }
+        let contingency = types
+            .iter()
+            .map(|(name, counts)| {
+                let totals = counts.contingency_counts(&scheme);
+                ContingencyRow {
+                    variant_type: name,
+                    truth_sample: truth_sample.clone(),
+                    call_sample: call_sample.clone(),
+                    tp_count: totals[Contingency::Tp as usize],
+                    tn_count: totals[Contingency::Tn as usize],
+                    fp_count: totals[Contingency::Fp as usize],
+                    fn_count: totals[Contingency::Fn as usize],
+                    empty_count: totals[Contingency::Empty as usize],
+                }
+            })
+            .collect();
+        Ok((summary, detail, contingency))
     }
-    let contingency = types
-        .iter()
-        .map(|(name, counts)| {
-            let totals = counts.contingency_counts(&scheme);
-            ContingencyRow {
-                variant_type: name,
-                truth_sample: truth_sample.clone(),
-                call_sample: call_sample.clone(),
-                tp_count: totals[Contingency::Tp as usize],
-                tn_count: totals[Contingency::Tn as usize],
-                fp_count: totals[Contingency::Fp as usize],
-                fn_count: totals[Contingency::Fn as usize],
-                empty_count: totals[Contingency::Empty as usize],
-            }
-        })
-        .collect();
-    Ok((summary, detail, contingency))
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
-    let (summary, detail, contingency) = run(&opts)?;
-    Ok(ToolOutput {
+    Ok(files(&opts.prefix, run(&opts)?))
+}
+
+/// The three files under `prefix`.
+fn files(prefix: &Path, (summary, detail, contingency): Rows) -> ToolOutput {
+    ToolOutput {
         main: None,
         extra: vec![
             (
-                output_path(&opts.prefix, SUMMARY_EXTENSION),
+                output_path(prefix, SUMMARY_EXTENSION),
                 MetricsOutput::from_rows(&summary, None),
             ),
             (
-                output_path(&opts.prefix, DETAIL_EXTENSION),
+                output_path(prefix, DETAIL_EXTENSION),
                 MetricsOutput::from_rows(&detail, None),
             ),
             (
-                output_path(&opts.prefix, CONTINGENCY_EXTENSION),
+                output_path(prefix, CONTINGENCY_EXTENSION),
                 MetricsOutput::from_rows(&contingency, None),
             ),
         ],
-    })
+    }
+}
+
+/// The tool as a tap of a variant stream (docs/chaining.md section 33):
+/// the stream is the call VCF (`CALL_VCF` names its file), compared with
+/// `TRUTH_VCF` read in step with it. The checks of `CALL_VCF` (its samples,
+/// its dictionary, its index under `INTERVALS`) are made as the tool makes
+/// them, on the stream's header and on the source file.
+pub fn variant_tap(inv: &Invocation) -> Result<crate::stage::variant::BuildVariantSink> {
+    use crate::stage::variant::VariantSink;
+    let opts = Options::from_invocation(inv)?;
+    Ok(Box::new(move |header| {
+        let intervals = load_intervals(&opts)?;
+        let truth_reader = VcfReader::open(&opts.truth_vcf)?;
+        let call = CallSide {
+            path: &opts.call_vcf,
+            samples: header.samples().to_vec(),
+            dictionary: header.dictionary().cloned(),
+        };
+        let concordance = Concordance::new(&opts, intervals, truth_reader, &call)?;
+        Ok(Box::new(ConcordanceTap {
+            concordance,
+            samples: header.samples().len(),
+            prefix: opts.prefix.clone(),
+            source: opts.call_vcf.clone(),
+            lines: 0,
+        }) as Box<dyn VariantSink>)
+    }))
+}
+
+/// [`variant_tap`]'s sink.
+struct ConcordanceTap {
+    concordance: Concordance,
+    samples: usize,
+    prefix: PathBuf,
+    source: PathBuf,
+    lines: u64,
+}
+
+impl crate::stage::variant::VariantSink for ConcordanceTap {
+    fn accept_batch(
+        &mut self,
+        _header: &vcf::VcfHeader,
+        batch: &[crate::stage::variant::VcfLine],
+    ) -> Result<()> {
+        for line in batch {
+            self.lines += 1;
+            if line.text.starts_with('#') {
+                continue;
+            }
+            let variant = vcf::variant_from_line(&line.text, self.samples).map_err(|message| {
+                Error::Intervals {
+                    path: self.source.clone(),
+                    message: format!("record {}: {message}", self.lines),
+                }
+            })?;
+            self.concordance.push_call(variant)?;
+        }
+        Ok(())
+    }
+
+    fn finish(self: Box<Self>) -> Result<crate::stage::Products> {
+        let rows = self.concordance.finish()?;
+        Ok(crate::stage::Products::metrics(files(&self.prefix, rows)))
+    }
 }
 
 #[cfg(test)]

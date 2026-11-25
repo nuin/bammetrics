@@ -60,7 +60,14 @@ const MIN_TREEIFY_CAPACITY: usize = 64;
 /// `TREEIFY_THRESHOLD` entries in a table under 64 slots. `None` when a
 /// bin would become a tree, whose iteration order this does not model.
 pub fn hash_map_order_checked(hashes: &[i32]) -> Option<Vec<usize>> {
-    let mut capacity = 16usize;
+    hash_map_order_sized(hashes, 16)
+}
+
+/// [`hash_map_order_checked`] for `new HashMap<>(initial)`: the table
+/// starts at `tableSizeFor(initial)` slots (the power of two at or above
+/// it, 1 for 0 or 1, at most 2^30).
+pub fn hash_map_order_sized(hashes: &[i32], initial: usize) -> Option<Vec<usize>> {
+    let mut capacity = initial.clamp(1, 1 << 30).next_power_of_two();
     let mut bins: HashMap<usize, usize> = HashMap::new();
     let bin = |hash: i32, capacity: usize| (spread(hash) & (capacity as i32 - 1)) as usize;
     let rebin = |count: usize, capacity: usize| {
@@ -843,6 +850,21 @@ pub fn latin1_utf8(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
         }
     }
     std::borrow::Cow::Owned(out)
+}
+
+/// The bytes an `OutputStreamWriter` over ISO-8859-1 writes for `text`: a
+/// character up to U+00FF as its one byte, any other as `?` (one `?` for a
+/// character outside the Basic Multilingual Plane, a surrogate pair in
+/// Java).
+pub fn iso_8859_1(text: &str) -> std::borrow::Cow<'_, [u8]> {
+    if text.is_ascii() {
+        return std::borrow::Cow::Borrowed(text.as_bytes());
+    }
+    std::borrow::Cow::Owned(
+        text.chars()
+            .map(|c| u8::try_from(u32::from(c)).unwrap_or(b'?'))
+            .collect(),
+    )
 }
 
 /// `new String(bytes, UTF_8)`: each malformed sequence becomes U+FFFD as

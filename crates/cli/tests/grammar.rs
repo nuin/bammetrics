@@ -78,7 +78,10 @@ fn bodies(dir: &Path) -> BTreeMap<String, String> {
             }
             continue;
         }
-        let text = fs::read_to_string(&path).expect("read");
+        // A BGZF VCF and its .tbi are bytes: compared as they are.
+        let bytes = fs::read(&path).expect("read");
+        let text =
+            String::from_utf8(bytes).unwrap_or_else(|binary| format!("{:?}", binary.into_bytes()));
         let body: Vec<&str> = text.lines().filter(|l| !l.starts_with("# ")).collect();
         let name = path
             .file_name()
@@ -812,6 +815,38 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("COMPARE_MQ", "true")),
             picard_outputs: single,
         },
+        Case {
+            verb: "split-vcfs",
+            class: "SplitVcfs",
+            verb_args: strings(&[&built.vcf]),
+            picard_args: strings(&[&format!("I={}", built.vcf)]),
+            option: Some(("STRICT", "false")),
+            picard_outputs: split_vcfs_outputs,
+        },
+        Case {
+            verb: "make-sites-only-vcf",
+            class: "MakeSitesOnlyVcf",
+            verb_args: strings(&[&built.vcf]),
+            picard_args: strings(&[&format!("I={}", built.vcf)]),
+            option: Some(("SAMPLE", "S1")),
+            picard_outputs: sites_vcf,
+        },
+        Case {
+            verb: "make-vcf-sample-name-map",
+            class: "MakeVcfSampleNameMap",
+            verb_args: strings(&[&built.vcf]),
+            picard_args: strings(&[&format!("I={}", built.vcf)]),
+            option: None,
+            picard_outputs: single,
+        },
+    ]
+}
+
+/// `SplitVcfs` has no `OUTPUT`: the verb's `-o PREFIX` names its two files.
+fn split_vcfs_outputs(out: &str) -> Vec<String> {
+    vec![
+        format!("SNP_OUTPUT={out}.snp.vcf.gz"),
+        format!("INDEL_OUTPUT={out}.indel.vcf.gz"),
     ]
 }
 
@@ -820,6 +855,11 @@ fn cases(built: &Built) -> Vec<Case> {
 fn split_directory(out: &str) -> Vec<String> {
     fs::create_dir_all(out).expect("split directory");
     vec![format!("O={out}")]
+}
+
+/// htsjdk types a VCF output by its name: `O=` takes a `.vcf`.
+fn sites_vcf(out: &str) -> Vec<String> {
+    vec![format!("O={out}.vcf")]
 }
 
 fn commented_bam(out: &str) -> Vec<String> {
@@ -844,6 +884,7 @@ fn named_output(verb: &str) -> Option<&'static str> {
         "add-comments-to-bam" | "gather-bam-files" | "merge-sam-files" | "reorder-sam" => {
             Some("bam")
         }
+        "make-sites-only-vcf" => Some("vcf"),
         _ => None,
     }
 }
@@ -959,7 +1000,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 74);
+    assert_eq!(classes.len(), 77);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

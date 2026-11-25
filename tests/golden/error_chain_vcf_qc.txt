@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/vcf_writer/calls.vcf
+-o
+OUT/s
++
+qc
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (qc): qc reads the metrics of the taps of a BAM, and this chain's stream holds VCF records (the source is a VCF)
+  bammetrics check DIR reads the metrics files a chain wrote

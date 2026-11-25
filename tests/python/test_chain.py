@@ -827,3 +827,22 @@ def test_a_materialized_step_takes_keep_and_feeds_qc(tmp_path, monkeypatch):
                    output=tmp_path / "w", reference=REFERENCE)
     assert [s.verb for s in run.stages].count("wgs") == 1
     assert "WgsMetrics" in (tmp_path / "w.verdict.json").read_text()
+
+
+def test_a_vcf_source_carries_vcf_records(tmp_path):
+    """Wave W16 (docs/chaining.md section 33): the variant stream, its write and its tap."""
+    calls = DATA / "vcf_writer" / "calls.vcf"
+    run = bm.chain(calls, [bm.step("variant_calling", dbsnp=DATA / "vcf_writer" / "dbsnp.vcf"),
+                           bm.step("write", output=str(tmp_path / "r.vcf.gz"), index=True)],
+                   output=tmp_path / "r")
+    assert [(s.verb, s.role, s.status) for s in run.stages] == [
+        ("variant-calling", "tap", "ok"), ("write", "write", "ok")]
+    assert [Path(f).name for f in run.stages[1].files] == ["r.vcf.gz", "r.vcf.gz.tbi"]
+    assert sorted(run.metrics) == ["variant-calling.variant_calling_detail_metrics",
+                                   "variant-calling.variant_calling_summary_metrics"]
+    # The fixture's GQ values hold decimals, which htslib's record parser refuses:
+    # the index is read through tabix.
+    with pysam.TabixFile(str(tmp_path / "r.vcf.gz")) as written:
+        assert sum(1 for _ in written.fetch("c1")) > 0
+    with pytest.raises(bm.UsageError, match="this chain's stream holds VCF records"):
+        bm.chain(calls, ["insert_size"], output=tmp_path / "x")

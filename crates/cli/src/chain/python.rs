@@ -312,15 +312,17 @@ pub fn step_table(name: &str) -> Result<StepTable, VerbError> {
         return Err(not_a_step(verb, &format!("step {}", verb.name))
             .hint(format!("steps: {}", step_names().join(", "))));
     }
-    let role = if is_transform(verb) {
-        Role::Transform
-    } else if is_split(verb) {
-        Role::Split
-    } else if is_materialized(verb) {
-        Role::Materialize
-    } else {
-        Role::Tap
-    };
+    let tool = verb.tool();
+    let role =
+        if is_transform(verb) || bammetrics_core::stage::variant::transform_label(tool).is_some() {
+            Role::Transform
+        } else if is_split(verb) || bammetrics_core::stage::variant::is_split(tool) {
+            Role::Split
+        } else if is_materialized(verb) {
+            Role::Materialize
+        } else {
+            Role::Tap
+        };
     let (keywords, refused) = tool_keywords(verb);
     Ok(StepTable {
         verb: verb.name,

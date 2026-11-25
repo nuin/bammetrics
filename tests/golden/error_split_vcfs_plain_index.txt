@@ -1,0 +1,12 @@
+## argv
+SplitVcfs
+I=tests/data/vcf_tools/types.vcf
+SNP_OUTPUT=OUT/snp.vcf
+INDEL_OUTPUT=OUT/indel.vcf.gz
+STRICT=false
+CREATE_INDEX=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: SNP_OUTPUT=OUT/snp.vcf: CREATE_INDEX=true asks for tribble's .idx beside a plain VCF, which bammetrics does not write (docs/07 decision W16-3): name the output .vcf.gz for its .tbi, or give CREATE_INDEX=false

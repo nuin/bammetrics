@@ -18,6 +18,7 @@
 use std::path::{Path, PathBuf};
 
 use bammetrics_core::registry::Kind as OptKind;
+use bammetrics_core::vcf_writer::VcfFormat;
 
 use super::args::{find_step, is_split, is_transform, materialize_leaves, step_parser_flags};
 use super::{QC, Spec, StepSpec, WRITE, usage};
@@ -92,11 +93,107 @@ fn result_of(text: &str) -> Option<Kind> {
     None
 }
 
+/// The length of the VCF extension `-o` ends in: `.vcf`, `.vcf.gz` or
+/// `.vcf.bgz`, in any case, on a name that is not a directory. On a chain
+/// whose source is a VCF, a name htsjdk writes block-compressed (`.gz`,
+/// `.gzip`, `.bgz`, `.bgzf`) is one too (decision W16-8).
+fn vcf_extension(text: &str, vcf_source: bool) -> Option<usize> {
+    if Path::new(text).is_dir() || text.ends_with('/') {
+        return None;
+    }
+    let lower = text.to_ascii_lowercase();
+    let compressed: &[&str] = if vcf_source {
+        &[".gz", ".gzip", ".bgz", ".bgzf"]
+    } else {
+        &[]
+    };
+    [".vcf.gz", ".vcf.bgz", ".vcf"]
+        .iter()
+        .chain(compressed)
+        .find(|extension| lower.ends_with(*extension) && lower.len() > extension.len())
+        .map(|extension| extension.len())
+}
+
+/// True when the chain's source is a VCF file.
+fn source_is_vcf(spec: &Spec) -> bool {
+    spec.source
+        .as_deref()
+        .is_some_and(|source| bammetrics_core::vcf::is_vcf(Path::new(source)))
+}
+
+/// `-o r.vcf.gz` on a chain whose source is a VCF (docs/chaining.md
+/// section 33): `write r.vcf.gz --index` as the last step when the chain
+/// has no `write` (a plain `.vcf` gets no index, decision W16-3), with or
+/// without other steps, and the prefix `r`. A VCF name on a chain of
+/// alignments, or a BAM name on a chain of VCF records, is refused.
+fn vcf_output(spec: &mut Spec, text: &str) -> Result<bool, VerbError> {
+    let vcf_source = source_is_vcf(spec);
+    let Some(extension) = vcf_extension(text, vcf_source) else {
+        if vcf_source && result_of(text).is_some() {
+            return Err(usage(format!(
+                "-o {text} names a BAM, SAM or CRAM, and this chain's source is a VCF: its \
+                 stream holds VCF records"
+            ))
+            .from("-o")
+            .hint("-o out.vcf.gz writes the VCF and its .tbi; -o PREFIX names the metrics files"));
+        }
+        return Ok(false);
+    };
+    // A source that is missing is named by prepare: `not found`.
+    let exists = spec
+        .source
+        .as_deref()
+        .is_some_and(|s| Path::new(s).exists());
+    if !vcf_source && !exists {
+        return Ok(false);
+    }
+    if !vcf_source {
+        let source = spec
+            .source
+            .as_deref()
+            .map(Path::new)
+            .unwrap_or(Path::new("-"));
+        let empty = std::fs::metadata(source).is_ok_and(|m| m.is_file() && m.len() == 0);
+        if !empty && bammetrics_core::cram::holds_alignments(source) {
+            return Err(usage(format!(
+                "-o {text} names a VCF, and this chain's source is no VCF: its stream holds \
+                 alignments"
+            ))
+            .from("-o")
+            .hint("-o out.bam writes the BAM of a chain with a transform"));
+        }
+        return Err(usage(format!(
+            "-o {text} names a VCF, and the source {} is no VCF: {}",
+            source.display(),
+            bammetrics_core::vcf::why_not_vcf(source)
+        ))
+        .from("-o")
+        .hint("a VCF source is plain, gzip or BGZF text whose header lines start with #"));
+    }
+    if spec.steps.iter().any(|step| step.verb == WRITE) {
+        return Ok(true);
+    }
+    let mut args = vec![text.to_owned()];
+    if VcfFormat::of(Path::new(text)).is_ok_and(|format| format == VcfFormat::Bgzf) {
+        args.push("--index".to_owned());
+    }
+    spec.steps.push(StepSpec {
+        verb: WRITE.to_owned(),
+        args,
+        origin: None,
+    });
+    spec.prefix = Some(text[..text.len() - extension].to_owned());
+    Ok(true)
+}
+
 /// `-o r.bam`: the implicit `write` and the prefix `r`.
 fn result_output(spec: &mut Spec) -> Result<(), VerbError> {
     let Some(text) = spec.prefix.clone() else {
         return Ok(());
     };
+    if vcf_output(spec, &text)? {
+        return Ok(());
+    }
     let Some(result) = result_of(&text) else {
         return Ok(());
     };

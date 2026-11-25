@@ -199,6 +199,13 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
     ),
     // METRICS_FILE_PREFIX is a prefix: the tool names its two files.
     ("CollectRrbsMetrics", &[("METRICS_FILE_PREFIX", "")]),
+    (
+        "SplitVcfs",
+        &[
+            ("SNP_OUTPUT", ".snp.vcf.gz"),
+            ("INDEL_OUTPUT", ".indel.vcf.gz"),
+        ],
+    ),
 ];
 
 /// The files `tool` writes under an output prefix, as (file option,
@@ -744,7 +751,15 @@ mod tests {
         assert!(file_extensions("EstimateLibraryComplexity").is_none());
         for (tool, files) in OTHER_FILES {
             let registered = crate::registry::find(tool).expect("registered");
-            assert_eq!(files[0].0, registered.output_name(), "{tool}");
+            // A tool without an OUTPUT (SplitVcfs) names its first file option.
+            let first = files[0].0;
+            assert!(
+                first == registered.output_name()
+                    || registered
+                        .option("OUTPUT")
+                        .is_none_or(|o| o.kind == crate::registry::Kind::Rejected),
+                "{tool}"
+            );
             assert!(PROGRAMS.iter().all(|p| p.name != *tool), "{tool}");
         }
     }

@@ -2035,6 +2035,40 @@ Where bammetrics differs:
 - The `check-terminator-block` verb prints the name on standard output (or `-o`); the
   Picard face prints it on standard error, where Picard prints it.
 
+## VCF writer and the variant stream
+
+The writer (`crates/core/src/vcf_writer.rs`, docs/chaining.md section 33) is held to
+Picard `VcfFormatConverter` line for line (`tests/concordance/test_vcf_writer.py`).
+Where it differs:
+
+- A plain `.vcf` gets no index. Picard writes tribble's `.idx` beside it
+  (`CREATE_INDEX`); `write out.vcf --index` exits 2 (docs/07 W16-3).
+- The `.tbi` of a `.vcf.gz` differs from Picard's in its bytes: its offsets are those
+  of this writer's BGZF blocks. Every whole-contig and 200-base `tabix` query returns
+  the same records (W16-5).
+- A header over 64 MiB or a line over 16 MiB fails the read with exit 1 and no file;
+  htsjdk reads any length (W16-10).
+- A BCF is neither read nor written: a `.bcf` output exits 2, a BCF source is named as
+  one.
+- Standard input is never a VCF source: a chain reads alignments from `-` (W16-6).
+- A record that starts or ends past 536,903,680 fails the `.tbi` in both tools; Picard
+  with an `ArrayIndexOutOfBoundsException`, bammetrics naming the record. Neither writes
+  a CSI index.
+- `SplitVcfs` and `MakeSitesOnlyVcf` write no `.idx` beside a plain output. With
+  `CREATE_INDEX` at its default (true) a note says so; `CREATE_INDEX=true` given for a
+  plain name exits 1 (docs/07 W16-11). The VCFs are Picard's byte for byte.
+- A failed `SplitVcfs` or `MakeSitesOnlyVcf` leaves no file; Picard leaves the VCFs it
+  began (W16-14). `SNP_OUTPUT` and `INDEL_OUTPUT` naming one file exits 1.
+- `MakeVcfSampleNameMap` exits 1 when more than 8 inputs fall into one bin of Picard's
+  `HashMap` of 64 slots or more, whose order bammetrics does not model (W16-15); no real
+  set of paths is known to do so.
+- `SplitVcfs SEQUENCE_DICTIONARY` holds at most 128 MiB of text and 4,000,000 `@SQ`
+  lines (W16-18); a larger one exits 1. Picard reads any size.
+- In a chain, `make-sites-only-vcf` under `--validation-stringency` `LENIENT` or `SILENT`
+  exits 2 (W16-19). The tool alone writes keys the header lacks there, as Picard does.
+- The verb `make-sites-only-vcf` exits 2 for an output name htsjdk cannot type (`o.txt`,
+  `o.VCF`); the Picard face exits 1, as Picard does.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

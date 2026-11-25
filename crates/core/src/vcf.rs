@@ -33,16 +33,23 @@ use std::path::{Path, PathBuf};
 use noodles::vcf;
 
 mod bit_set;
+mod encode;
+mod encode_genotypes;
+mod full_header;
 mod header;
 mod line_cap;
 mod site;
 mod site_header;
+mod subset;
 
 pub use bit_set::MAX_DBSNP_PAGES;
 use bit_set::PAGE_BITS;
 use bit_set::{BitSet, OverBudget};
+pub use encode::{Encoder, format_quality};
+pub use full_header::{Count, Definition, VcfHeader, java_compare};
 use line_cap::LineCap;
-pub use site_header::{ContigLine, MAX_HEADER_BYTES, SiteHeader};
+pub use site_header::{ContigLine, MAX_HEADER_BYTES, RawHeader, SiteHeader};
+pub use subset::{SampleSubset, tree_set};
 
 use crate::bed_to_interval_list;
 use crate::error::{Error, Result};
@@ -428,7 +435,7 @@ impl Variant {
 pub struct VcfReader {
     path: PathBuf,
     header: vcf::Header,
-    reader: vcf::io::Reader<Box<dyn BufRead>>,
+    reader: vcf::io::Reader<Box<dyn BufRead + Send>>,
     record: vcf::Record,
     line: u64,
 }
@@ -445,7 +452,7 @@ fn open_text(
     max_line_bytes: usize,
     max_lines: u64,
     max_header_lines: u64,
-) -> Result<Box<dyn BufRead>> {
+) -> Result<Box<dyn BufRead + Send>> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -464,7 +471,7 @@ fn open_text(
     let gzip = read >= 2 && magic[..2] == [0x1f, 0x8b];
     let bgzf = read == magic.len() && magic[3] & 0x04 != 0 && magic[12..14] == *b"BC";
     let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
-    let text: Box<dyn BufRead> = if gzip && bgzf {
+    let text: Box<dyn BufRead + Send> = if gzip && bgzf {
         Box::new(noodles::bgzf::io::Reader::new(file))
     } else if gzip {
         Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
@@ -589,7 +596,7 @@ impl VcfReader {
 /// record line through `vcf/site.rs`, without noodles.
 pub struct SiteReader {
     path: PathBuf,
-    reader: Box<dyn BufRead>,
+    reader: Box<dyn BufRead + Send>,
     header: SiteHeader,
     rules: site::Rules,
     line: u64,
@@ -634,24 +641,16 @@ impl SiteReader {
     /// a byte that is not becoming U+FFFD.
     pub fn next_site(&mut self) -> Result<Option<Site>> {
         loop {
-            self.raw.clear();
-            let read = self
-                .reader
-                .read_until(b'\n', &mut self.raw)
-                .map_err(|source| Error::Input {
+            let read = line_cap::read_line(&mut self.reader, &mut self.raw).map_err(|source| {
+                Error::Input {
                     path: self.path.clone(),
                     source,
-                })?;
+                }
+            })?;
             if read == 0 {
                 return Ok(None);
             }
             self.line += 1;
-            if self.raw.last() == Some(&b'\n') {
-                self.raw.pop();
-                if self.raw.last() == Some(&b'\r') {
-                    self.raw.pop();
-                }
-            }
             let text = crate::java::decode_utf8(&self.raw);
             match site::parse_line(&text, &self.rules) {
                 Ok(Some(site)) => return Ok(Some(site)),
@@ -664,6 +663,144 @@ impl SiteReader {
                 }
             }
         }
+    }
+}
+
+/// A VCF read line by line for a writer: the whole header as htsjdk's
+/// `VCFCodec` reads it ([`VcfHeader`]), then each record line as text, at
+/// most [`MAX_LINE_BYTES`] each, one line in memory at a time.
+/// The smallest header [`VcfLines::take_header`] leaves behind.
+const EMPTY_HEADER: &str = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+
+pub struct VcfLines {
+    path: PathBuf,
+    reader: Box<dyn BufRead + Send>,
+    header: std::sync::Arc<VcfHeader>,
+    raw: Vec<u8>,
+    line: u64,
+}
+
+impl VcfLines {
+    /// Open `path` (plain, gzip or BGZF by its first bytes) and read its
+    /// header.
+    pub fn open(path: &Path) -> Result<Self> {
+        let mut reader = open_text(path, MAX_LINE_BYTES, u64::MAX, u64::MAX)?;
+        let header = VcfHeader::read(&mut reader).map_err(|message| Error::Intervals {
+            path: path.to_path_buf(),
+            message,
+        })?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            reader,
+            header: std::sync::Arc::new(header),
+            raw: Vec::new(),
+            line: 0,
+        })
+    }
+
+    pub fn header(&self) -> &VcfHeader {
+        &self.header
+    }
+
+    /// The header, one copy shared by every step that holds it.
+    pub fn shared_header(&self) -> std::sync::Arc<VcfHeader> {
+        std::sync::Arc::clone(&self.header)
+    }
+
+    /// The header, handed over: the reader keeps an empty one, so a caller
+    /// that drops its copy frees it (a chain whose transform makes a new
+    /// header holds the source's only while a step reads it).
+    pub fn take_header(&mut self) -> Result<std::sync::Arc<VcfHeader>> {
+        let empty = VcfHeader::read(&mut EMPTY_HEADER.as_bytes()).map_err(Error::Metric)?;
+        Ok(std::mem::replace(
+            &mut self.header,
+            std::sync::Arc::new(empty),
+        ))
+    }
+
+    /// The header as the reader holds it, for a caller that rewrites it in
+    /// place ([`SampleSubset::new_shared`]); the lines read after are not
+    /// read by it.
+    pub fn header_mut(&mut self) -> &mut std::sync::Arc<VcfHeader> {
+        &mut self.header
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The record lines read so far.
+    pub fn lines(&self) -> u64 {
+        self.line
+    }
+
+    /// Replace `out` by the next line without its line end (`\n`, `\r` or
+    /// `\r\n`), decoded as UTF-8 (a byte that is not becomes U+FFFD, as
+    /// Java decodes it). False at the end of the file.
+    pub fn next_line(&mut self, out: &mut String) -> Result<bool> {
+        let read = line_cap::read_line(&mut self.reader, &mut self.raw).map_err(|source| {
+            Error::Input {
+                path: self.path.clone(),
+                source,
+            }
+        })?;
+        if read == 0 {
+            return Ok(false);
+        }
+        self.line += 1;
+        out.clear();
+        out.push_str(&crate::java::decode_utf8(&self.raw));
+        Ok(true)
+    }
+}
+
+/// One record line (no line end) decoded into a [`Variant`] as
+/// [`VcfReader::next_variant`] decodes a record of a file whose header
+/// names `samples` samples: the same noodles fields and the same rules.
+pub fn variant_from_line(line: &str, samples: usize) -> std::result::Result<Variant, String> {
+    let mut reader = vcf::io::Reader::new(line.as_bytes());
+    let mut record = vcf::Record::default();
+    reader.read_record(&mut record).map_err(|e| e.to_string())?;
+    parse_variant(&record, samples)
+}
+
+/// The first bytes of the text of the regular file at `path` (plain, gzip
+/// or BGZF), at most 4; `None` for a pipe, a device or a file that cannot
+/// be read. A pipe or a device is never opened here, so it is never read
+/// ahead of its reader.
+fn text_start(path: &Path) -> Option<Vec<u8>> {
+    if !fs::metadata(path).is_ok_and(|m| m.is_file()) || path.starts_with("/dev") {
+        return None;
+    }
+    let mut text = open_text(path, MAX_LINE_BYTES, u64::MAX, u64::MAX).ok()?;
+    let mut start = [0u8; 4];
+    let mut filled = 0;
+    while filled < start.len() {
+        match text.read(&mut start[filled..]) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => filled += n,
+        }
+    }
+    Some(start[..filled].to_vec())
+}
+
+/// True when `path` is a regular file whose text (plain, gzip or BGZF)
+/// starts with `#`: a VCF to the chain verb. htsjdk reads the `##` lines
+/// in any order, so `##fileformat` need not be first; a text that names no
+/// version fails when its header is read, with the codec's message.
+pub fn is_vcf(path: &Path) -> bool {
+    text_start(path).is_some_and(|start| start.first() == Some(&b'#'))
+}
+
+/// Why the file at `path`, which [`is_vcf`] refuses, is no VCF.
+pub fn why_not_vcf(path: &Path) -> String {
+    match text_start(path) {
+        None => "it is not a regular file that can be read".to_owned(),
+        Some(start) if start.is_empty() => "it is empty".to_owned(),
+        Some(start) if start.starts_with(b"BCF") => {
+            "it is a BCF, and bammetrics reads VCF text only".to_owned()
+        }
+        Some(_) => "its text does not start with #, as a VCF header does".to_owned(),
     }
 }
 
@@ -769,7 +906,8 @@ fn parse_genotype(
                 ));
             }
             let gt = value.unwrap_or(".");
-            for token in gt.split(['/', '|']) {
+            // `StringTokenizer` over `/|\`: empty tokens are skipped.
+            for token in gt.split(['/', '|', '\\']).filter(|t| !t.is_empty()) {
                 if token == "." {
                     genotype.alleles.push(None);
                 } else {

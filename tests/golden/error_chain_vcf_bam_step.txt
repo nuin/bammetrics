@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/vcf_writer/calls.vcf
+insert-size
+-o
+OUT/s
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (insert-size): CollectInsertSizeMetrics reads alignments, and this chain's stream holds VCF records (the source is a VCF): it cannot be a step of this chain
+  on a VCF stream: write [PATH] writes a VCF; make-sites-only-vcf is a transform, split-vcfs a split, variant-calling and genotype-concordance are taps
+  the steps: bammetrics chain --help

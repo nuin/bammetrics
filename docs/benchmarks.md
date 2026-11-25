@@ -591,6 +591,74 @@ read holds the primary records of both the same way. The two tools add 99,360 by
 stripped default binary (9,843,192 at 0.31.0, 9,942,552 with them; 113,664 unstripped),
 both built with rustc 1.100.0.
 
+## VCF writer and the variant stream (wave W16)
+
+No real VCF exists under `~/data`. `python3 benches/vcf_scale.py
+~/data/bammetrics-scale/waves/w16 1000000` wrote 1,000,000 records on three 100 Mb contigs
+(three samples with `GT:GQ:DP:AD`, 104,444,492 bytes of text), the same records with the
+samples out of sorted order, and a dbSNP of every tenth site; the files were removed after
+the run. Default threads, `/usr/bin/time -l`; Picard 3.5.0 `VcfFormatConverter
+REQUIRE_INDEX=false` with `-Xmx8g` (its `CREATE_INDEX` default writes the `.tbi`).
+
+| command | bammetrics | Picard |
+|---|---|---|
+| `chain big.vcf -o r.vcf.gz variant-calling --dbsnp dbsnp.vcf` (copy, `.tbi`, tap) | 1.84 s, 60.6 MiB | copy alone 5.3 s, 316 MiB |
+| `chain big_unsorted.vcf -o u.vcf.gz` (every genotype decoded and written anew) | 5.14 s, 16.3 MiB | 8.0 s, 302 MiB |
+| `chain big.vcf -o p.vcf` (plain, no index) | 1.02 s, 11.2 MiB | not run |
+| `variant-calling big.vcf --dbsnp dbsnp.vcf` (the tool alone) | 1.12 s, 46.9 MiB | not run |
+
+Both copies inflate to the text Picard writes, all 1,000,012 lines, and a `tabix` query of
+`chr2:5000000-9000000` returns the same 13,378 records from both indexes. The memgate row
+`chain vcf 1,000,000 records` (both chains in one `sh -c`) peaked at 57.3 MiB against the
+500 MiB of docs/07 section 5, in 6.82 s. The 1,000,000 records hold 33,183,346 bytes of
+BGZF at level 5 and a 174,281-byte `.tbi`.
+
+The review of the writer measured wide lines and long headers (`chain X -o r.vcf.gz`,
+`/usr/bin/time -l`, peak RSS before and after the fix):
+
+| input | before | after |
+|---|---|---|
+| 20,000 samples out of sorted order, 300 records (91 MB) | 298 MB | 100 MB |
+| 100,000 samples out of sorted order, 60 records (92 MB) | 1,075 MB | 140 MB |
+| 100,000 samples in sorted order, 60 records | 106 MB | 106 MB |
+| 100,000 `##contig` lines (4.4 MB) | 285 MB | 37 MB |
+| 1,000,000 `##contig` lines (45 MB) | 2,678 MB | 209 MB |
+| 3,150,000 short `##contig` lines (65 MB, under the 64 MiB header cap) | not run | 486 MB |
+
+Three changes: a batch ends at 4 MiB of text; the header is one shared copy whose lines
+are held as written in one buffer; a record whose samples are out of sorted order is
+decoded into one array per record, where each sample allocated before. The 1,000,000
+records above, written again and removed: the copy with its tap 1.40 s and 58.6 MiB, the
+samples out of sorted order 2.58 s (was 5.14 s) and 16.3 MiB.
+
+### SplitVcfs, MakeSitesOnlyVcf, MakeVcfSampleNameMap
+
+No real VCF is under `~/data`; the inputs are those of `benches/vcf_scale.py` and
+`benches/vcf_wide.py`, written for the measurement and removed. Peak RSS by
+`/usr/bin/time -l`, Picard 3.5.0 under `JAVA_OPTS=-Xmx8g`.
+
+| Input | Command | Picard | bammetrics |
+|---|---|---|---|
+| 1,000,000 records, 3 samples (104 MB) | `MakeSitesOnlyVcf O=.vcf.gz` | 3.7 s, 699 MiB | |
+| the same | `SplitVcfs STRICT=false`, two `.vcf.gz` | 5.0 s, 272 MiB | |
+| the same | `chain make-sites-only-vcf split-vcfs --strict false` | | 1.55 s, 17.6 MiB |
+| the same, samples out of sorted order | `make-sites-only-vcf --sample S1` (every genotype decoded) | | 3.08 s, 15.0 MiB |
+| 200,000 records | `chain make-sites-only-vcf split-vcfs` | | 0.32 s, 15.9 MiB |
+| 20,000 samples by 100 records | `chain make-sites-only-vcf --sample S000001` | | 0.32 s, 37.0 MiB |
+| 1,430,000 `##contig` lines (65 MB, at the 64 MiB header cap) | `make-sites-only-vcf` | | 1.8 s, 274 MiB |
+| the same | `chain make-sites-only-vcf -o c.vcf.gz` | | 1.9 s, 308 MiB (426 MiB before the W16 tools review) |
+| the same at `VCFv4.1` | `chain make-sites-only-vcf -o c.vcf.gz` (the header read back, W16-17) | | 2.3 s, 466 MiB |
+| one sample, one record of 200,000 `FORMAT` keys | `make-sites-only-vcf --sample S1` | | 0.55 s, 98 MiB (26.6 s before) |
+| `SEQUENCE_DICTIONARY` of 3,999,999 `@SQ` lines (128,000,000 bytes) | `split-vcfs --sequence-dictionary` | | 0.4 s, 240 MiB (918 MiB for 6,000,000 lines before) |
+| the same | `split-vcfs --strict false` | | 2.0 s, 277 MiB |
+| the same | `chain -o c.vcf.gz` (the writer alone) | | 1.8 s, 275 MiB |
+
+The tool rewrites the header's sample columns in place, and so does the chain's transform
+since the W16 tools review (`BuildVariantTransform` takes the header to change), unless a
+step in front holds it. The steps behind a transform read the header as a reader of its
+file would (W16-17): the same copy for a `VCFv4.2` header of ASCII text whose lookups read
+back the same, one copy more for any other, under the 500 MiB of docs/07 section 5.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails

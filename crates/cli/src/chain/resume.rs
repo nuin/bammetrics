@@ -144,6 +144,15 @@ fn argv(chain: &Chain, index: usize) -> Vec<String> {
             format!("CREATE_MD5_FILE={}", options.create_md5),
         ];
     }
+    if let (Some(options), Some(vcf)) = (&step.vcf, step.files.first()) {
+        return vec![
+            format!("OUTPUT={}", vcf.path.display()),
+            "FORMAT=vcf".to_owned(),
+            format!("COMPRESSION_LEVEL={}", options.compression_level),
+            format!("CREATE_INDEX={}", options.index),
+            format!("CREATE_MD5_FILE={}", options.md5),
+        ];
+    }
     if step.role == Role::Qc {
         return chain
             .qc
@@ -165,7 +174,7 @@ fn argv(chain: &Chain, index: usize) -> Vec<String> {
 /// The names of the path options of `step`'s tool: their values are
 /// files, hashed by [`resolve`] so a respelled path hashes the same.
 fn path_names(step: &Planned) -> Vec<&'static str> {
-    if step.write.is_some() {
+    if step.write.is_some() || step.vcf.is_some() {
         return vec!["OUTPUT"];
     }
     step.tool.map_or_else(Vec::new, |tool| {
@@ -809,13 +818,14 @@ pub fn skipped_outcome(number: usize, key: &Key, resume: &Resume) -> StepOutcome
 }
 
 /// The kinds a run writes, as the `&'static str` of [`super::run::Written`].
-const KINDS: [&str; 26] = [
+const KINDS: [&str; 27] = [
     "metrics",
     "gaps",
     "file",
     "bam",
     "sam",
     "cram",
+    "vcf",
     "index",
     "md5",
     "kept",
@@ -856,6 +866,7 @@ fn kind_fits(kind: &str, path: &Path) -> bool {
         "bam" | "kept" => Some("bam"),
         "sam" => Some("sam"),
         "cram" => Some("cram"),
+        "index" if extension == Some("tbi") => Some("tbi"),
         "index" => Some("bai"),
         "md5" => Some("md5"),
         _ => None,
@@ -1127,6 +1138,8 @@ mod tests {
         assert!(kind_fits("kept", Path::new("o/s.marked.bam")));
         assert!(kind_fits("index", Path::new("o/s.marked.bai")));
         assert!(kind_fits("cram", Path::new("o/r.cram")));
+        assert!(kind_fits("vcf", Path::new("o/r.vcf.gz")));
+        assert!(kind_fits("index", Path::new("o/r.vcf.gz.tbi")));
         assert!(!kind_fits("cram", Path::new("o/r.bam")));
         assert!(kind_fits("md5", Path::new("o/s.marked.bam.md5")));
         assert!(!kind_fits("bam", Path::new("o/s.insert_size_metrics")));

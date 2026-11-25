@@ -1,0 +1,39 @@
+## argv
+MakeSitesOnlyVcf
+I=tests/data/vcf_writer/bad_filter.vcf
+O=OUT/sites.vcf
+CREATE_INDEX=false
+VALIDATION_STRINGENCY=LENIENT
+## exit
+0
+## stdout
+## stderr
+## file sites.vcf
+##fileformat=VCFv4.2
+##ALT=<ID=NON_REF,Description="Any other allele">
+##FILTER=<ID=LowQual,Description="Low quality">
+##FILTER=<ID=q10,Description="Quality below 10">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allele depths">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=FT,Number=.,Type=String,Description="Genotype-level filter">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="PL">
+##FORMAT=<ID=XA,Number=A,Type=Float,Description="Per alternate">
+##FORMAT=<ID=XS,Number=1,Type=String,Description="Text">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele freq",Source="gatk",Version="3">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">
+##INFO=<ID=FL,Number=0,Type=Flag,Description="A flag">
+##INFO=<ID=FY,Number=.,Type=Flag,Description="A flag of any count">
+##INFO=<ID=MQ,Number=1,Type=Float,Description="RMS Mapping Quality">
+##INFO=<ID=NODESC,Number=1,Type=Integer,Description="Not provided in original VCF header">
+##INFO=<ID=XT,Number=1,Type=String,Description="Extra attrs">
+##INFO=<ID=ZZ,Number=.,Type=String,Description="Has \"quotes\" and, commas">
+##META=<ID=Assay,Type=String,Number=.,Values=Exome]>
+##SAMPLE=<ID=S1,Assay=WholeGenome>
+##contig=<ID=c2,length=3000,assembly=b37,md5=abc>
+##contig=<ID=c1,length=5000>
+##key=value with spaces
+##source=a caller
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+c1	1	.	A	C	.	nofilter	.

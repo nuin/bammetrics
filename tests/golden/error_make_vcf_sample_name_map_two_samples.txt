@@ -1,0 +1,9 @@
+## argv
+MakeVcfSampleNameMap
+I=tests/data/vcf_writer/call.vcf
+O=OUT/cohort.sample_map
+## exit
+1
+## stdout
+## stderr
+bammetrics: Input: tests/data/vcf_writer/call.vcf was expected to contain a single sample but actually contained 2 samples.

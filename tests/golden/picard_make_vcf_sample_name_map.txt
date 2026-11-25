@@ -1,0 +1,12 @@
+## argv
+MakeVcfSampleNameMap
+I=tests/data/vcf_writer/truth.vcf
+I=tests/data/vcf_tools/u.vcf
+O=OUT/cohort.sample_map
+## exit
+0
+## stdout
+## stderr
+## file cohort.sample_map
+tests/data/vcf_writer/truth.vcf	T
+tests/data/vcf_tools/u.vcf	U

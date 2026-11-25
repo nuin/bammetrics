@@ -269,6 +269,11 @@ fn kind_of(path: &Path) -> Option<Kind> {
         .map(|sniffed| sniffed.kind)
 }
 
+/// True when `path` is a regular file holding a BAM, a CRAM or SAM text.
+pub fn holds_alignments(path: &Path) -> bool {
+    kind_of(path).is_some()
+}
+
 /// True when `path` is a regular file that starts with the CRAM magic.
 pub fn is_cram(path: &Path) -> bool {
     kind_of(path) == Some(Kind::Cram)

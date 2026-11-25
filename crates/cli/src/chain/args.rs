@@ -296,7 +296,11 @@ pub(crate) fn is_transform(verb: &Verb) -> bool {
 /// True for a verb that can be a step: a transform, a split, a one-pass
 /// tool, or a tool that runs on a file of its stream (materialize).
 pub(crate) fn is_step(verb: &Verb) -> bool {
-    is_transform(verb) || is_split(verb) || verb.tool().collector.is_some() || is_materialized(verb)
+    is_transform(verb)
+        || is_split(verb)
+        || verb.tool().collector.is_some()
+        || is_materialized(verb)
+        || stage::variant::is_variant_step(verb.tool())
 }
 
 /// True for a verb whose tool runs on a file holding the stream at its
@@ -392,6 +396,17 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
             verb.class
         ))
         .hint("run it on the file: bammetrics check-terminator-block FILE");
+    }
+    if verb.class == bammetrics_core::make_vcf_sample_name_map::TOOL.name {
+        return usage(format!(
+            "{place}: {} reads the headers of several VCF files and writes a sample map, and a \
+             chain hands on the records of one stream: it cannot be a step",
+            verb.class
+        ))
+        .hint(format!(
+            "run it on the VCF files: bammetrics {} A.vcf.gz B.vcf.gz -o cohort.sample_map",
+            verb.name
+        ));
     }
     if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {
         return usage(format!(
@@ -575,6 +590,10 @@ pub fn help() -> String {
          copy in the temporary directory): {}\n  \
          qc         the last step: the verdict and report over the taps of its stream, \
          as bammetrics qc writes them; it adds the taps its --preset needs\n\n\
+         A VCF source (a file whose text starts with ##fileformat) carries VCF records: \
+         write writes a VCF (.vcf.gz is BGZF, --index its .tbi), variant-calling and \
+         genotype-concordance are its taps, and -o out.vcf.gz adds write out.vcf.gz \
+         --index. A step of the other kind exits 2.\n\n\
          A step takes its verb's own options in every spelling (--minimum-pct 0.1, \
          --MINIMUM_PCT 0.1, MINIMUM_PCT=0.1); bammetrics chain BAM + VERB --help lists them. \
          A value that is a lone + is written --option=+.\n\n\
