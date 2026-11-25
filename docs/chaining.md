@@ -2317,7 +2317,7 @@ and that has no `write` step adds `write r.vcf.gz --index` as the last step, `wr
 r.vcf` for a plain name, and the prefix of every metrics file is `r`. A chain with no
 step and `-o r.vcf.gz` is the copy above. On a VCF source any name htsjdk writes as
 BGZF (`.gz`, `.gzip`, `.bgz`, `.bgzf`, any case) is a VCF too: `-o r.gz` writes `r.gz`
-and `r.gz.tbi` with the prefix `r` (decision W16-9).
+and `r.gz.tbi` with the prefix `r` (decision D244).
 
 Refused before the first read, exit 2:
 
@@ -2328,7 +2328,7 @@ Refused before the first read, exit 2:
 | `chain calls.vcf vcf-to-interval-list` | `step 1 (vcf-to-interval-list): VcfToIntervalList reads a VCF file of its own: it cannot be a step; ...` |
 | `chain in.bam mark-duplicates -o r.vcf.gz` | `-o r.vcf.gz names a VCF, and this chain's source is no VCF: its stream holds alignments` |
 | `chain calls.vcf -o r.bam` | `-o r.bam names a BAM, SAM or CRAM, and this chain's source is a VCF: its stream holds VCF records` |
-| `chain calls.vcf write r.vcf --index` | the index of a plain VCF is tribble's `.idx`, which this writer does not write (decision W16-3) |
+| `chain calls.vcf write r.vcf --index` | the index of a plain VCF is tribble's `.idx`, which this writer does not write (decision D238) |
 | `chain calls.vcf write -` | a VCF is written to a file |
 | `chain calls.vcf ... qc` | qc reads the metrics of the taps of a BAM |
 | `chain notes.txt -o r.vcf` | `-o r.vcf names a VCF, and the source notes.txt is no VCF: its text does not start with #, as a VCF header does`; an empty file `it is empty`, a BCF `it is a BCF, and bammetrics reads VCF text only` |
@@ -2400,7 +2400,7 @@ Golden records: the 14 of `VCF_WRITER_CASES` on `tests/data/vcf_writer`
 
 ### 33.4 Departures from docs/07
 
-The decision rows W16-1 to W16-10 of docs/07 section 7. In short: the variant stream runs
+The decision rows D236 to D245 of docs/07 section 7. In short: the variant stream runs
 on an executor of the same shape beside `exec.rs` (no barrier yet); its item is the
 record line, which the writer needs to pass genotypes through as htsjdk does; the
 plain VCF's `.idx` is refused; `-o r.vcf.gz` copies a VCF with no transform; the `.tbi`
@@ -2436,10 +2436,10 @@ bammetrics chain calls.vcf.gz split-vcfs --strict false --snp-output s.vcf.gz --
   letter the replacement character), the header at `VCFv4.2`. A `write` step right after
   a transform writes what the transform's own file holds. So `chain X make-sites-only-vcf
   split-vcfs` equals `MakeSitesOnlyVcf` then `SplitVcfs` for any header text, a `VCFv4.3`
-  input included (docs/07 W16-17).
+  input included (docs/07 D252).
 - `make-sites-only-vcf` exits 2 under the chain's `--validation-stringency` other than
   `STRICT`: alone the tool writes keys the header lacks there, and the steps after it check
-  every key (W16-19).
+  every key (D254).
 - On a BAM stream all three exit 2 naming the stream's kind; `make-vcf-sample-name-map`
   exits 2 on either kind: it reads the headers of several files.
 - The manifest records the split's files as kinds `vcf` and `index`; `--resume` skips the

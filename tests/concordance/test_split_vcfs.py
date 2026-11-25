@@ -3,7 +3,7 @@
 Truth: compare_vcf's rule with the header rule of vcf_headers.json, on every VCF of
 variant_vcfs.py and types.vcf (vcf_tool_cases.py), plain and gzip input, plain and
 .vcf.gz output, every option. A .vcf.gz output's .tbi answers every tabix query as
-Picard's does. A plain output gets no .idx (docs/07 decision W16-3): Picard writes one
+Picard's does. A plain output gets no .idx (docs/07 decision D238): Picard writes one
 under the default CREATE_INDEX, and CREATE_INDEX=true given for a plain name exits 2 here.
 Error parity: both fail, and bammetrics leaves no output (Picard leaves the files it
 began). The chain's split step writes the files the tool writes.
@@ -93,7 +93,7 @@ def test_plain_outputs_take_no_idx(data, tmp_path):
     lines = assert_equal_split(sides, ".vcf", "default index, plain")
     assert (sides["picard"][1] / "snp.vcf.idx").exists()
     assert files_in(sides["ours"][1]) == ["indel.vcf", "snp.vcf"]
-    assert "W16-3" in sides["ours"][0].stderr
+    assert "D238" in sides["ours"][0].stderr
     refused = ours("SplitVcfs", f"I={data / 'truth.vcf'}", f"SNP_OUTPUT={tmp_path / 'x.vcf'}",
                    f"INDEL_OUTPUT={tmp_path / 'y.vcf'}", "STRICT=false", "CREATE_INDEX=true")
     assert refused.returncode == 1 and not (tmp_path / "x.vcf").exists(), refused.stderr

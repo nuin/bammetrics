@@ -18,7 +18,7 @@
 //!   ask (`A sequence dictionary must be available in the input file when
 //!   creating indexed output`). Picard also writes a tribble `.idx` beside a plain `.vcf`
 //!   (`DynamicIndexCreator`); this writer refuses that index (docs/07
-//!   decision W16-3) and writes the `.vcf` alone.
+//!   decision D238) and writes the `.vcf` alone.
 //! - `md5` writes `OUTPUT.md5`, the hex MD5 of the file.
 //! - The text is written as ISO-8859-1, as htsjdk's `VCFWriter` writes it
 //!   (`VCFEncoder.VCF_CHARSET`): a character up to U+00FF as its one byte,
@@ -134,7 +134,7 @@ impl Default for VcfOptions {
 
 impl VcfOptions {
     /// A usage error for a name [`VcfFormat::of`] refuses, or for options
-    /// `path` cannot take: an index of a plain VCF (decision W16-3).
+    /// `path` cannot take: an index of a plain VCF (decision D238).
     pub fn check(&self, path: &Path) -> Result<()> {
         if self.compression_level > 9 {
             return Err(Error::Usage(format!(
@@ -166,7 +166,7 @@ impl VcfOptions {
 pub fn plain_index_refusal(path: &Path) -> String {
     format!(
         "{}: the index of a plain VCF is tribble's .idx, which this writer does not write \
-         (decision W16-3); name the output .vcf.gz for its .tbi, or leave the index out",
+         (decision D238); name the output .vcf.gz for its .tbi, or leave the index out",
         path.display()
     )
 }

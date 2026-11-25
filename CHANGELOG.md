@@ -31,7 +31,7 @@
   line; the `.tbi` reads `CHROM`, `POS`, `REF` and `END` of each written line, so a
   record Picard indexes is indexed; a record past 536,903,680 fails the `.tbi` as in
   Picard; the index and MD5 are renamed before the VCF, as one set. `-o r.gz` and
-  `-o r.bgz` on a VCF source write a BGZF VCF (W16-9); a source that is no VCF is named
+  `-o r.bgz` on a VCF source write a BGZF VCF (D244); a source that is no VCF is named
   with its reason (empty, a BCF, no `#`); `##fileformat` need not be the first line.
   Memory: batches end at 4 MiB of text, the header is shared and held as one buffer,
   decoded genotypes use one array per record (100,000 samples out of sorted order: 133
@@ -47,7 +47,7 @@
   (docs/chaining.md section 34) `make-sites-only-vcf` is the first transform of a variant
   stream (stream `sites`) and `split-vcfs` a split; `make-vcf-sample-name-map` is no step.
   `Encoder::read_type`, `VcfWriter::stage` and an index dictionary for the writer.
-  Decisions W16-11 to W16-16: no `.idx` beside a plain output (a note under the default
+  Decisions D246 to D251: no `.idx` beside a plain output (a note under the default
   `CREATE_INDEX`), no `.md5` (Picard's VCF tools write none), a failed run leaves no file.
   `tests/concordance/test_split_vcfs.py`, `test_make_sites_only_vcf.py`,
   `test_make_vcf_sample_name_map.py` (every VCF of `variant_vcfs.py` and `types.vcf`,
@@ -65,12 +65,12 @@
   `MakeSitesOnlyVcf` under `VALIDATION_STRINGENCY` `LENIENT` or `SILENT` writes keys the
   header lacks; a record with more genotype columns than samples keeps the first ones;
   `SEQUENCE_DICTIONARY` without `@SQ` lines is an empty dictionary, a name given twice and
-  an `LN` past a Java `int` fail, and the file is read line by line (W16-18: 240 MiB at
+  an `LN` past a Java `int` fail, and the file is read line by line (D253: 240 MiB at
   its caps, was 918 MiB for 6,000,000 lines); `VERBOSITY` outside `ERROR`, `WARNING`,
   `INFO`, `DEBUG` fails every tool, as Picard's `LogLevel` parse does; a `SAMPLE` with a
   line end fails; `--sample` over 200,000 `FORMAT` keys takes 0.55 s (was 26.6 s: each key
   was a scan of the genotype's keys). The chain hands on, after a transform, what a reader
-  of its file reads (W16-17), so `make-sites-only-vcf split-vcfs` equals the staged tools
+  of its file reads (D252), so `make-sites-only-vcf split-vcfs` equals the staged tools
   for any header text. The three verbs read standard input (`-`), as they did; their help
   said otherwise. `split-vcfs` with both outputs named prints no prefix note, and
   `make-vcf-sample-name-map` takes a `file://` input on the verb as on the Picard face.

@@ -4,7 +4,7 @@ Truth: compare_vcf's rule with the header rule of vcf_headers.json on every VCF 
 variant_vcfs.py and types.vcf (vcf_tool_cases.py), plain and gzip input, plain and
 .vcf.gz output, every SAMPLE shape (none, each sample, several, a name the input lacks,
 null clearing the list), the writer options. The .tbi answers every tabix query as
-Picard's does; a plain output gets no .idx (docs/07 decision W16-3). Error parity: both
+Picard's does; a plain output gets no .idx (docs/07 decision D238). Error parity: both
 fail and bammetrics leaves no file. The chain's transform writes what the tool writes.
 """
 import shutil

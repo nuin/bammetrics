@@ -2350,7 +2350,7 @@ The type is htsjdk's `VariantContext.getType`; `INDEL` is asked first.
   `--sequence-dictionary` (a `.dict`, a SAM, BAM or CRAM header, an interval list). Without
   one the run exits 1 before any record, as Picard does, even for plain outputs.
 - A plain output gets no index. Picard writes tribble's `.idx` there; bammetrics does not
-  (docs/07 decision W16-3). With `--create-index` left at its default the VCF is written
+  (docs/07 decision D238). With `--create-index` left at its default the VCF is written
   and a note says so; `CREATE_INDEX=true` given for a plain name exits 1.
 - `--create-md5-file` is accepted and ignored: Picard's VCF writers write no `.md5`.
 - Both files and their `.tbi` are renamed into place together after the last record. A run
@@ -2382,7 +2382,7 @@ and `INFO` as read (`AN` and `AF` stay). The header keeps every line; its sample
   sample fails the run, as in Picard. Without, the genotypes stay unread unless the input
   names its samples out of sorted order.
 - `--create-index` (default true) needs the input's `##contig` lines; a `.vcf.gz` gets its
-  `.tbi`, a plain `.vcf` no `.idx` (decision W16-3, as for `split-vcfs`).
+  `.tbi`, a plain `.vcf` no `.idx` (decision D238, as for `split-vcfs`).
   `--create-md5-file` is accepted and ignored. `-o` takes the names `split-vcfs` takes.
 - `--validation-stringency LENIENT` or `SILENT` writes an `INFO`, `FILTER` or `FORMAT` key
   the header lacks as read, as Picard does (its default options of a VCF writer allow

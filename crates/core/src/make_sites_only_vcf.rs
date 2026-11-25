@@ -9,7 +9,7 @@
 //! - `CREATE_INDEX` (default true) needs the input's `##contig` lines,
 //!   else the run fails before the first record, as Picard's does. A
 //!   `.vcf.gz` `OUTPUT` gets its `.tbi`; a plain `.vcf` gets no index
-//!   (docs/07 decision W16-3; [`crate::split_vcfs::WriterOptions`]).
+//!   (docs/07 decision D238; [`crate::split_vcfs::WriterOptions`]).
 //! - `OUTPUT` and its companions are renamed into place after the last
 //!   record; a failed run leaves none of them.
 

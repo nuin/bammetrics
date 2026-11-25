@@ -10,8 +10,8 @@ CREATE_MD5_FILE=true
 0
 ## stdout
 ## stderr
-bammetrics: SNP_OUTPUT=OUT/snp.vcf: no .idx is written beside a plain VCF (docs/07 decision W16-3); Picard writes one. A .vcf.gz name gets its .tbi
-bammetrics: INDEL_OUTPUT=OUT/indel.vcf: no .idx is written beside a plain VCF (docs/07 decision W16-3); Picard writes one. A .vcf.gz name gets its .tbi
+bammetrics: SNP_OUTPUT=OUT/snp.vcf: no .idx is written beside a plain VCF (docs/07 decision D238); Picard writes one. A .vcf.gz name gets its .tbi
+bammetrics: INDEL_OUTPUT=OUT/indel.vcf: no .idx is written beside a plain VCF (docs/07 decision D238); Picard writes one. A .vcf.gz name gets its .tbi
 DEBUG	SplitVcfs	Found 4 records that didn't match SNP or INDEL
 bammetrics: ignoring CREATE_MD5_FILE=true: Picard writes no .md5 beside a VCF
 ## file indel.vcf

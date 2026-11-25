@@ -16,7 +16,7 @@
 //!   an index.
 //! - A `.vcf.gz` output (any name htsjdk writes as BGZF) gets its `.tbi`.
 //!   A plain `.vcf` gets no index: Picard writes tribble's `.idx` there,
-//!   which this writer does not (docs/07 decision W16-3). `CREATE_INDEX`
+//!   which this writer does not (docs/07 decision D238). `CREATE_INDEX`
 //!   left at its default then writes the VCF alone with a note on standard
 //!   error; `CREATE_INDEX=true` given on the command line is refused.
 //! - Both outputs and their companions are written under temporary names
@@ -134,20 +134,20 @@ impl WriterOptions {
     /// The options of the VCF written to `path` (named `option` in
     /// messages): a `.tbi` for a block-compressed name when the index is
     /// asked for. A plain name with `CREATE_INDEX` given true is refused
-    /// (decision W16-3); with the default it gets no index and a note.
+    /// (decision D238); with the default it gets no index and a note.
     pub fn for_output(&self, option: &str, path: &Path) -> Result<(VcfOptions, Option<String>)> {
         let plain = VcfFormat::of(path)? == VcfFormat::Plain;
         if plain && self.create_index && self.index_given {
             return Err(Error::Usage(format!(
                 "{option}={}: CREATE_INDEX=true asks for tribble's .idx beside a plain VCF, \
-                 which bammetrics does not write (docs/07 decision W16-3): name the output \
+                 which bammetrics does not write (docs/07 decision D238): name the output \
                  .vcf.gz for its .tbi, or give CREATE_INDEX=false",
                 path.display()
             )));
         }
         let note = (plain && self.create_index).then(|| {
             format!(
-                "{option}={}: no .idx is written beside a plain VCF (docs/07 decision W16-3); \
+                "{option}={}: no .idx is written beside a plain VCF (docs/07 decision D238); \
                  Picard writes one. A .vcf.gz name gets its .tbi",
                 path.display()
             )

@@ -96,7 +96,7 @@ fn result_of(text: &str) -> Option<Kind> {
 /// The length of the VCF extension `-o` ends in: `.vcf`, `.vcf.gz` or
 /// `.vcf.bgz`, in any case, on a name that is not a directory. On a chain
 /// whose source is a VCF, a name htsjdk writes block-compressed (`.gz`,
-/// `.gzip`, `.bgz`, `.bgzf`) is one too (decision W16-8).
+/// `.gzip`, `.bgz`, `.bgzf`) is one too (decision D243).
 fn vcf_extension(text: &str, vcf_source: bool) -> Option<usize> {
     if Path::new(text).is_dir() || text.ends_with('/') {
         return None;
@@ -123,7 +123,7 @@ fn source_is_vcf(spec: &Spec) -> bool {
 
 /// `-o r.vcf.gz` on a chain whose source is a VCF (docs/chaining.md
 /// section 33): `write r.vcf.gz --index` as the last step when the chain
-/// has no `write` (a plain `.vcf` gets no index, decision W16-3), with or
+/// has no `write` (a plain `.vcf` gets no index, decision D238), with or
 /// without other steps, and the prefix `r`. A VCF name on a chain of
 /// alignments, or a BAM name on a chain of VCF records, is refused.
 fn vcf_output(spec: &mut Spec, text: &str) -> Result<bool, VerbError> {

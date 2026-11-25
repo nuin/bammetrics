@@ -159,7 +159,7 @@ fn md5_and_a_failed_write() {
 #[test]
 fn compressed_names_bare_cr_lines_and_sources_that_are_no_vcf() {
     let dir = fresh_dir("names");
-    // htsjdk writes BGZF for any name ending in .gz or .bgz (decision W16-9).
+    // htsjdk writes BGZF for any name ending in .gz or .bgz (decision D244).
     for name in ["x.gz", "y.BGZ"] {
         let out = dir.join(name);
         let done = bammetrics(&["chain", CALLS, "-q", "-o", &out.display().to_string()]);
