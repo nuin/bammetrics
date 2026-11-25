@@ -327,7 +327,7 @@ crates/py     the bammetrics Python module (PyO3)
 tests/        concordance/ (Picard harness), harness/ (tests of that harness), corpus/ (generator), python/, data/
 tools/        spec_agent.py: a Picard tool's --help option table as a starting spec
 deny.toml     cargo-deny configuration (make deny)
-docs/         cli.md, chaining.md, formats.md, verdict.md, python.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md
+docs/         cli.md, chaining.md, formats.md, verdict.md, python.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md, parity_status.md
 ```
 
 License: MIT OR Apache-2.0. Changes: [CHANGELOG.md](CHANGELOG.md).
