@@ -4,7 +4,7 @@ Status: plan, 2026-11-25, against bammetrics 0.34.0. Nothing here is built. Fact
 
 ## 1. Answer
 
-Build a machine contract first, then ship binaries and wheels, then generate workflow wrappers from the registry. Do this in five waves (E1 to E5) that touch no tool code, so the Picard parity programme (W17 onward) keeps its order. The owner's pipeline needs only a prebuilt static binary and a version check. It does not need the wrappers. The owner wants Nextflow, WDL and "most modern systems" covered, has no containers for now, and does not want the pipeline's integration branch finished in this plan.
+Build a machine contract first, then ship binaries and wheels, then generate workflow wrappers from the registry, then bind one native library to R, C, C++, Nim, Elixir, Java and Go. Do this in seven waves (E1 to E7). E1 to E5 touch no tool code and E6 adds only a cancel flag to the read loop, so the Picard parity programme (W17 onward) keeps its order. The owner's pipeline needs only a prebuilt static binary and a version check. It does not need the wrappers. The owner wants Nextflow, WDL and "most modern systems" covered, has no containers for now, and does not want the pipeline's integration branch finished in this plan.
 
 ## 2. Intent and why
 
@@ -19,12 +19,13 @@ Goals:
 - G1. A caller in any language lists tools, options, outputs and exit codes as versioned JSON, with no text parsing.
 - G2. One command installs a pinned bammetrics on a Linux analysis host with no compiler and no GitHub credentials.
 - G3. Wrappers for Nextflow, WDL, Snakemake, CWL and Galaxy exist for every tool, generated, and each passes its system's own validator.
+- G5. R, C, C++, Nim, Elixir, Java and Go call bammetrics in process through one library, with output byte-equal to the CLI.
 - G4. The first consumer (the owner's Python pipeline) can drop its per-host source build.
 
 Non-goals:
 
 - N1. A cohort or sample-sheet runner. docs/05 line 469 decided cohorts stay in shell, make, Snakemake or Nextflow.
-- N2. A C ABI, R package, JVM binding or WASM build. Section 5.4 gives the substitute.
+- N2. WASM, Julia, Perl, .NET and Swift bindings. They run the CLI and read its JSON until a user is named.
 - N3. Publishing to nf-core, Dockstore, the Galaxy ToolShed, bio.tools, Terra or DNAnexus without an owner decision (section 7). Wrappers for Nextflow, WDL and CWL already run on Terra and DNAnexus once the owner uploads them.
 
 Anti-goals, each a failure even if everything runs:
@@ -155,14 +156,45 @@ Python is the supported in-process route. Rules for a job runner such as RQ:
 
 Designer's call ED9: the owner's pipeline stays on the CLI subprocess. The RQ worker already runs `pipeline.py` as a child of a shell script. `run_tool` adds stderr capture, partial-file promotion, a timeout and a log API post, and an in-process call loses all four. The Python module is documented for notebooks and for runners that call it after the fork.
 
-Other languages:
+Other languages. The owner named six: R, C and C++, Nim, Elixir, Java and Go (2026-11-25). All six call one native surface, a new crate `crates/embed` (`bammetrics-embed`). It holds the functions the Python module calls, with JSON in and JSON out.
 
-| Target | Route | Reason |
+| Function | Input | Output |
 |---|---|---|
-| R, Julia, Perl, shell, Java | Run the CLI and read JSON from `--format json`, `verdict.json` and the manifest | The layer 1 contract is the binding. No per-language code to keep in step with 77 tools |
-| C or C++ | Same route. No C ABI | A C ABI over `chain` argv repeats the CLI with weaker error reporting |
+| `bm_version()` | none | the `--version --json` document (E1) |
+| `bm_tools()` | none | the `tools-1` listing (E1) |
+| `bm_run_tool(name, options_json)` | registry tool name, Picard keys and values | result JSON: status, files written, rows by class |
+| `bm_chain(source, steps_json, options_json)` | as Python `chain` | result JSON: one record per step, as manifest 2 |
+| `bm_qc(argv_json)`, `bm_check(argv_json)`, `bm_report(argv_json)` | the verb's argv | result JSON with the verdict |
+| `bm_read_table(path)` | Picard text, JSON or Parquet | `metrics-1` JSON |
+| `bm_start(call_json)`, `bm_wait(job)`, `bm_cancel(job)` | any call above | a job handle; `bm_cancel` sets a flag the read loop checks per batch |
+| `bm_free(ptr)` | a string the library returned | none |
 
-Designer's call ED10: no extendr, JNI or cbindgen work. A binding is a second surface over 77 tools, growing to 121, with its own marshalling and tests. The CLI runs in its own process, so a crash or an out-of-memory kill cannot take down the host. Research on these tools was not done and no user is named. Revisit when one is.
+Every result has one shape, schema `embed-1`: `ok`, `exit_code` (the CLI's code for the same call), `error` (`kind` usage, input or internal, plus the message), `files`, `rows`. Nothing goes to standard output or standard error. The call fills the same files the CLI writes, through the same `AtomicFile` code, so output stays byte-equal.
+
+Rules at the boundary:
+
+| Rule | Mechanism |
+|---|---|
+| No panic crosses | Each export runs under `catch_unwind`. A panic returns `kind: internal` |
+| No abort | The `pdf` feature is off in `bammetrics-embed`, since krilla aborts on a panic under an open surface. `qc --report pdf` returns a usage error there |
+| Cancel | `bm_cancel` sets an `AtomicBool` that `pass.rs` and `stage/exec.rs` read per 1,024-record batch. A cancelled call removes its files through `cleanup.rs` and returns exit code 130 |
+| Threads | Worker threads are made per call and joined before return. Calls on different outputs may run at once. A test runs 8 concurrent chains |
+| Signals | The library installs no signal handler. The host owns signals |
+| Version | `BM_ABI_VERSION` in the header. A change to a function's signature bumps it. A new field in `embed-1` does not |
+
+Per language:
+
+| Language | Route | Package | Check |
+|---|---|---|---|
+| C | `bammetrics.h` from cbindgen, `libbammetrics.a` and `.so` or `.dylib` | release tarball with header, libraries and a pkg-config file | a C test program links the static library and runs a chain on the fixture BAM |
+| C++ | `bammetrics.hpp`, header only, over the C header: RAII for returned strings and jobs, exceptions from `error.kind` | same tarball | the same chain from C++ 17 |
+| Go | cgo over the C header, linking the static library | module `github.com/nuin/bammetrics/bindings/go` | `go test` runs the chain and a cancel |
+| Java | Foreign Function and Memory API (final in Java 22, so Java 25 LTS), bindings from jextract, the native library inside the jar per platform | Maven coordinates chosen at E7 | JUnit runs the chain on Java 25 |
+| Nim | `importc` over the C header, static linking | nimble package | `nimble test` runs the chain |
+| R | extendr, calling `bammetrics-embed` in Rust; results as `data.frame`s with the glossary types; one function per registry tool, generated from the option table as the Python stubs are | r-universe first, CRAN later (EQ9) | testthat runs the chain and `read_table` |
+| Elixir | Rustler NIF over `bammetrics-embed` in Rust, every call on a dirty CPU scheduler; results as maps; a `Port` module over the CLI for callers who want a crash to stay outside the VM | Hex package | ExUnit runs the chain through the NIF and through the Port |
+
+Designer's call ED10: one Rust surface, `bammetrics-embed`, under all six languages. R and Elixir bind it in Rust through extendr and Rustler. C, C++, Go, Java and Nim bind its C header. A language never sees the 77 tool signatures: tools are names and option maps, checked by the same registry that checks the CLI. So W17 onward needs no binding edits, only a regenerated R function list. The process isolation the CLI gives is lost in process: an out-of-memory kill takes the host down. `docs/embedding.md` says so, and the Elixir `Port` keeps that isolation for the BEAM.
 
 ### 5.5 Layer 5: the first consumer
 
@@ -189,9 +221,11 @@ Format follows docs/07: wave id, version, scope, agents, exit check. Agent count
 | E2 | 0.34.2 | Layer 2a: `scripts/release.sh`, musl x86_64 and aarch64, macOS universal, `SHA256SUMS`, CycloneDX SBOM, musl speed, TZ and libm results, Homebrew formula file | E1 | 10 (2 branches: release script; musl and TZ check) | Golden suite, `make concordance` (hs, wgs, gc_bias and variant tool modules) and the PDF byte-stability tests pass with the musl x86_64, musl aarch64 and macOS universal binaries. Arrays cases under `TZ=UTC` equal. Speed ratio in `docs/benchmarks.md`. A mismatch blocks that artifact |
 | E3 | 0.34.3 | Layer 2b: abi3 trial, zig wheels, sdist, PyPI upload, bioconda recipe, `Dockerfile` and Apptainer note, built but not published | E2 tag and release asset | 10 (2 branches: wheels and PyPI; bioconda and image) | Each wheel in a fresh venv runs `bammetrics.tools()` and pytest. `conda build` passes locally or the failure is recorded |
 | E4 | 0.34.4 | Layer 3: `tools/gen_wrappers.py`, `integrations/` for five systems, one smoke run each on the fixture BAM, regenerate-and-diff test | E1, E2 | 10 (2 branches: generator with Nextflow, Snakemake and Galaxy; WDL and CWL) | Every validator passes on every file. Smoke outputs equal the CLI's byte for byte. Regeneration gives no diff |
-| E5 | 0.34.5 | Layer 4: fork and thread test, embedding rules in `docs/embedding.md`, R and shell examples reading JSON | E1, E3 | 6 (1 branch; spec, builder, reviewer, one lens, fixer, integrator) | Fork test passes under `fork`, `spawn` and `forkserver`. A `multiprocessing` stand-in for RQ runs a chain |
+| E5 | 0.34.5 | Layer 4: fork and thread test, embedding rules in `docs/embedding.md`, shell examples reading JSON | E1, E3 | 6 (1 branch; spec, builder, reviewer, one lens, fixer, integrator) | Fork test passes under `fork`, `spawn` and `forkserver`. A `multiprocessing` stand-in for RQ runs a chain |
+| E6 | 0.34.6 | Layer 4b: `crates/embed`, schema `embed-1`, cancel flag in `pass.rs` and `stage/exec.rs`, cbindgen header, static and shared libraries in the E2 release script, C and C++ headers and tests | E1, E2 | 10 (2 branches: the crate and cancel; C and C++ with the release script) | Every call equals the CLI: same exit code, same files byte for byte, on the golden fixture cases a script picks. 8 concurrent chains pass. A cancel leaves no file. Golden and `make concordance` unchanged |
+| E7 | 0.34.7 | Layer 4c: Go, Java, Nim, R and Elixir packages, built but not published | E6 | 14 (3 branches: Go, Java and Nim over the C header; R with extendr; Elixir with Rustler) | Each language runs the fixture chain, `read_table` and a cancel in its own test runner, output equal to the CLI byte for byte |
 
-Total: 42 agents (6, 10, 10, 10, 6). docs/07 Q1 reads 40 as the cap per workflow (14 at most each) and budgets 572 agents over 48 waves. ED12 puts the E waves outside the 572, each run as one workflow under the per-workflow cap, and the global cap of 8 concurrent holds. EQ3 asks the owner to confirm this reading.
+Total: 66 agents (6, 10, 10, 10, 6, 10, 14). docs/07 Q1 reads 40 as the cap per workflow (14 at most each) and budgets 572 agents over 48 waves. ED12 puts the E waves outside the 572, each run as one workflow under the per-workflow cap, and the global cap of 8 concurrent holds. EQ3 asks the owner to confirm this reading.
 
 Slot against the parity programme:
 
@@ -223,6 +257,8 @@ Most important first. Each blocks the wave named.
 | EQ5 | May `.github/workflows/ci.yml` become `workflow_dispatch` only, so E wave PRs start no run? | Leave it. Every E PR starts one run | every E PR |
 | EQ6 | Is a container image wanted? Nextflow, WDL and Galaxy users expect one, the owner's runs use none for now | Dockerfile built locally, nothing published | E3 |
 | EQ7 | Submit modules to nf-core, a wrapper to Snakemake wrappers, tasks to Dockstore, a tool to the Galaxy ToolShed, or create a Homebrew tap repository? Each needs an account and a maintainer commitment | None submitted | none |
+| EQ9 | Publish the language packages (r-universe or CRAN, Hex, Maven Central, a Go module path, nimble) at E7, or build them only? Each registry needs an account; CRAN and Maven Central uploads cannot be withdrawn | Build only, like EQ1 | E7 |
+| EQ10 | Which JDK floor for Java: 25 LTS with the FFM API, or 17 and 21 through JNI as well? JNI adds a C shim and a branch | 25 only | E7 |
 | EQ8 | Will the owner's pipeline move from subprocess to the module later (ED9), and what are its hard timeout and OOM policy? | Subprocess | E5 scope |
 
 ## 8. Designer's calls
@@ -238,7 +274,8 @@ Most important first. Each blocks the wave named.
 | ED7 | Generate five systems, submit none upstream | One template per system. Upstream needs the owner |
 | ED8 | `container` is an optional input with no default | BioContainers tags carry a build hash known after the bioconda merge |
 | ED9 | The owner's pipeline stays on the CLI subprocess | Keeps stderr capture, timeout, partial promotion and log posts |
-| ED10 | No C ABI, extendr, JNI or WASM | No named user. Research unverified |
+| ED10 | One crate `bammetrics-embed` with JSON in and out under R, C, C++, Nim, Elixir, Java and Go | Tools are names and option maps, so new tools need no binding edits |
+| ED15 | No `pdf` in the embedded library; cancel through a per-batch flag | krilla aborts on a panic; a host cannot kill a thread |
 | ED11 | E waves as patch releases 0.34.1 to 0.34.5 | Keeps W numbering and 30 later versions. Gated by EQ4 |
 | ED12 | E waves outside docs/07's 572 agents. No chain events in E1 | Per-workflow cap reading of docs/07 Q1. Chain events need their own decision |
 | ED13 | The `tools` listing covers verbs without a registry row from the clap command | Options are read, not written twice |
