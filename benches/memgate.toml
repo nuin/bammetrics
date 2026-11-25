@@ -1455,8 +1455,8 @@ max_seconds = 30
 # 200,000 records through make-sites-only-vcf and split-vcfs 16 MiB, 0.3 s; with the
 # samples out of sorted order and SAMPLE (every genotype decoded) 15 MiB; 20,000 samples
 # by 100 records cut to one sample 37 MiB; a header at the 64 MiB cap (1,430,000
-# ##contig lines) 274 MiB for the tool, which edits the header in place, and 426 MiB in a
-# chain, which also holds the input header for the steps in front.
+# ##contig lines) 274 MiB for the tool, which edits the header in place, and 308 MiB in a
+# chain (426 MiB before the W16 tools review let the transform edit it in place too).
 [[command]]
 name = "split-vcfs"
 argv = [
@@ -1527,3 +1527,28 @@ argv = [
 needs = ["~/data/bammetrics-scale/waves/w16/big.vcf"]
 max_rss_mib = 500
 max_seconds = 300
+
+# The W16 tools review: MakeSitesOnlyVcf --sample over one genotype of 200,000 FORMAT keys
+# (26.6 s before the keys were looked up through a table, 0.55 s and 98 MiB after), and
+# SplitVcfs --sequence-dictionary at its caps (3,999,999 @SQ lines, 128,000,000 bytes):
+# 918 MiB for 6,000,000 lines before the dictionary was read line by line and shared by
+# both indexes, 240 MiB at the cap after.
+[[command]]
+name = "make-sites-only-vcf 200,000 format keys"
+argv = [
+    "sh", "-c",
+    "python3 benches/vcf_review.py {out} 200000 10 && {bin} make-sites-only-vcf {out}/keys.vcf --sample S1 -o {out}/k.vcf.gz",
+]
+needs = ["benches/vcf_review.py"]
+max_rss_mib = 160
+max_seconds = 20
+
+[[command]]
+name = "split-vcfs dictionary at the cap"
+argv = [
+    "sh", "-c",
+    "python3 benches/vcf_review.py {out} 10 3999999 && {bin} split-vcfs {out}/cap.vcf --sequence-dictionary {out}/cap.dict --snp-output {out}/s.vcf.gz --indel-output {out}/i.vcf.gz",
+]
+needs = ["benches/vcf_review.py"]
+max_rss_mib = 500
+max_seconds = 60

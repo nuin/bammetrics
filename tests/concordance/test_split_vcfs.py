@@ -16,8 +16,9 @@ import pytest
 from conftest import RESULTS
 from test_vcf_writer import contigs_of, tabix_regions
 from compare import vcf_lines
-from vcf_tool_cases import (INPUTS, bammetrics, compare_files, corpus, files_in, ours,
-                            picard)
+from vcf_tool_cases import (BAD_OUTPUT_SUFFIXES, BGZF_OUTPUT_SUFFIXES, INPUTS,
+                            REVIEW_CONTIGS, bammetrics, compare_files, corpus, files_in, ours,
+                            picard, review_inputs)
 
 
 @pytest.fixture(scope="module")
@@ -213,3 +214,84 @@ def test_chain_split_equals_the_tool(data, tmp_path):
                               for k in ("snp", "indel")])
     assert not problems, problems
     RESULTS.append(("SplitVcfs chain", 4, 4, "chained equals Picard staged"))
+
+
+@pytest.fixture(scope="module")
+def review(tmp_path_factory):
+    return review_inputs(tmp_path_factory.mktemp("split_vcfs_review"))
+
+
+# The W16 tools review: (input, suffix, arguments, Picard's outcome). Both succeed with
+# equal files, or both fail and bammetrics leaves no file.
+REVIEW_CASES = [
+    ("v43.vcf", ".vcf", ["CREATE_INDEX=false"], 1),
+    ("nonascii3.vcf", ".vcf", ["CREATE_INDEX=false"], 1),
+    ("nonascii1.vcf", ".vcf", ["CREATE_INDEX=false"], 0),
+    ("undeclared_info.vcf", ".vcf", ["CREATE_INDEX=false", "VALIDATION_STRINGENCY=LENIENT"], 1),
+    ("extra_columns.vcf", ".vcf", ["CREATE_INDEX=false"], 0),
+    ("unsorted_extra.vcf", ".vcf", ["CREATE_INDEX=false"], 0),
+    ("v42.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=nosq.dict"], 0),
+    ("v42.vcf", ".vcf.gz", ["SEQUENCE_DICTIONARY=nosq.dict"], 1),
+    ("v42.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=dup.dict"], 1),
+    ("v42.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=big.dict"], 1),
+    ("v42.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=badname.dict"], 0),
+    ("v42.vcf", ".vcf.gz", ["SEQUENCE_DICTIONARY=ok.dict"], 0),
+    ("contig0.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=ok.dict"], 0),
+] + [(f"contig{i}.vcf", ".vcf", ["CREATE_INDEX=false"], 1 if i < 4 else 0)
+     for i in range(len(REVIEW_CONTIGS))]
+
+
+@pytest.mark.parametrize("case", range(len(REVIEW_CASES)))
+def test_review_cases(review, tmp_path, case):
+    name, suffix, args, picard_exit = REVIEW_CASES[case]
+    args = ["STRICT=false"] + [a.replace("DICTIONARY=", f"DICTIONARY={review}/") for a in args]
+    sides = run_split(review, tmp_path, name, suffix, *args)
+    p, o = sides["picard"][0], sides["ours"][0]
+    assert (p.returncode != 0) == (picard_exit != 0), p.stderr[-800:]
+    if picard_exit:
+        assert o.returncode != 0, f"{name} {args}: Picard failed, bammetrics did not"
+        assert files_in(sides["ours"][1]) == [], f"{name}: bammetrics left files"
+        RESULTS.append((f"SplitVcfs review {name} {' '.join(args)}", 1, 1, "both fail"))
+        return
+    lines = assert_equal_split(sides, suffix, f"{name} {args}")
+    RESULTS.append((f"SplitVcfs review {name} {' '.join(args)}", lines, lines,
+                    "every line equal"))
+
+
+@pytest.mark.parametrize("suffix", BAD_OUTPUT_SUFFIXES + BGZF_OUTPUT_SUFFIXES)
+def test_output_names(review, tmp_path, suffix):
+    sides = run_split(review, tmp_path, "v42.vcf", suffix, "CREATE_INDEX=false")
+    p, o = sides["picard"][0], sides["ours"][0]
+    good = suffix in BGZF_OUTPUT_SUFFIXES
+    assert (p.returncode == 0) == good, p.stderr[-800:]
+    if not good:
+        assert o.returncode != 0 and files_in(sides["ours"][1]) == [], suffix
+        RESULTS.append((f"SplitVcfs SNP_OUTPUT=x{suffix}", 1, 1, "both fail"))
+        return
+    problems = compare_files([(sides["picard"][1] / f"{k}{suffix}", sides["ours"][1] / f"{k}{suffix}")
+                              for k in ("snp", "indel")])
+    assert not problems, problems
+    RESULTS.append((f"SplitVcfs SNP_OUTPUT=x{suffix}", 2, 2, "every line equal"))
+
+
+@pytest.mark.parametrize("version", [1, 3])
+def test_chain_sites_split_equals_picard_staged_for_any_header_text(review, tmp_path, version):
+    """chain X make-sites-only-vcf split-vcfs equals Picard MakeSitesOnlyVcf then
+    SplitVcfs, for Latin-1 and wider header text and a VCFv4.3 input."""
+    src = review / f"nonascii{version}.vcf"
+    chained = bammetrics("chain", str(src), "-q", "make-sites-only-vcf", "split-vcfs",
+                         "--strict", "false", "--snp-output", str(tmp_path / "c.snp.vcf"),
+                         "--indel-output", str(tmp_path / "c.indel.vcf"))
+    assert chained.returncode == 0, chained.stderr
+    p = picard("MakeSitesOnlyVcf", f"I={src}", f"O={tmp_path / 'p.vcf'}", "CREATE_INDEX=false")
+    assert p.returncode == 0, p.stderr[-800:]
+    p = picard("SplitVcfs", f"I={tmp_path / 'p.vcf'}", f"SNP_OUTPUT={tmp_path / 'p.snp.vcf'}",
+               f"INDEL_OUTPUT={tmp_path / 'p.indel.vcf'}", "STRICT=false", "CREATE_INDEX=false")
+    assert p.returncode == 0, p.stderr[-800:]
+    for kind in ("snp", "indel"):
+        assert (tmp_path / f"p.{kind}.vcf").read_bytes().split(b"\n#CHROM")[1] == \
+            (tmp_path / f"c.{kind}.vcf").read_bytes().split(b"\n#CHROM")[1], kind
+    assert not compare_files([(tmp_path / f"p.{k}.vcf", tmp_path / f"c.{k}.vcf")
+                              for k in ("snp", "indel")])
+    RESULTS.append((f"SplitVcfs chain sites non-ASCII v4.{version}", 2, 2,
+                    "chained equals Picard staged"))

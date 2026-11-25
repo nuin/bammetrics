@@ -798,7 +798,7 @@ pub const VERBS: &[Verb] = &[
              unless --strict false drops it.",
         ),
         writes: "VCF files",
-        reads_stdin: false,
+        reads_stdin: true,
         reads: &["SEQUENCE_DICTIONARY"],
         ignores: &[(Key::Sample, "a VCF keeps its own sample columns")],
         ..verb("split-vcfs", "SplitVcfs", Files::Prefix)
@@ -811,7 +811,7 @@ pub const VERBS: &[Verb] = &[
              read; -o gets a .tbi beside a .vcf.gz.",
         ),
         writes: "VCF",
-        reads_stdin: false,
+        reads_stdin: true,
         ignores: &[(Key::Sample, "--sample names the samples kept")],
         ..verb("make-sites-only-vcf", "MakeSitesOnlyVcf", Files::Bam)
     },
@@ -823,7 +823,7 @@ pub const VERBS: &[Verb] = &[
              order.",
         ),
         writes: "sample map",
-        reads_stdin: false,
+        reads_stdin: true,
         ignores: &[
             (Key::Threads, "only headers are read"),
             (Key::Sample, "the samples come from the headers"),
@@ -1709,7 +1709,17 @@ impl Verb {
                     }
                     (None, Some(stem)) => {
                         let path = Path::new(".").join(&stem);
-                        if !parsed.flag(Key::Quiet) {
+                        // SplitVcfs writes no file of its own under the
+                        // prefix: with both outputs named it uses none.
+                        let every_file_named = self.class == bammetrics_core::split_vcfs::TOOL.name
+                            && file_extensions(self.class).unwrap_or_default().iter().all(
+                                |(option, _)| {
+                                    picard.iter().any(|a| {
+                                        a.strip_prefix(option).is_some_and(|v| v.starts_with('='))
+                                    })
+                                },
+                            );
+                        if !parsed.flag(Key::Quiet) && !every_file_named {
                             eprintln!(
                                 "bammetrics {}: no -o, files go to {}.*",
                                 self.name,
@@ -1860,7 +1870,10 @@ impl Verb {
             ));
         }
         for input in picard.iter().filter_map(|a| a.strip_prefix("INPUT=")) {
-            if input == "-" || self.input == "PREFIX" || Path::new(input).exists() {
+            // MakeVcfSampleNameMap reads a file: URI itself, as Picard does.
+            let uri = self.class == bammetrics_core::make_vcf_sample_name_map::TOOL.name
+                && input.starts_with("file:");
+            if input == "-" || self.input == "PREFIX" || uri || Path::new(input).exists() {
                 continue;
             }
             let from = parsed

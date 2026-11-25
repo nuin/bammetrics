@@ -57,6 +57,26 @@
 
 ### Fixed
 
+- The W16 tools review, each found against Picard 3.5.0: an output name htsjdk cannot type
+  (`o.txt`, `o.VCF`, `o.vcf.gz.tbi`, `-`) fails before any file, in the tools and the
+  chain's `write` step, as Picard's `Output format type is not set`; `SplitVcfs` refuses a
+  `VCFv4.3` input (`Writing VCF version VCF4_3 is not implemented`); a `##contig` ID outside
+  the SAM name pattern fails both tools (`SplitVcfs` only without `SEQUENCE_DICTIONARY`);
+  `MakeSitesOnlyVcf` under `VALIDATION_STRINGENCY` `LENIENT` or `SILENT` writes keys the
+  header lacks; a record with more genotype columns than samples keeps the first ones;
+  `SEQUENCE_DICTIONARY` without `@SQ` lines is an empty dictionary, a name given twice and
+  an `LN` past a Java `int` fail, and the file is read line by line (W16-18: 240 MiB at
+  its caps, was 918 MiB for 6,000,000 lines); `VERBOSITY` outside `ERROR`, `WARNING`,
+  `INFO`, `DEBUG` fails every tool, as Picard's `LogLevel` parse does; a `SAMPLE` with a
+  line end fails; `--sample` over 200,000 `FORMAT` keys takes 0.55 s (was 26.6 s: each key
+  was a scan of the genotype's keys). The chain hands on, after a transform, what a reader
+  of its file reads (W16-17), so `make-sites-only-vcf split-vcfs` equals the staged tools
+  for any header text. The three verbs read standard input (`-`), as they did; their help
+  said otherwise. `split-vcfs` with both outputs named prints no prefix note, and
+  `make-vcf-sample-name-map` takes a `file://` input on the verb as on the Picard face.
+  Two memgate rows (`benches/vcf_review.py`), two golden records
+  (`picard_make_sites_only_vcf_lenient`, `error_make_sites_only_vcf_name`);
+  `error_split_vcfs_one_file` loses the prefix note.
 - A VCF `QUAL` within 5e-5 of -1 is missing, as htsjdk reads the VCF 3 spelling; it failed
   `VcfToIntervalList` (`vcf/site.rs`). A `GT` with an empty allele token (`0//1`, `1/`)
   skips it, as `StringTokenizer` does; it failed `CollectVariantCallingMetrics` and

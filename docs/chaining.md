@@ -2308,7 +2308,7 @@ bammetrics chain calls.vcf.gz variant-calling --dbsnp dbsnp.vcf.gz \
 
 | Step | What it does |
 |---|---|
-| `write [PATH]` | The lines of its position as a VCF (`crates/core/src/vcf_writer.rs`). A name ending in `.gz`, `.gzip`, `.bgz` or `.bgzf`, in any case, is BGZF; any other name is plain text; `.bcf` exits 2. `--index` writes the `.tbi` of a BGZF VCF; `--md5` writes `PATH.md5`; `--compression-level` 0 to 9 (default 5). Without a path, `PREFIX.<stream>.vcf.gz` |
+| `write [PATH]` | The lines of its position as a VCF (`crates/core/src/vcf_writer.rs`). A name ending in `.gz`, `.gzip`, `.bgz` or `.bgzf`, in any case, is BGZF; a name ending in lower-case `.vcf` is plain text; any other name (`x.bam`, `x.VCF`, `x.vcf.gz.tbi`) exits 2 before the first read, as htsjdk cannot type it; `.bcf` exits 2. `--index` writes the `.tbi` of a BGZF VCF; `--md5` writes `PATH.md5`; `--compression-level` 0 to 9 (default 5). Without a path, `PREFIX.<stream>.vcf.gz` |
 | `variant-calling` | `CollectVariantCallingMetrics` as a tap: `PREFIX.variant_calling_detail_metrics` and `PREFIX.variant_calling_summary_metrics`. The tool alone reads `INPUT` whole and Picard needs it indexed; the tap reads the stream in its order and needs no index |
 | `genotype-concordance` | `GenotypeConcordance` as a tap: the stream is the call VCF, `--truth-vcf` is read in step with it. `--call-vcf` on the step exits 2. `INTERVALS` still needs both files indexed, as the tool checks |
 
@@ -2430,6 +2430,16 @@ bammetrics chain calls.vcf.gz split-vcfs --strict false --snp-output s.vcf.gz --
   `--strict` (the default) on a record of another type exits 1 and leaves no file. Its
   note counts the records `--strict false` dropped.
 - `--keep` on a step of a variant stream exits 2: a kept stream is a BAM.
+- After a transform each step but `write` reads the stream as a reader of the transform's
+  own file would read it: each line encoded as the writer encodes it, the header and the
+  lines through ISO-8859-1 and back as UTF-8 (a character above U+00FF is `?`, a Latin-1
+  letter the replacement character), the header at `VCFv4.2`. A `write` step right after
+  a transform writes what the transform's own file holds. So `chain X make-sites-only-vcf
+  split-vcfs` equals `MakeSitesOnlyVcf` then `SplitVcfs` for any header text, a `VCFv4.3`
+  input included (docs/07 W16-17).
+- `make-sites-only-vcf` exits 2 under the chain's `--validation-stringency` other than
+  `STRICT`: alone the tool writes keys the header lacks there, and the steps after it check
+  every key (W16-19).
 - On a BAM stream all three exit 2 naming the stream's kind; `make-vcf-sample-name-map`
   exits 2 on either kind: it reads the headers of several files.
 - The manifest records the split's files as kinds `vcf` and `index`; `--resume` skips the

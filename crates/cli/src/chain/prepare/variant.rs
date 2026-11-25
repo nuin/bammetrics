@@ -90,6 +90,21 @@ pub(super) fn transform_step(
     position: Position,
 ) -> Result<(Planned, bool), VerbError> {
     let tool = verb.tool();
+    if cx.stringency != bammetrics_core::sam_text::Stringency::Strict {
+        // Picard's MakeSitesOnlyVcf writes a key the header lacks under a
+        // stringency other than STRICT; the write step and split-vcfs check
+        // every key as SplitVcfs does.
+        return Err(draft
+            .usage(format!(
+                "{} writes keys the header lacks under --validation-stringency other than \
+                 STRICT, and the steps after it check every key",
+                tool.name
+            ))
+            .hint(format!(
+                "run it on its own: bammetrics {} IN.vcf --validation-stringency LENIENT -o OUT.vcf.gz",
+                verb.name
+            )));
+    }
     let (argv, inv) = step_invocation(cx, &mut draft, verb, &[])?;
     stage::variant::VariantStep::tool_transform(tool, &inv).map_err(|e| draft.core(verb, &e))?;
     let planned = Planned {

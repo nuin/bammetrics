@@ -1345,6 +1345,10 @@ const VCF_TOOLS_CASES: &[Case] = &[
     case!("picard_make_sites_only_vcf_samples", "MakeSitesOnlyVcf", "I=VT_TYPES", "O=OUT/sites.vcf", "SAMPLE=S1", "SAMPLE=NOPE", "CREATE_INDEX=false"),
     case!("verb_make_sites_only_vcf", "make-sites-only-vcf", "VW_CALLS_GZ", "-o", "OUT/sites.vcf", "--create-index", "false", "--sample", "S2"),
     case!("error_make_sites_only_vcf_missing", "MakeSitesOnlyVcf", "I=tests/data/vcf_tools/none.vcf", "O=OUT/sites.vcf.gz"),
+    // The W16 tools review: an undeclared FILTER written as read below STRICT, and an
+    // output name htsjdk cannot type.
+    case!("picard_make_sites_only_vcf_lenient", "MakeSitesOnlyVcf", "I=tests/data/vcf_writer/bad_filter.vcf", "O=OUT/sites.vcf", "CREATE_INDEX=false", "VALIDATION_STRINGENCY=LENIENT"),
+    case!("error_make_sites_only_vcf_name", "make-sites-only-vcf", "VW_CALLS", "-o", "OUT/sites.txt"),
     case!("picard_make_vcf_sample_name_map", "MakeVcfSampleNameMap", "I=VW_TRUTH", "I=VT_ONE", "O=OUT/cohort.sample_map"),
     // The sample T twice: both lines and Picard's warning.
     case!("verb_make_vcf_sample_name_map", "make-vcf-sample-name-map", "VW_TRUTH", "VT_ONE", "tests/data/vcf_writer/../vcf_writer/truth.vcf", "-o", "OUT/cohort.sample_map"),

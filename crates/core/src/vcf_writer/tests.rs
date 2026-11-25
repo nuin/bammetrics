@@ -168,11 +168,11 @@ fn names_pick_the_kind() {
         ("a.vcf.gz", VcfFormat::Bgzf),
         ("a.VCF.GZ", VcfFormat::Bgzf),
         ("a.vcf.bgz", VcfFormat::Bgzf),
-        ("a.txt", VcfFormat::Plain),
     ] {
         assert_eq!(VcfFormat::of(Path::new(name)).expect(name), kind, "{name}");
     }
     assert!(VcfFormat::of(Path::new("a.bcf")).is_err());
+    assert!(VcfFormat::of(Path::new("a.txt")).is_err());
     let index = VcfOptions {
         index: true,
         ..VcfOptions::default()
@@ -240,4 +240,27 @@ fn a_record_past_the_tbi_windows_fails_the_index_and_leaves_no_file() {
         assert_eq!(fs::read_dir(&dir).expect("dir").count(), 0);
     }
     fs::remove_dir_all(dir).expect("clean");
+}
+
+#[test]
+fn only_names_htsjdk_types_are_written() {
+    for (name, format) in [
+        ("x.vcf", Some(VcfFormat::Plain)),
+        ("x.vcf.gz", Some(VcfFormat::Bgzf)),
+        ("x.Vcf.Gz", Some(VcfFormat::Bgzf)),
+        ("x.gz", Some(VcfFormat::Bgzf)),
+        ("x.vcf.bgzf", Some(VcfFormat::Bgzf)),
+        ("x.gzip", Some(VcfFormat::Bgzf)),
+        ("x.VCF", None),
+        ("x.txt", None),
+        ("x", None),
+        ("-", None),
+        ("x.vcf.", None),
+        ("x.vcf.gz.tbi", None),
+        ("x.vcf.idx", None),
+        ("x.bam", None),
+        ("x.bcf", None),
+    ] {
+        assert_eq!(VcfFormat::of(Path::new(name)).ok(), format, "{name}");
+    }
 }

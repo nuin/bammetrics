@@ -130,3 +130,27 @@ def test_not_a_chain_step(data, tmp_path):
     done = bammetrics("chain", str(data / "truth.vcf.gz"), "make-vcf-sample-name-map", "-o",
                       str(tmp_path / "x"))
     assert done.returncode == 2 and "sample map" in done.stderr, done.stderr
+
+
+def test_bad_verbosity_fails_both(data, tmp_path):
+    """Picard parses VERBOSITY as a LogLevel before the tool runs."""
+    for value in ("bogus", "debug"):
+        sides = {}
+        for side, run in (("picard", picard), ("ours", ours)):
+            out = tmp_path / f"{side}.{value}.tsv"
+            sides[side] = (run("MakeVcfSampleNameMap", f"I={data / 'truth.vcf'}", f"O={out}",
+                               f"VERBOSITY={value}"), out)
+        assert sides["picard"][0].returncode != 0 and sides["ours"][0].returncode != 0, value
+        assert not sides["ours"][1].exists(), value
+    RESULTS.append(("MakeVcfSampleNameMap VERBOSITY=bogus", 2, 2, "both fail"))
+
+
+def test_verb_reads_a_file_uri(data, tmp_path):
+    """The verb passes a file: URI to the tool, as the Picard face does."""
+    uri = f"file://{data / 'm' / 's8.vcf'}"
+    verb = bammetrics("make-vcf-sample-name-map", uri, "-o", str(tmp_path / "v.tsv"))
+    assert verb.returncode == 0, verb.stderr
+    p = picard("MakeVcfSampleNameMap", f"I={uri}", f"O={tmp_path / 'p.tsv'}")
+    assert p.returncode == 0, p.stderr[-600:]
+    assert (tmp_path / "v.tsv").read_bytes() == (tmp_path / "p.tsv").read_bytes()
+    RESULTS.append(("MakeVcfSampleNameMap verb file://", 1, 1, "file equal"))

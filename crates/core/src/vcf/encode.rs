@@ -23,7 +23,8 @@
 //!   flag is dropped; a later entry of a key replaces an earlier one. The
 //!   keys print in sorted order, a key whose `Number` is 0 without its
 //!   value. A key with no
-//!   `##INFO` line fails. From VCF 4.3 each value is percent-decoded.
+//!   `##INFO` line fails (a `FILTER` or `FORMAT` key too) unless
+//!   [`Encoder::allow_missing_fields`] is set. From VCF 4.3 each value is percent-decoded.
 //! - `FORMAT` and the samples are written as they were read
 //!   (`LazyGenotypesContext`), unless the header's sample names are not in
 //!   sorted order: then the codec decodes them and the encoder writes them
@@ -39,6 +40,9 @@ use super::{Site, VariantType, encode_genotypes};
 #[derive(Clone, Debug)]
 pub struct Encoder {
     rules: Rules,
+    /// `Options.ALLOW_MISSING_FIELDS_IN_HEADER`: an `INFO`, `FILTER` or
+    /// `FORMAT` key the header lacks is written as read.
+    allow_missing: bool,
 }
 
 /// A key of the INFO map, ordered as Java's `TreeMap<String, _>` orders it.
@@ -77,7 +81,16 @@ impl Encoder {
     pub fn new(header: &VcfHeader) -> Self {
         Self {
             rules: Rules::of(header.site()),
+            allow_missing: false,
         }
+    }
+
+    /// Write a key the header lacks as read in place of failing
+    /// (`Options.ALLOW_MISSING_FIELDS_IN_HEADER`, which Picard sets for
+    /// every VCF writer that keeps its default options when
+    /// `VALIDATION_STRINGENCY` is not `STRICT`).
+    pub fn allow_missing_fields(&mut self, allow: bool) {
+        self.allow_missing = allow;
     }
 
     /// Append the encoded form of `line` (no line end) to `out`; `None`
@@ -128,13 +141,19 @@ impl Encoder {
             Some(log10) => out.push_str(&format_quality(log10 * -10.0 + 0.0)),
         }
         out.push('\t');
-        out.push_str(&filters(parts[6], header, &site)?);
+        out.push_str(&filters(parts[6], header, &site, self.allow_missing)?);
         out.push('\t');
         self.info(parts[7], header, &site, out)?;
         if max == 9 {
             out.push('\t');
             match &decoded {
-                Some(decoded) => encode_genotypes::write_decoded(header, decoded, &site, out)?,
+                Some(decoded) => encode_genotypes::write_decoded(
+                    header,
+                    decoded,
+                    &site,
+                    self.allow_missing,
+                    out,
+                )?,
                 None => out.push_str(parts[8]),
             }
         }
@@ -205,15 +224,16 @@ impl Encoder {
             return Ok(());
         }
         for (i, (JavaKey(key), value)) in map.iter().enumerate() {
-            let Some(definition) = header.info(key) else {
+            let definition = header.info(key);
+            if definition.is_none() && !self.allow_missing {
                 return Err(missing_from_header(key, "INFO", site));
-            };
+            }
             if i > 0 {
                 out.push(';');
             }
             out.push_str(key);
             if let InfoValue::Text(value) = value
-                && definition.count != Count::Fixed(0)
+                && definition.is_none_or(|d| d.count != Count::Fixed(0))
             {
                 out.push('=');
                 out.push_str(value);
@@ -244,7 +264,12 @@ fn alternates(text: &str) -> Vec<String> {
 }
 
 /// `VCFEncoder.getFilterString` over the codec's filters.
-fn filters(text: &str, header: &VcfHeader, site: &Site) -> Result<String, String> {
+fn filters(
+    text: &str,
+    header: &VcfHeader,
+    site: &Site,
+    allow_missing: bool,
+) -> Result<String, String> {
     if matches!(text, "." | "PASS") {
         return Ok(text.to_owned());
     }
@@ -254,7 +279,10 @@ fn filters(text: &str, header: &VcfHeader, site: &Site) -> Result<String, String
     if names.is_empty() {
         return Ok("PASS".to_owned());
     }
-    if let Some(missing) = names.iter().find(|name| !header.has_filter(name)) {
+    if let Some(missing) = names
+        .iter()
+        .find(|name| !allow_missing && !header.has_filter(name))
+    {
         return Err(missing_from_header(missing, "FILTER", site));
     }
     Ok(names.join(";"))

@@ -669,6 +669,9 @@ impl SiteReader {
 /// A VCF read line by line for a writer: the whole header as htsjdk's
 /// `VCFCodec` reads it ([`VcfHeader`]), then each record line as text, at
 /// most [`MAX_LINE_BYTES`] each, one line in memory at a time.
+/// The smallest header [`VcfLines::take_header`] leaves behind.
+const EMPTY_HEADER: &str = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+
 pub struct VcfLines {
     path: PathBuf,
     reader: Box<dyn BufRead + Send>,
@@ -702,6 +705,17 @@ impl VcfLines {
     /// The header, one copy shared by every step that holds it.
     pub fn shared_header(&self) -> std::sync::Arc<VcfHeader> {
         std::sync::Arc::clone(&self.header)
+    }
+
+    /// The header, handed over: the reader keeps an empty one, so a caller
+    /// that drops its copy frees it (a chain whose transform makes a new
+    /// header holds the source's only while a step reads it).
+    pub fn take_header(&mut self) -> Result<std::sync::Arc<VcfHeader>> {
+        let empty = VcfHeader::read(&mut EMPTY_HEADER.as_bytes()).map_err(Error::Metric)?;
+        Ok(std::mem::replace(
+            &mut self.header,
+            std::sync::Arc::new(empty),
+        ))
     }
 
     /// The header as the reader holds it, for a caller that rewrites it in

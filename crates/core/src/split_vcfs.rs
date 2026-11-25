@@ -294,11 +294,24 @@ impl Writers {
         let (snp_options, snp_note) = writer.for_output("SNP_OUTPUT", snp)?;
         let (indel_options, indel_note) = writer.for_output("INDEL_OUTPUT", indel)?;
         refuse_shared_files(&snp_options.files(snp), &indel_options.files(indel))?;
+        if dictionary.is_none() {
+            header.check_contig_names().map_err(Error::Metric)?;
+        }
         if writer.create_index && dictionary.is_none() && header.dictionary().is_none() {
             return Err(no_dictionary(snp));
         }
+        if header.minor() >= 3 {
+            // SplitVcfs hands the writers the input's header, whose version
+            // htsjdk 5.0.0 cannot write (MakeSitesOnlyVcf builds a new one).
+            return Err(Error::Metric(format!(
+                "Writing VCF version VCF4_{} is not implemented",
+                header.minor()
+            )));
+        }
         notes.extend(snp_note);
         notes.extend(indel_note);
+        // One dictionary for both indexes: it may hold millions of contigs.
+        let dictionary = dictionary.map(Arc::new);
         let snp =
             VcfWriter::create_indexed_by(snp, Arc::clone(header), snp_options, dictionary.clone())?;
         let indel =
@@ -375,10 +388,22 @@ fn refuse_shared_files(snp: &[PathBuf], indel: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-/// The dictionary `SEQUENCE_DICTIONARY` names: any file
-/// [`vcf::read_dictionary`] reads but a VCF, which Picard's SAM reader
-/// cannot open.
-fn read_sequence_dictionary(path: &Path) -> Result<vcf::Dictionary> {
+/// The most bytes of a text `SEQUENCE_DICTIONARY` (a `.dict`, SAM text, an
+/// interval list) read before its first line that is not a header line.
+/// The file is read line by line and only each `@SQ` name and length is
+/// held.
+pub const MAX_DICTIONARY_BYTES: u64 = 128 << 20;
+/// The most `@SQ` lines of `SEQUENCE_DICTIONARY`: about 40 bytes and the
+/// name each, so the dictionary stays under 300 MiB.
+pub const MAX_DICTIONARY_CONTIGS: usize = 4_000_000;
+
+/// The dictionary `SEQUENCE_DICTIONARY` names, as
+/// `SamReaderFactory.getFileHeader(...).getSequenceDictionary()` gives it:
+/// the `@SQ` lines of a `.dict`, SAM text, an interval list, a BAM or a
+/// CRAM, none or more. A VCF is refused: Picard's SAM reader cannot open
+/// one. A name given twice fails (`Cannot add sequence that already
+/// exists`), and so does an `LN` that is no Java `int`.
+pub fn read_sequence_dictionary(path: &Path) -> Result<vcf::Dictionary> {
     if vcf::is_vcf(path) {
         return Err(Error::Usage(format!(
             "SEQUENCE_DICTIONARY={}: a VCF is no dictionary here; give a .dict, a SAM, BAM or \
@@ -386,7 +411,133 @@ fn read_sequence_dictionary(path: &Path) -> Result<vcf::Dictionary> {
             path.display()
         )));
     }
-    vcf::read_dictionary(path)
+    let failed = |message: String| Error::Intervals {
+        path: path.to_path_buf(),
+        message,
+    };
+    let name = path.to_string_lossy().to_ascii_lowercase();
+    let dictionary = if crate::cram::is_cram(path) || name.ends_with(".bam") {
+        crate::bed_to_interval_list::read_sequences(path)?
+            .into_iter()
+            .map(|s| {
+                let length = i32::try_from(s.length).map_err(|_| {
+                    failed(format!(
+                        "NumberFormatException: For input string: \"{}\"",
+                        s.length
+                    ))
+                })?;
+                Ok(vcf::Contig {
+                    name: s.name,
+                    length: Some(i64::from(length)),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        read_text_dictionary(path)?
+    };
+    refuse_repeated_names(&dictionary).map_err(failed)?;
+    Ok(dictionary)
+}
+
+/// The `@SQ` lines of the text header at `path` (inflated for a name
+/// ending in `.gz`), up to the first line that does not start with `@`.
+fn read_text_dictionary(path: &Path) -> Result<vcf::Dictionary> {
+    use std::io::{BufRead, Read};
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let failed = |message: String| Error::Intervals {
+        path: path.to_path_buf(),
+        message,
+    };
+    let file = std::fs::File::open(path).map_err(input)?;
+    let reader: Box<dyn Read> = if path.to_string_lossy().ends_with(".gz") {
+        Box::new(crate::gzip::GzipReader::new(std::io::BufReader::new(file)))
+    } else {
+        Box::new(file)
+    };
+    let mut reader = std::io::BufReader::new(reader.take(MAX_DICTIONARY_BYTES + 1));
+    let mut dictionary = Vec::new();
+    let mut raw = Vec::new();
+    let mut read = 0u64;
+    loop {
+        raw.clear();
+        let n = reader.read_until(b'\n', &mut raw).map_err(input)?;
+        if n == 0 {
+            break;
+        }
+        read += n as u64;
+        if read > MAX_DICTIONARY_BYTES {
+            return Err(failed(format!(
+                "the header holds more than {MAX_DICTIONARY_BYTES} bytes, the most a \
+                 SEQUENCE_DICTIONARY file may hold"
+            )));
+        }
+        if raw.first() != Some(&b'@') {
+            break;
+        }
+        if !raw.starts_with(b"@SQ\t") {
+            continue;
+        }
+        let line = crate::java::decode_utf8(&raw);
+        let line = line.trim_end_matches(['\n', '\r']);
+        dictionary.push(sq_line(line).map_err(failed)?);
+        if dictionary.len() > MAX_DICTIONARY_CONTIGS {
+            return Err(failed(format!(
+                "more than {MAX_DICTIONARY_CONTIGS} @SQ lines, the most a SEQUENCE_DICTIONARY \
+                 may hold"
+            )));
+        }
+    }
+    dictionary.shrink_to_fit();
+    Ok(dictionary)
+}
+
+/// One `@SQ` line: its `SN` and its `LN`, a Java `int`.
+fn sq_line(line: &str) -> std::result::Result<vcf::Contig, String> {
+    let (mut name, mut length) = (None, None);
+    for field in line[4..].split('\t') {
+        if let Some(value) = field.strip_prefix("SN:") {
+            name = Some(value);
+        } else if let Some(value) = field.strip_prefix("LN:") {
+            length =
+                Some(crate::java::parse_integer(value, 32).map_err(|_| {
+                    format!("NumberFormatException: For input string: \"{value}\"")
+                })?);
+        }
+    }
+    match (name, length) {
+        (Some(name), Some(length)) => Ok(vcf::Contig {
+            name: name.to_owned(),
+            length: Some(length),
+        }),
+        _ => Err(format!("@SQ line without SN and LN: {line}")),
+    }
+}
+
+/// `SAMSequenceDictionary.addSequence`: a name given twice fails. The
+/// names are compared through a sorted index of 4 bytes per contig.
+fn refuse_repeated_names(dictionary: &vcf::Dictionary) -> std::result::Result<(), String> {
+    let mut order: Vec<u32> = (0..dictionary.len() as u32).collect();
+    order.sort_unstable_by(|&a, &b| {
+        dictionary[a as usize]
+            .name
+            .cmp(&dictionary[b as usize].name)
+            .then(a.cmp(&b))
+    });
+    let repeated = order
+        .windows(2)
+        .filter(|pair| dictionary[pair[0] as usize].name == dictionary[pair[1] as usize].name)
+        .map(|pair| pair[1])
+        .min();
+    match repeated {
+        Some(at) => Err(format!(
+            "Cannot add sequence that already exists in SAMSequenceDictionary: {}",
+            dictionary[at as usize].name
+        )),
+        None => Ok(()),
+    }
 }
 
 /// Run the tool: every record of `opts.input` to its output.
@@ -407,6 +558,10 @@ pub fn split(opts: &Options) -> Result<(Counts, Vec<PathBuf>)> {
         .as_deref()
         .map(read_sequence_dictionary)
         .transpose()?;
+    let place = |e: Error| match e {
+        Error::Metric(message) => Error::Metric(format!("{}: {message}", opts.input.display())),
+        other => other,
+    };
     let mut notes = Vec::new();
     let mut writers = Writers::create(
         &opts.snp_output,
@@ -416,7 +571,8 @@ pub fn split(opts: &Options) -> Result<(Counts, Vec<PathBuf>)> {
         dictionary,
         opts.strict,
         &mut notes,
-    )?;
+    )
+    .map_err(place)?;
     if !opts.quiet {
         for note in &notes {
             eprintln!("bammetrics: {note}");
@@ -424,10 +580,6 @@ pub fn split(opts: &Options) -> Result<(Counts, Vec<PathBuf>)> {
     }
     let encoder = Encoder::new(&header);
     let mut line = String::new();
-    let place = |e: Error| match e {
-        Error::Metric(message) => Error::Metric(format!("{}: {message}", opts.input.display())),
-        other => other,
-    };
     while lines.next_line(&mut line)? {
         writers.write(&encoder, &line).map_err(place)?;
     }

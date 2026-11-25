@@ -646,12 +646,18 @@ No real VCF is under `~/data`; the inputs are those of `benches/vcf_scale.py` an
 | 200,000 records | `chain make-sites-only-vcf split-vcfs` | | 0.32 s, 15.9 MiB |
 | 20,000 samples by 100 records | `chain make-sites-only-vcf --sample S000001` | | 0.32 s, 37.0 MiB |
 | 1,430,000 `##contig` lines (65 MB, at the 64 MiB header cap) | `make-sites-only-vcf` | | 1.8 s, 274 MiB |
-| the same | `chain make-sites-only-vcf -o c.vcf.gz` | | 1.9 s, 426 MiB |
+| the same | `chain make-sites-only-vcf -o c.vcf.gz` | | 1.9 s, 308 MiB (426 MiB before the W16 tools review) |
+| the same at `VCFv4.1` | `chain make-sites-only-vcf -o c.vcf.gz` (the header read back, W16-17) | | 2.3 s, 466 MiB |
+| one sample, one record of 200,000 `FORMAT` keys | `make-sites-only-vcf --sample S1` | | 0.55 s, 98 MiB (26.6 s before) |
+| `SEQUENCE_DICTIONARY` of 3,999,999 `@SQ` lines (128,000,000 bytes) | `split-vcfs --sequence-dictionary` | | 0.4 s, 240 MiB (918 MiB for 6,000,000 lines before) |
 | the same | `split-vcfs --strict false` | | 2.0 s, 277 MiB |
 | the same | `chain -o c.vcf.gz` (the writer alone) | | 1.8 s, 275 MiB |
 
-The tool rewrites the header's sample columns in place; a chain keeps the input header
-for the steps in front and holds a second copy, under the 500 MiB of docs/07 section 5.
+The tool rewrites the header's sample columns in place, and so does the chain's transform
+since the W16 tools review (`BuildVariantTransform` takes the header to change), unless a
+step in front holds it. The steps behind a transform read the header as a reader of its
+file would (W16-17): the same copy for a `VCFv4.2` header of ASCII text whose lookups read
+back the same, one copy more for any other, under the 500 MiB of docs/07 section 5.
 
 ## Memory gate
 

@@ -54,7 +54,11 @@ pub const TOOL: Tool = Tool {
         split_vcfs::COMPRESSION_OPTION,
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
         registry::REFERENCE_NOT_DECODED,
-        registry::STRINGENCY_NO_RECORDS,
+        Opt::text(
+            &["VALIDATION_STRINGENCY"],
+            "STRICT (default) fails on an INFO, FILTER or FORMAT key the header lacks; LENIENT \
+             or SILENT writes it as read.",
+        ),
     ],
     run: run_tool,
     collector: None,
@@ -71,12 +75,30 @@ pub struct Options {
     /// `SAMPLE` after `null` handling, as given.
     pub samples: Vec<String>,
     pub writer: WriterOptions,
+    /// `VALIDATION_STRINGENCY` is not `STRICT`: a key the header lacks is
+    /// written as read.
+    pub allow_missing: bool,
     pub quiet: bool,
 }
 
-/// `SAMPLE`: each value added, `null` clearing the list so far.
+/// `SAMPLE`: each value added, `null` clearing the list so far. A name
+/// with a line end is refused, as Picard's command-line header refuses it.
 pub fn samples_of(inv: &Invocation) -> Result<Vec<String>> {
-    registry::picard_list(Vec::new(), inv.all("SAMPLE"), |name| Ok(name.to_owned()))
+    registry::picard_list(Vec::new(), inv.all("SAMPLE"), |name| {
+        if let Some(c) = name.chars().find(|c| matches!(c, '\n' | '\r')) {
+            return Err(Error::Usage(format!(
+                "SAMPLE={name:?}: Supplied String contains illegal character {c:?}"
+            )));
+        }
+        Ok(name.to_owned())
+    })
+}
+
+/// `Options.ALLOW_MISSING_FIELDS_IN_HEADER`, which Picard's
+/// `CommandLineProgram` sets on every VCF writer's default options when
+/// `VALIDATION_STRINGENCY` is not `STRICT`.
+fn allow_missing(inv: &Invocation) -> Result<bool> {
+    Ok(inv.stringency()? != crate::sam_text::Stringency::Strict)
 }
 
 impl Options {
@@ -90,6 +112,7 @@ impl Options {
             output,
             samples: samples_of(inv)?,
             writer: WriterOptions::from_invocation(inv)?,
+            allow_missing: allow_missing(inv)?,
             quiet: inv.quiet,
         })
     }
@@ -106,14 +129,20 @@ pub fn make_sites_only(opts: &Options) -> Result<u64> {
         std::slice::from_ref(&opts.input),
     )?;
     let mut lines = VcfLines::open(&opts.input)?;
+    lines
+        .header()
+        .check_contig_names()
+        .map_err(|message| Error::Metric(format!("{}: {message}", opts.input.display())))?;
     if opts.writer.create_index && lines.header().dictionary().is_none() {
         return Err(split_vcfs::no_dictionary(&opts.input));
     }
     if let Some(note) = note.filter(|_| !opts.quiet) {
         eprintln!("bammetrics: {note}");
     }
-    let subset = SampleSubset::new_shared(lines.header_mut(), &opts.samples);
+    let mut subset = SampleSubset::new_shared(lines.header_mut(), &opts.samples);
+    subset.allow_missing_fields(opts.allow_missing);
     let mut writer = VcfWriter::create_shared(&opts.output, subset.shared_header(), options)?;
+    writer.allow_missing_fields(opts.allow_missing);
     let mut line = String::new();
     let mut edited = String::new();
     let mut read = 0u64;
@@ -154,10 +183,18 @@ pub fn variant_transform(inv: &Invocation) -> Result<BuildVariantTransform> {
              none (-o r.vcf.gz or write PATH)"
         )));
     }
+    if allow_missing(inv)? {
+        return Err(Error::Usage(
+            "VALIDATION_STRINGENCY other than STRICT lets MakeSitesOnlyVcf write keys the header \
+             lacks, and the steps after it in a chain check every key: run the tool on its own"
+                .to_owned(),
+        ));
+    }
     let samples = samples_of(inv)?;
-    Ok(Box::new(move |header: &Arc<VcfHeader>| {
+    Ok(Box::new(move |header: &mut Arc<VcfHeader>| {
+        header.check_contig_names().map_err(Error::Metric)?;
         Ok(Box::new(SitesOnly {
-            subset: SampleSubset::new(header, &samples),
+            subset: SampleSubset::new_shared(header, &samples),
             counters: Counters::default(),
             edited: String::new(),
         }) as Box<dyn VariantTransform>)

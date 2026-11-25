@@ -9,5 +9,4 @@ OUT/x.vcf.gz
 2
 ## stdout
 ## stderr
-bammetrics split-vcfs: no -o, files go to ./types.*
 bammetrics split-vcfs: SNP_OUTPUT and INDEL_OUTPUT both write OUT/x.vcf.gz (OUT/x.vcf.gz): give each its own file

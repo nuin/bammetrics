@@ -625,6 +625,8 @@ struct Context<'a> {
     threads: usize,
     /// The chain's `--tmp-dir`.
     tmp_dir: Option<&'a Path>,
+    /// The chain's `--validation-stringency`.
+    stringency: Stringency,
 }
 
 impl Context<'_> {
@@ -1379,6 +1381,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         also: &per_file,
         threads,
         tmp_dir: spec.tmp_dir.as_deref().map(Path::new),
+        stringency,
     };
     let mut steps: Vec<Planned> = Vec::with_capacity(drafts.len());
     let mut prefix_used = false;

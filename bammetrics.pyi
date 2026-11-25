@@ -1772,6 +1772,7 @@ def make_sites_only_vcf(
     sample: str | Sequence[str] | None = None,
     create_index: bool | None = None,
     compression_level: int | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """MakeSitesOnlyVcf: writes OUTPUT: every record of the VCF without its genotypes, or
     with those of the SAMPLE names only, the site columns and INFO as read. Returns one

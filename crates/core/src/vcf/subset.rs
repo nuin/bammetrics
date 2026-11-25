@@ -53,6 +53,8 @@ pub struct SampleSubset {
     /// Per output sample, its column in the input; `None` when the input
     /// lacks it.
     picks: Vec<Option<usize>>,
+    /// A `FORMAT` key the header lacks is written as read.
+    allow_missing: bool,
 }
 
 impl SampleSubset {
@@ -86,7 +88,14 @@ impl SampleSubset {
             percent,
             output: Arc::clone(input),
             picks,
+            allow_missing: false,
         }
+    }
+
+    /// Write a `FORMAT` key the header lacks as read in place of failing
+    /// ([`super::Encoder::allow_missing_fields`]).
+    pub fn allow_missing_fields(&mut self, allow: bool) {
+        self.allow_missing = allow;
     }
 
     /// The header the edited records are written under.
@@ -130,6 +139,7 @@ impl SampleSubset {
             percent: self.percent,
             output: &self.output,
             picks: &self.picks,
+            allow_missing: self.allow_missing,
         }
         .write(genotypes, alleles, &site, out)?;
         Ok(true)

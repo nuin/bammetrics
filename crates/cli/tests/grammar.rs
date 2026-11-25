@@ -829,7 +829,7 @@ fn cases(built: &Built) -> Vec<Case> {
             verb_args: strings(&[&built.vcf]),
             picard_args: strings(&[&format!("I={}", built.vcf)]),
             option: Some(("SAMPLE", "S1")),
-            picard_outputs: single,
+            picard_outputs: sites_vcf,
         },
         Case {
             verb: "make-vcf-sample-name-map",
@@ -857,6 +857,11 @@ fn split_directory(out: &str) -> Vec<String> {
     vec![format!("O={out}")]
 }
 
+/// htsjdk types a VCF output by its name: `O=` takes a `.vcf`.
+fn sites_vcf(out: &str) -> Vec<String> {
+    vec![format!("O={out}.vcf")]
+}
+
 fn commented_bam(out: &str) -> Vec<String> {
     vec![format!("O={out}.bam")]
 }
@@ -879,6 +884,7 @@ fn named_output(verb: &str) -> Option<&'static str> {
         "add-comments-to-bam" | "gather-bam-files" | "merge-sam-files" | "reorder-sam" => {
             Some("bam")
         }
+        "make-sites-only-vcf" => Some("vcf"),
         _ => None,
     }
 }

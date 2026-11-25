@@ -728,6 +728,16 @@ impl Tool {
                             )));
                         }
                         inv.values.entry(opt.names[0]).or_default().push(value);
+                    } else if opt.names[0] == "VERBOSITY"
+                        && !matches!(
+                            value.as_str(),
+                            "ERROR" | "WARNING" | "INFO" | "DEBUG" | "null"
+                        )
+                    {
+                        // Picard parses the `LogLevel` before the tool runs.
+                        return Err(Error::Usage(format!(
+                            "{name}={value}: one of ERROR, WARNING, INFO, DEBUG"
+                        )));
                     }
                 }
                 Kind::Rejected => unreachable!("rejected above"),

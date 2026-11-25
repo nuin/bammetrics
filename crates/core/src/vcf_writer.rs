@@ -6,8 +6,10 @@
 //! - The kind follows the name as `VariantContextWriterBuilder` decides it:
 //!   `.bcf` is BCF (refused: no BCF writer); a name ending in `.gz`,
 //!   `.gzip`, `.bgz` or `.bgzf` in any case is block-compressed text
-//!   (BGZF on worker threads, its end-of-file block last); any other name
-//!   is plain text.
+//!   (BGZF on worker threads, its end-of-file block last); a name ending
+//!   in `.vcf` (lower case) is plain text; any other name fails with
+//!   htsjdk's `Output format type is not set` sentence before a file is
+//!   made.
 //! - The index of a block-compressed VCF is the `.tbi` beside it
 //!   (`out.vcf.gz.tbi`), built as `TabixIndexCreator` builds it
 //!   ([`tabix`]) from the finished file read back, so each record's offset
@@ -69,16 +71,21 @@ impl VcfFormat {
             )));
         }
         let lower = name.to_ascii_lowercase();
-        Ok(
-            if [".gz", ".gzip", ".bgz", ".bgzf"]
-                .iter()
-                .any(|e| lower.ends_with(e))
-            {
-                Self::Bgzf
-            } else {
-                Self::Plain
-            },
-        )
+        if [".gz", ".gzip", ".bgz", ".bgzf"]
+            .iter()
+            .any(|e| lower.ends_with(e))
+        {
+            return Ok(Self::Bgzf);
+        }
+        if name.ends_with(".vcf") {
+            return Ok(Self::Plain);
+        }
+        Err(Error::Usage(format!(
+            "{}: Output format type is not set, or could not be inferred from the output path. \
+             If a path was used, does it have a valid VCF extension (.vcf, .vcf.gz, .vcf.bgz, \
+             .bcf)?",
+            path.display()
+        )))
     }
 
     pub fn name(self) -> &'static str {
@@ -126,8 +133,8 @@ impl Default for VcfOptions {
 }
 
 impl VcfOptions {
-    /// A usage error for options `path` cannot take: an index of a plain
-    /// VCF (decision W16-3).
+    /// A usage error for a name [`VcfFormat::of`] refuses, or for options
+    /// `path` cannot take: an index of a plain VCF (decision W16-3).
     pub fn check(&self, path: &Path) -> Result<()> {
         if self.compression_level > 9 {
             return Err(Error::Usage(format!(
@@ -135,7 +142,7 @@ impl VcfOptions {
                 self.compression_level
             )));
         }
-        if self.index && VcfFormat::of(path)? == VcfFormat::Plain {
+        if VcfFormat::of(path)? == VcfFormat::Plain && self.index {
             return Err(Error::Usage(plain_index_refusal(path)));
         }
         Ok(())
@@ -197,7 +204,7 @@ pub struct VcfWriter {
     options: VcfOptions,
     /// The dictionary of the `.tbi` when it is not the header's
     /// (`SplitVcfs SEQUENCE_DICTIONARY`).
-    dictionary: Option<crate::vcf::Dictionary>,
+    dictionary: Option<Arc<crate::vcf::Dictionary>>,
     line: String,
     records: u64,
 }
@@ -228,7 +235,7 @@ impl VcfWriter {
         path: &Path,
         header: Arc<VcfHeader>,
         options: VcfOptions,
-        dictionary: Option<crate::vcf::Dictionary>,
+        dictionary: Option<Arc<crate::vcf::Dictionary>>,
     ) -> Result<Self> {
         options.check(path)?;
         if options.index && dictionary.is_none() && header.dictionary().is_none() {
@@ -280,6 +287,12 @@ impl VcfWriter {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Write an `INFO`, `FILTER` or `FORMAT` key the header lacks as read
+    /// ([`Encoder::allow_missing_fields`]).
+    pub fn allow_missing_fields(&mut self, allow: bool) {
+        self.encoder.allow_missing_fields(allow);
     }
 
     /// The records written so far.
@@ -339,7 +352,7 @@ impl VcfWriter {
             Some(write_tabix(
                 self.file.writing(),
                 &self.path,
-                self.dictionary.as_ref().or(self.header.dictionary()),
+                self.dictionary.as_deref().or(self.header.dictionary()),
                 &index_path(&self.path),
             )?)
         } else {

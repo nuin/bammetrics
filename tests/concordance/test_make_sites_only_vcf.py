@@ -14,7 +14,9 @@ import pytest
 from compare import vcf_lines
 from conftest import RESULTS
 from test_vcf_writer import contigs_of, tabix_regions
-from vcf_tool_cases import INPUTS, bammetrics, compare_files, corpus, files_in, ours, picard
+from vcf_tool_cases import (BAD_OUTPUT_SUFFIXES, BGZF_OUTPUT_SUFFIXES, INPUTS, REVIEW_CONTIGS,
+                            bammetrics, compare_files, corpus, files_in, ours, picard,
+                            review_inputs)
 
 
 @pytest.fixture(scope="module")
@@ -163,3 +165,53 @@ def test_chain_equals_the_tool(data, tmp_path, name):
     assert not compare_files([(tmp_path / "q.vcf.gz", tmp_path / "s.vcf.gz")])
     assert files_in(tmp_path).count("r.vcf.gz.tbi") == 1
     RESULTS.append((f"MakeSitesOnlyVcf chain {name}", 2, 2, "chained equals Picard"))
+
+
+@pytest.fixture(scope="module")
+def review(tmp_path_factory):
+    return review_inputs(tmp_path_factory.mktemp("sites_only_review"))
+
+
+# The W16 tools review: each case runs both faces and holds them to each other (both
+# succeed with equal files, or both fail and bammetrics leaves no file). The third item
+# is Picard's outcome, so a case cannot pass by both tools failing where Picard works.
+REVIEW_CASES = [
+    ("undeclared_info.vcf", ["VALIDATION_STRINGENCY=LENIENT"], 0),
+    ("undeclared_info.vcf", ["VALIDATION_STRINGENCY=SILENT", "SAMPLE=S1"], 0),
+    ("undeclared_info.vcf", [], 1),
+    ("undeclared_filter.vcf", ["VALIDATION_STRINGENCY=SILENT"], 0),
+    ("undeclared_flag.vcf", ["VALIDATION_STRINGENCY=LENIENT"], 0),
+    ("undeclared_format.vcf", ["VALIDATION_STRINGENCY=LENIENT", "SAMPLE=S1"], 0),
+    ("undeclared_format.vcf", ["SAMPLE=S1"], 1),
+    ("extra_columns.vcf", ["SAMPLE=S1"], 0),
+    ("extra_columns.vcf", [], 0),
+    ("unsorted_extra.vcf", [], 0),
+    ("unsorted_extra.vcf", ["SAMPLE=S1"], 0),
+    ("v43.vcf", [], 0),
+    ("nonascii1.vcf", [], 0),
+    ("nonascii3.vcf", ["SAMPLE=S2"], 0),
+    ("v42.vcf", ["VERBOSITY=bogus"], 1),
+    ("v42.vcf", ["VERBOSITY=debug"], 1),
+    ("v42.vcf", ["SAMPLE=a\nb"], 1),
+] + [(f"contig{i}.vcf", [], 1 if i < 4 else 0) for i in range(len(REVIEW_CONTIGS))]
+
+
+@pytest.mark.parametrize("case", range(len(REVIEW_CASES)))
+def test_review_cases(review, tmp_path, case):
+    name, args, picard_exit = REVIEW_CASES[case]
+    sides = run(review, tmp_path, name, ".vcf", "CREATE_INDEX=false", *args)
+    assert (sides["picard"][0].returncode != 0) == (picard_exit != 0), sides["picard"][0].stderr[-800:]
+    lines = assert_equal(sides, f"{name} {args}")
+    RESULTS.append((f"MakeSitesOnlyVcf review {name} {' '.join(args)}", lines, lines,
+                    "every line equal" if picard_exit == 0 else "both fail"))
+
+
+@pytest.mark.parametrize("suffix", BAD_OUTPUT_SUFFIXES + BGZF_OUTPUT_SUFFIXES)
+def test_output_names(review, tmp_path, suffix):
+    """htsjdk types an output by its name: .vcf (lower case) is text, a gzip suffix in any
+    case BGZF, any other name fails before a file is made."""
+    sides = run(review, tmp_path, "v42.vcf", suffix, "CREATE_INDEX=false")
+    assert (sides["picard"][0].returncode == 0) == (suffix in BGZF_OUTPUT_SUFFIXES)
+    lines = assert_equal(sides, suffix)
+    RESULTS.append((f"MakeSitesOnlyVcf O=x{suffix}", lines, lines,
+                    "every line equal" if lines else "both fail"))

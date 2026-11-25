@@ -2062,6 +2062,12 @@ Where it differs:
 - `MakeVcfSampleNameMap` exits 1 when more than 8 inputs fall into one bin of Picard's
   `HashMap` of 64 slots or more, whose order bammetrics does not model (W16-15); no real
   set of paths is known to do so.
+- `SplitVcfs SEQUENCE_DICTIONARY` holds at most 128 MiB of text and 4,000,000 `@SQ`
+  lines (W16-18); a larger one exits 1. Picard reads any size.
+- In a chain, `make-sites-only-vcf` under `--validation-stringency` `LENIENT` or `SILENT`
+  exits 2 (W16-19). The tool alone writes keys the header lacks there, as Picard does.
+- The verb `make-sites-only-vcf` exits 2 for an output name htsjdk cannot type (`o.txt`,
+  `o.VCF`); the Picard face exits 1, as Picard does.
 
 ## Not in Picard
 

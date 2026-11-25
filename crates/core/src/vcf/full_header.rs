@@ -626,6 +626,145 @@ impl VcfHeader {
         (!self.dictionary.is_empty()).then_some(&self.dictionary)
     }
 
+    /// The header a reader of the file [`crate::vcf_writer::VcfWriter`]
+    /// writes under `self` gets: the text as ISO-8859-1 bytes read back as
+    /// UTF-8, `VCFv4.2`, the lines in written order. A chain hands this on
+    /// after a transform, so the steps behind it read what they would read
+    /// from the transform's file.
+    ///
+    /// The lines go straight to [`VcfHeader::from_raw`], each split where
+    /// the reader splits it (`\n`, `\r`, `\r\n`), so no copy of the whole
+    /// text is held beside them.
+    pub fn reread(&self) -> Result<Self, String> {
+        // The lines this header writes: its own, the version and the columns.
+        let mut lines: Vec<String> = Vec::with_capacity(self.lines.len() + 2);
+        let mut current = String::new();
+        let mut after_cr = false;
+        self.each_line(&mut |piece| {
+            let piece = crate::java::iso_8859_1(piece);
+            let piece = crate::java::decode_utf8(&piece);
+            for c in piece.chars() {
+                match c {
+                    '\n' if after_cr => {}
+                    '\n' | '\r' => {
+                        // Each line at its own length: the buffer is reused.
+                        lines.push(current.as_str().to_owned());
+                        current.clear();
+                    }
+                    _ => current.push(c),
+                }
+                after_cr = c == '\r';
+            }
+            Ok(())
+        })
+        .map_err(|e| e.to_string())?;
+        let Some(at) = lines.iter().position(|line| !line.starts_with("##")) else {
+            return Err("the written header has no column line".to_owned());
+        };
+        lines.truncate(at + 1);
+        let columns = lines.pop().unwrap_or_default();
+        Self::from_raw(RawHeader {
+            lines,
+            columns,
+            minor: 2,
+        })
+    }
+
+    /// What a reader of the file [`crate::vcf_writer::VcfWriter`] writes
+    /// under `self` reads: [`VcfHeader::reread`], with no second copy of
+    /// the lines for a header of ASCII text. Writing such a header changes
+    /// no character, so its kept lines read back as written; only the
+    /// version (4.2) and what the reader takes from the first line of each
+    /// `ID` in written order change: the `INFO`, `FORMAT` and `FILTER`
+    /// lookups and the `END` flag of the site reader. Those are read again
+    /// from the written lines.
+    ///
+    /// `None` when that is `self` (a `VCFv4.2` header whose lookups read
+    /// back the same), so the caller keeps its copy.
+    pub fn read_back(&self) -> Result<Option<Self>, String> {
+        if !self.is_ascii() {
+            return self.reread().map(Some);
+        }
+        let mut lookups = Self {
+            text: String::new(),
+            lines: Vec::new(),
+            samples: Vec::new(),
+            minor: 2,
+            site: SiteHeader::default(),
+            infos: HashMap::new(),
+            formats: HashMap::new(),
+            filters: HashSet::new(),
+            dictionary: Vec::new(),
+        };
+        for written in self.written_lines() {
+            let text = self.line(written);
+            let parsed = if text.starts_with("INFO") || text.starts_with("FORMAT") {
+                let line = format!("##{text}");
+                if text.starts_with("INFO") {
+                    compound("INFO", after(&line, 7)?, 2)?
+                } else {
+                    compound("FORMAT", after(&line, 9)?, 2)?
+                }
+            } else if text.starts_with("FILTER") {
+                let line = format!("##{text}");
+                let Some((key, skip)) = structured_key(&line, 2) else {
+                    continue;
+                };
+                Line::Structured {
+                    key: key.to_owned(),
+                    fields: parse_fields(after(&line, skip)?, None, &[])?,
+                    contig: None,
+                }
+            } else {
+                continue;
+            };
+            lookups.index(&parsed);
+        }
+        let end_is_flag = lookups.info("END").is_some_and(|d| d.flag);
+        if self.minor == 2
+            && end_is_flag == self.site.end_is_flag
+            && lookups.infos == self.infos
+            && lookups.formats == self.formats
+            && lookups.filters == self.filters
+        {
+            return Ok(None);
+        }
+        let mut header = self.clone();
+        header.minor = 2;
+        header.site.minor = 2;
+        header.site.end_is_flag = end_is_flag;
+        header.infos = lookups.infos;
+        header.formats = lookups.formats;
+        header.filters = lookups.filters;
+        Ok(Some(header))
+    }
+
+    /// True when the header's text is ASCII, so writing it as ISO-8859-1
+    /// and reading it back as UTF-8 changes no character.
+    pub fn is_ascii(&self) -> bool {
+        self.text.is_ascii() && self.samples.iter().all(|s| s.is_ascii())
+    }
+
+    /// `VCFHeader.getSequenceDictionary` builds a `SAMSequenceRecord` per
+    /// `##contig` line, which checks its name: the first `ID` outside the
+    /// SAM name pattern fails with htsjdk's message. `MakeSitesOnlyVcf`
+    /// always asks for the dictionary, `SplitVcfs` without
+    /// `SEQUENCE_DICTIONARY`.
+    pub fn check_contig_names(&self) -> Result<(), String> {
+        match self
+            .dictionary
+            .iter()
+            .find(|contig| !crate::create_sequence_dictionary::legal_name(&contig.name))
+        {
+            Some(contig) => Err(format!(
+                "Sequence name '{}' doesn't match regex: '{}'",
+                contig.name,
+                crate::create_sequence_dictionary::NAME_PATTERN
+            )),
+            None => Ok(()),
+        }
+    }
+
     pub fn info(&self, id: &str) -> Option<&Definition> {
         self.infos.get(id)
     }
@@ -650,13 +789,11 @@ impl VcfHeader {
         out
     }
 
-    /// Hand `put` each piece of [`VcfHeader::text`] in order, so a writer
-    /// never holds the whole text: the lines are sorted by an index of
-    /// 4 bytes per line.
-    pub fn each_line(
-        &self,
-        put: &mut dyn FnMut(&str) -> std::io::Result<()>,
-    ) -> std::io::Result<()> {
+    /// The kept lines in the order `VCFWriter.writeHeader` writes them,
+    /// each once: contig lines by their place among the contig lines,
+    /// every other pair by its text, two equal lines that are no contig
+    /// written once (`TreeSet`). An index of 4 bytes per line is sorted.
+    fn written_lines(&self) -> Vec<Written> {
         let mut order: Vec<u32> = (0..self.lines.len() as u32).collect();
         order.sort_by(|&a, &b| {
             let (a, b) = (self.lines[a as usize], self.lines[b as usize]);
@@ -666,19 +803,30 @@ impl VcfHeader {
                 java_compare(self.line(a), self.line(b))
             }
         });
-        put("##fileformat=VCFv4.2\n")?;
-        let mut previous: Option<Written> = None;
-        for &at in &order {
+        let mut written: Vec<Written> = Vec::with_capacity(order.len());
+        for at in order {
             let line = self.lines[at as usize];
-            // `TreeSet` keeps one of two equal lines that are no contig.
-            if let Some(before) = previous
+            if let Some(before) = written.last()
                 && before.contig == 0
                 && line.contig == 0
-                && self.line(before) == self.line(line)
+                && self.line(*before) == self.line(line)
             {
                 continue;
             }
-            previous = Some(line);
+            written.push(line);
+        }
+        written
+    }
+
+    /// Hand `put` each piece of [`VcfHeader::text`] in order, so a writer
+    /// never holds the whole text: the lines are sorted by an index of
+    /// 4 bytes per line.
+    pub fn each_line(
+        &self,
+        put: &mut dyn FnMut(&str) -> std::io::Result<()>,
+    ) -> std::io::Result<()> {
+        put("##fileformat=VCFv4.2\n")?;
+        for line in self.written_lines() {
             put("##")?;
             put(self.line(line))?;
             put("\n")?;
@@ -771,5 +919,79 @@ mod tests {
         assert_eq!(Count::G.values(2, 1), 2);
         assert_eq!(Count::A.values(3, 2), 2);
         assert_eq!(Count::R.values(3, 2), 3);
+    }
+
+    #[test]
+    fn read_back_equals_a_reread() {
+        let body = "##source=x y\n##contig=<ID=c2,length=3000>\n##contig=<ID=c1,length=5000>\n\
+             ##contig=<ID=c2,length=1>\n\
+             ##INFO=<ID=XT,Number=1,Type=String,Description=\"a\",Foo=bar,Source=s,Version=3>\n\
+             ##INFO=<ID=NODESC,Number=1,Type=Integer>\n\
+             ##INFO=<ID=END,Number=1,Type=Flag,Description=\"e\">\n\
+             ##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">\n\
+             ##FORMAT=<ID=ZZ,Number=1,Type=String,Description=\"z\">\n\
+             ##FORMAT=<ID=ZZ,Number=A,Type=Integer,Description=\"a\">\n\
+             ##FILTER=<ID=q10,Description=\"low, \\\"q\\\"\">\n\
+             ##INFO=<ID=MQ,Number=1,Type=Integer,Description=\"mq\">\n\
+             ##META=<ID=Assay,Values=[A, B]>\n##PEDIGREE=<ID=c,Father=f,Mother=m>\n\
+             ##SAMPLE=<ID=S1,Assay=WholeGenome>\n##ALT=<ID=DEL,Description=\"d\">\n\
+             ##INFO=<ID=AA,Number=A,Type=Flag,Description=\"a\">\n\
+             ##INFO=<ID=AA,Number=2,Type=Integer,Description=\"z\">\n\
+             ##FILTER=<ID=q10,Description=\"again\">\n\
+             ##noequals\n##k=v\n##k=v\n";
+        for version in 0..=3 {
+            for body in [body, ""] {
+                let read = header(&format!("##fileformat=VCFv4.{version}\n{body}{COLUMNS}"));
+                let fast = read
+                    .read_back()
+                    .expect("reads back")
+                    .unwrap_or_else(|| read.clone());
+                let reread = read.reread().expect("reads back");
+                assert_eq!(fast.text(), reread.text(), "4.{version}");
+                assert_eq!(fast.site(), reread.site(), "4.{version}");
+                assert_eq!(fast.minor(), reread.minor());
+                assert_eq!(fast.samples(), reread.samples());
+                assert_eq!(fast.dictionary(), reread.dictionary());
+                assert_eq!(fast.filters, reread.filters, "4.{version}");
+                let keys: Vec<&String> = fast
+                    .infos
+                    .keys()
+                    .chain(fast.formats.keys())
+                    .chain(reread.infos.keys())
+                    .chain(reread.formats.keys())
+                    .collect();
+                for key in keys {
+                    assert_eq!(fast.info(key), reread.info(key), "4.{version} {key}");
+                    assert_eq!(fast.format(key), reread.format(key), "4.{version} {key}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_header_read_back_is_at_version_4_2_with_its_text_as_written() {
+        let text = format!(
+            "##fileformat=VCFv4.0\n##INFO=<ID=END,Number=1,Type=Flag,Description=\"e\">\n\
+             ##INFO=<ID=AA,Number=A,Type=Flag,Description=\"a\">\n\
+             ##INFO=<ID=AA,Number=2,Type=Integer,Description=\"z\">\n{COLUMNS}"
+        );
+        let read = header(&text);
+        let reread = read.reread().expect("reads back");
+        assert_eq!(reread.minor(), 2);
+        assert_eq!(reread.text(), read.text());
+        // The first AA line of the written order is the one a reader keeps.
+        assert_eq!(read.info("AA").map(|d| d.flag), Some(true));
+        assert_eq!(reread.info("AA").map(|d| d.flag), Some(false));
+        assert!(!reread.site().end_is_flag);
+        // Text a VCF cannot hold as ISO-8859-1 changes on the way back.
+        let text = format!("##fileformat=VCFv4.2\n##source=caller \u{e9} \u{65e5}\n{COLUMNS}");
+        let read = header(&text);
+        assert!(!read.is_ascii());
+        assert!(
+            read.reread()
+                .expect("reads back")
+                .text()
+                .contains("##source=caller \u{fffd} ?\n")
+        );
     }
 }

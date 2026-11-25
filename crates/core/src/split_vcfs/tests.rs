@@ -185,3 +185,98 @@ fn the_debug_line_is_picards() {
         "Found a record with type SYMBOLIC"
     );
 }
+
+#[test]
+fn the_sequence_dictionary_is_read_as_picards_sam_reader_reads_it() {
+    let dir = scratch("dictionary");
+    let write = |name: &str, text: &str| {
+        let path = dir.join(name);
+        std::fs::write(&path, text).expect("dictionary");
+        path
+    };
+    let empty = write("nosq.dict", "@HD\tVN:1.6\n");
+    assert!(read_sequence_dictionary(&empty).expect("empty").is_empty());
+    let list = write(
+        "l.interval_list",
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:7\tM5:x\n@SQ\tSN:c2\tLN:2147483647\nc1\t1\t5\t+\t.\n@SQ\tSN:c9\tLN:1\n",
+    );
+    let read = read_sequence_dictionary(&list).expect("reads");
+    assert_eq!(
+        read.iter()
+            .map(|c| (c.name.as_str(), c.length))
+            .collect::<Vec<_>>(),
+        [("c1", Some(7)), ("c2", Some(2_147_483_647))]
+    );
+    let repeated = write(
+        "dup.dict",
+        "@SQ\tSN:c1\tLN:1\n@SQ\tSN:c2\tLN:1\n@SQ\tSN:c1\tLN:1\n",
+    );
+    let error = read_sequence_dictionary(&repeated).expect_err("repeated");
+    assert!(
+        error
+            .to_string()
+            .contains("already exists in SAMSequenceDictionary: c1"),
+        "{error}"
+    );
+    let long = write("big.dict", "@SQ\tSN:c1\tLN:99999999999\n");
+    let error = read_sequence_dictionary(&long).expect_err("no int");
+    assert!(
+        error
+            .to_string()
+            .contains("For input string: \"99999999999\""),
+        "{error}"
+    );
+    std::fs::remove_dir_all(dir).expect("clean");
+}
+
+#[test]
+fn a_dictionary_without_sq_lines_serves_a_run_without_an_index() {
+    let dir = scratch("empty-dictionary");
+    let input = dir.join("in.vcf");
+    std::fs::write(&input, format!("{HEADER}{RECORDS}")).expect("input");
+    std::fs::write(dir.join("nosq.dict"), "@HD\tVN:1.6\n").expect("dictionary");
+    let mut opts = options(&dir, &input, false, "s.vcf", "i.vcf");
+    opts.sequence_dictionary = Some(dir.join("nosq.dict"));
+    opts.writer.create_index = false;
+    split(&opts).expect("no index, no contig needed");
+    let mut opts = options(&dir, &input, false, "s.vcf.gz", "i.vcf.gz");
+    opts.sequence_dictionary = Some(dir.join("nosq.dict"));
+    assert!(split(&opts).is_err());
+    assert!(!dir.join("s.vcf.gz").exists() && !dir.join("i.vcf.gz").exists());
+    std::fs::remove_dir_all(dir).expect("clean");
+}
+
+#[test]
+fn version_4_3_and_bad_contig_names_fail_before_any_file() {
+    let dir = scratch("refusals");
+    let input = dir.join("in.vcf");
+    std::fs::write(
+        &input,
+        format!("{HEADER}{RECORDS}").replace("VCFv4.2", "VCFv4.3"),
+    )
+    .expect("input");
+    let opts = options(&dir, &input, false, "s.vcf.gz", "i.vcf.gz");
+    let error = split(&opts).expect_err("4.3");
+    assert!(
+        error
+            .to_string()
+            .contains("Writing VCF version VCF4_3 is not implemented"),
+        "{error}"
+    );
+    assert!(!dir.join("s.vcf.gz").exists());
+    std::fs::write(&input, format!("{HEADER}{RECORDS}").replace("c1", "a b")).expect("input");
+    let error = split(&opts).expect_err("name");
+    assert!(
+        error
+            .to_string()
+            .contains("Sequence name 'a b' doesn't match regex"),
+        "{error}"
+    );
+    // SEQUENCE_DICTIONARY replaces the header's contigs, whose names are then unread.
+    std::fs::write(dir.join("ok.dict"), "@SQ\tSN:c1\tLN:1000\n").expect("dictionary");
+    let mut opts = options(&dir, &input, false, "s.vcf", "i.vcf");
+    opts.writer.create_index = false;
+    opts.sequence_dictionary = Some(dir.join("ok.dict"));
+    split(&opts).expect("a dictionary given");
+    std::fs::remove_dir_all(dir).expect("clean");
+}

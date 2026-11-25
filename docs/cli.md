@@ -2336,8 +2336,16 @@ The type is htsjdk's `VariantContext.getType`; `INDEL` is asked first.
   records that didn't match SNP or INDEL`.
 - `-o PREFIX` names `PREFIX.snp.vcf.gz` and `PREFIX.indel.vcf.gz`; without it the prefix
   is `./` and the input's name less `.vcf.gz` (`./calls`). A name ending in `.gz` (`.bgz`,
-  `.gzip`, `.bgzf`, any case) is block-compressed with a `.tbi`; any other name is plain
-  text.
+  `.gzip`, `.bgzf`, any case) is block-compressed with a `.tbi`; a name ending in `.vcf`
+  (lower case) is plain text; any other name exits 2 with htsjdk's `Output format type is
+  not set` sentence, before any file is made.
+- A `VCFv4.3` input exits 1 with Picard's `Writing VCF version VCF4_3 is not implemented`:
+  the outputs take the input's header, which htsjdk 5.0.0 cannot write.
+- Without `--sequence-dictionary`, a `##contig` ID outside the SAM name pattern exits 1
+  with htsjdk's `Sequence name ... doesn't match regex`. `--sequence-dictionary` is read
+  line by line, at most 128 MiB and 4,000,000 `@SQ` lines; one with no `@SQ` line is an
+  empty dictionary, which fails only once the index needs a contig. A name given twice or
+  an `LN` that is no Java `int` exits 1, as in Picard.
 - `--create-index` (default true) needs a dictionary: the input's `##contig` lines or
   `--sequence-dictionary` (a `.dict`, a SAM, BAM or CRAM header, an interval list). Without
   one the run exits 1 before any record, as Picard does, even for plain outputs.
@@ -2366,6 +2374,8 @@ and `INFO` as read (`AN` and `AF` stay). The header keeps every line; its sample
 - `--sample NAME` (repeated; `null` clears) keeps those samples' genotypes, in the header
   in sorted order (`String.compareTo`). Their genotypes are written anew as htsjdk writes
   decoded genotypes: `GT` first, the other keys sorted, trailing missing values dropped.
+  A record with more genotype columns than the header names samples keeps the first ones,
+  as htsjdk's codec does; fewer exits 1.
   A name the VCF lacks gets a no-call at the record's ploidy (`./.`, or `.` for haploid
   genotypes).
 - With samples kept, every genotype of a record is decoded, so a bad genotype of any
@@ -2373,7 +2383,12 @@ and `INFO` as read (`AN` and `AF` stay). The header keeps every line; its sample
   names its samples out of sorted order.
 - `--create-index` (default true) needs the input's `##contig` lines; a `.vcf.gz` gets its
   `.tbi`, a plain `.vcf` no `.idx` (decision W16-3, as for `split-vcfs`).
-  `--create-md5-file` is accepted and ignored.
+  `--create-md5-file` is accepted and ignored. `-o` takes the names `split-vcfs` takes.
+- `--validation-stringency LENIENT` or `SILENT` writes an `INFO`, `FILTER` or `FORMAT` key
+  the header lacks as read, as Picard does (its default options of a VCF writer allow
+  missing header fields below `STRICT`); `STRICT`, the default, exits 1 on one.
+- A `##contig` ID outside the SAM name pattern exits 1, as for `split-vcfs`, whatever
+  `--create-index`. A `--sample` name with a line end exits 2.
 - In a chain it is a transform of a VCF stream that leaves the stream `sites`:
   `bammetrics chain calls.vcf.gz make-sites-only-vcf -o sites.vcf.gz`.
 - Python `make_sites_only_vcf(vcf, output=..., sample=[...])` returns one row: `records`.
@@ -2397,8 +2412,8 @@ summary says; this file is byte for byte Picard's.
 - A sample in two inputs keeps both lines and prints Picard's warning `Duplicate sample:
   S. Sample was found in both A and in B` on standard error.
 - An input must parse as a `java.net.URI`, as Picard's `IOUtil.getPath` asks: a space or
-  `|` in the name exits 1. A `file:///` URI names its absolute path; another scheme exits
-  1. Only headers are read, one at a time, at most 100,000 inputs.
+  `|` in the name exits 1. A `file:///` URI names its absolute path, on the verb as on the
+  Picard face; another scheme exits 1. Only headers are read, one at a time, at most 100,000 inputs.
 - Not a chain step: it reads the headers of several files and the stream holds one.
 - Python `make_vcf_sample_name_map(["a.vcf.gz", "b.vcf.gz"], output=...)` returns one row
   per line: `input`, `sample`.

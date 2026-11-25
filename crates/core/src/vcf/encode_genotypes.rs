@@ -24,7 +24,7 @@
 //! its trailing missing values.
 
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::Site;
 use super::full_header::{VcfHeader, java_compare};
@@ -68,13 +68,36 @@ struct Decoded<'t> {
     attributes: Vec<(&'t str, Cow<'t, str>)>,
 }
 
-impl Decoded<'_> {
-    fn attribute(&self, key: &str) -> Option<&str> {
-        self.attributes
-            .iter()
-            .rev()
-            .find(|(k, _)| *k == key)
-            .map(|(_, v)| v.as_ref())
+/// The attributes of one [`Decoded`] by key, the last value of a repeated
+/// key winning as `HashMap.put` keeps it. Past [`SCAN_ATTRIBUTES`] keys a
+/// hash table is built once per genotype, so writing `N` keys costs `N`
+/// lookups, never `N` scans of `N`.
+enum Attributes<'a> {
+    Scan(&'a [(&'a str, Cow<'a, str>)]),
+    Table(HashMap<&'a str, &'a str>),
+}
+
+/// The most attributes read by a scan.
+const SCAN_ATTRIBUTES: usize = 16;
+
+impl<'a> Attributes<'a> {
+    fn of(decoded: &'a Decoded<'a>) -> Self {
+        let attributes = decoded.attributes.as_slice();
+        if attributes.len() <= SCAN_ATTRIBUTES {
+            return Self::Scan(attributes);
+        }
+        Self::Table(attributes.iter().map(|(k, v)| (*k, v.as_ref())).collect())
+    }
+
+    fn get(&self, key: &str) -> Option<&'a str> {
+        match self {
+            Self::Scan(attributes) => attributes
+                .iter()
+                .rev()
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| v.as_ref()),
+            Self::Table(table) => table.get(key).copied(),
+        }
     }
 }
 
@@ -362,8 +385,10 @@ fn decode_all<'t>(
 ) -> Result<Genotypes<'t>, String> {
     let mut fields = text.split('\t');
     let format = fields.next().unwrap_or_default();
+    // `ParsingUtils.split` into `samples + 1` slots: a column past them
+    // is dropped, fewer fail.
     let found = text.bytes().filter(|&b| b == b'\t').count();
-    if found != samples {
+    if found < samples {
         return Err(format!(
             "there are {found} genotypes while the header requires that {samples} genotypes be \
              present for all records{place}"
@@ -381,7 +406,7 @@ fn decode_all<'t>(
         pl_read: false,
         values: Vec::new(),
     };
-    for sample in fields {
+    for sample in fields.take(samples) {
         let decoded = decode_sample(&mut reading, sample, &mut genotypes)?;
         genotypes.samples.push(decoded);
     }
@@ -439,7 +464,13 @@ fn genotype_keys_of<'t>(decoded: &[&Decoded<'t>]) -> Vec<&'t str> {
 /// Append one genotype's value of `name` to `out`, as
 /// `appendGenotypeData` prints it: an absent value is `.` whatever the
 /// key's `Number`.
-fn push_value(out: &mut String, genotypes: &Genotypes<'_>, genotype: &Decoded<'_>, name: &str) {
+fn push_value(
+    out: &mut String,
+    genotypes: &Genotypes<'_>,
+    genotype: &Decoded<'_>,
+    attributes: &Attributes<'_>,
+    name: &str,
+) {
     use std::fmt::Write as _;
     let mut ints = |values: Option<Span>| match values {
         None => out.push('.'),
@@ -469,7 +500,7 @@ fn push_value(out: &mut String, genotypes: &Genotypes<'_>, genotype: &Decoded<'_
                 let _ = write!(out, "{d}");
             }
         },
-        _ => out.push_str(genotype.attribute(name).unwrap_or(".")),
+        _ => out.push_str(attributes.get(name).unwrap_or(".")),
     }
 }
 
@@ -501,19 +532,11 @@ pub(super) fn write_decoded(
     header: &VcfHeader,
     decoding: &Decoding<'_>,
     site: &Site,
+    allow_missing: bool,
     out: &mut String,
 ) -> Result<(), String> {
-    write(header, &decoding.0, site, out)
-}
-
-fn write(
-    header: &VcfHeader,
-    genotypes: &Genotypes<'_>,
-    site: &Site,
-    out: &mut String,
-) -> Result<(), String> {
-    let names = genotype_keys(&genotypes.samples);
-    write_keys(header, genotypes, &names, site, out)
+    let names = genotype_keys(&decoding.0.samples);
+    write_keys(header, &decoding.0, &names, site, allow_missing, out)
 }
 
 /// `GenotypesContext.subsetToSamples` over the genotypes of `text`, then
@@ -530,6 +553,9 @@ pub(super) struct Subset<'h> {
     pub percent: bool,
     pub output: &'h VcfHeader,
     pub picks: &'h [Option<usize>],
+    /// A `FORMAT` key `output` lacks is written as read
+    /// ([`super::Encoder::allow_missing_fields`]).
+    pub allow_missing: bool,
 }
 
 impl Subset<'_> {
@@ -578,7 +604,14 @@ impl Subset<'_> {
                     })
             })
             .collect();
-        write_keys(self.output, &genotypes, &names, site, out)
+        write_keys(
+            self.output,
+            &genotypes,
+            &names,
+            site,
+            self.allow_missing,
+            out,
+        )
     }
 }
 
@@ -587,6 +620,7 @@ fn write_keys(
     genotypes: &Genotypes<'_>,
     names: &[&str],
     site: &Site,
+    allow_missing: bool,
     out: &mut String,
 ) -> Result<(), String> {
     use std::fmt::Write as _;
@@ -598,7 +632,7 @@ fn write_keys(
     }
     if let Some(name) = names
         .iter()
-        .find(|n| **n != "GT" && header.format(n).is_none())
+        .find(|n| !allow_missing && **n != "GT" && header.format(n).is_none())
     {
         return Err(format!(
             "Key {name} found in VariantContext field FORMAT at {}:{} but this key isn't defined \
@@ -638,8 +672,9 @@ fn write_keys(
         }
         values.clear();
         ends.clear();
+        let attributes = Attributes::of(genotype);
         for name in others {
-            push_value(&mut values, genotypes, genotype, name);
+            push_value(&mut values, genotypes, genotype, &attributes, name);
             ends.push(values.len());
         }
         // Trailing missing values are dropped.

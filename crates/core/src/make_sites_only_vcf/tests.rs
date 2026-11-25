@@ -35,6 +35,7 @@ fn options(input: &Path, output: &Path, samples: &[&str]) -> Options {
             compression_level: 5,
             threads: 1,
         },
+        allow_missing: false,
         quiet: true,
     }
 }
@@ -101,5 +102,87 @@ fn an_index_needs_contig_lines_and_a_failure_leaves_no_file() {
     let out = dir.join("bad.vcf");
     assert!(make_sites_only(&options(&input, &out, &[])).is_err());
     assert!(!out.exists());
+    std::fs::remove_dir_all(dir).expect("clean");
+}
+
+#[test]
+fn a_lenient_run_writes_keys_the_header_lacks() {
+    let dir = scratch("lenient");
+    let input = dir.join("in.vcf");
+    std::fs::write(
+        &input,
+        TEXT.replace("AN=4\tGT:DP\t0/1:5", "AN=4;ZZ=3;ZF\tGT:DP:XX\t0/1:5:9")
+            .replace("\t30\t.\t.\tGT", "\t30\tNOPE\t.\tGT"),
+    )
+    .expect("input");
+    let out = dir.join("o.vcf");
+    let mut opts = options(&input, &out, &["S2"]);
+    assert!(make_sites_only(&opts).is_err());
+    assert!(!out.exists());
+    opts.allow_missing = true;
+    make_sites_only(&opts).expect("lenient");
+    assert_eq!(
+        body(&out)[1..],
+        [
+            "c1\t1\t.\tA\tC\t30\t.\tAN=4;ZF;ZZ=3\tGT:DP:XX\t0/1:5:9",
+            "c1\t2\t.\tA\tAT\t30\tNOPE\t.\tGT\t0/1",
+        ]
+    );
+    std::fs::remove_dir_all(dir).expect("clean");
+}
+
+#[test]
+fn bad_contig_names_names_with_line_ends_and_odd_output_names_fail() {
+    let dir = scratch("refusals");
+    let input = dir.join("in.vcf");
+    std::fs::write(&input, TEXT.replace("ID=c1,", "ID=a b,")).expect("input");
+    let out = dir.join("o.vcf");
+    let error = make_sites_only(&options(&input, &out, &[])).expect_err("bad name");
+    assert!(
+        error
+            .to_string()
+            .contains("Sequence name 'a b' doesn't match regex"),
+        "{error}"
+    );
+    assert!(!out.exists());
+    std::fs::write(&input, TEXT).expect("input");
+    for name in ["o.txt", "o.VCF", "o", "o.vcf.gz.tbi"] {
+        let out = dir.join(name);
+        let error = make_sites_only(&options(&input, &out, &[])).expect_err(name);
+        assert!(
+            error.to_string().contains("Output format type is not set"),
+            "{error}"
+        );
+        assert!(!out.exists(), "{name}");
+    }
+    let inv = TOOL
+        .parse(&[
+            format!("I={}", input.display()),
+            "O=x.vcf".to_owned(),
+            "SAMPLE=a\nb".to_owned(),
+        ])
+        .expect("parses");
+    assert!(Options::from_invocation(&inv).is_err());
+    std::fs::remove_dir_all(dir).expect("clean");
+}
+
+#[test]
+fn more_genotype_columns_than_samples_keep_the_first() {
+    let dir = scratch("extra");
+    let input = dir.join("in.vcf");
+    std::fs::write(
+        &input,
+        format!("{TEXT}c1\t3\t.\tA\tC\t30\t.\t.\tGT\t0/1\t1/1\t0/0\n"),
+    )
+    .expect("input");
+    let out = dir.join("o.vcf");
+    make_sites_only(&options(&input, &out, &["S2"])).expect("extra columns");
+    assert_eq!(body(&out)[3], "c1\t3\t.\tA\tC\t30\t.\t.\tGT\t0/1");
+    std::fs::write(&input, format!("{TEXT}c1\t3\t.\tA\tC\t30\t.\t.\tGT\t0/1\n")).expect("input");
+    let error = make_sites_only(&options(&input, &out, &["S2"])).expect_err("too few");
+    assert!(
+        error.to_string().contains("there are 1 genotypes"),
+        "{error}"
+    );
     std::fs::remove_dir_all(dir).expect("clean");
 }

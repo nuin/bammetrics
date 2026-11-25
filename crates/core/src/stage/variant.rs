@@ -14,6 +14,12 @@
 //! [`VcfHeader`] of the source, handed to each step as it is built, and a
 //! transform may change it for the steps after it.
 //!
+//! After each transform the stream is what a reader of the transform's
+//! own file would read ([`AsWritten`]): each line encoded as the writer
+//! encodes it, the header and lines through ISO-8859-1 and back as UTF-8,
+//! the header at `VCFv4.2`. So chained equals staged for text a VCF
+//! cannot hold.
+//!
 //! Variant streams have no barrier: every step reads in the one pass.
 //! A step that reads alignments cannot be on a variant stream, nor a
 //! variant step on an alignment stream: the chain verb refuses either
@@ -30,7 +36,7 @@ use super::{BATCH_RECORDS, Counters, Products, QUEUED_BATCHES};
 use crate::error::{Error, Result};
 use crate::pass;
 use crate::registry::{Invocation, Tool};
-use crate::vcf::{VcfHeader, VcfLines};
+use crate::vcf::{Encoder, VcfHeader, VcfLines};
 use crate::vcf_writer::{VcfOptions, VcfWriter};
 
 /// One record line of a variant stream, without its line end.
@@ -97,7 +103,7 @@ impl VcfSource {
     /// the record lines.
     pub fn read(&self, consume: &mut Consume<'_>) -> Result<()> {
         let mut lines = VcfLines::open(&self.path)?;
-        let header = lines.shared_header();
+        let header = lines.take_header()?;
         consume(header, &mut lines)
     }
 }
@@ -134,15 +140,20 @@ pub trait VariantSink: Send {
 /// Builds a sink from the header at its position, one copy shared by
 /// every step.
 pub type BuildVariantSink = Box<dyn FnOnce(&Arc<VcfHeader>) -> Result<Box<dyn VariantSink>>>;
-/// Builds a transform from the header at its position.
+/// Builds a transform from the header at its position. The builder may
+/// turn the header into its own in place (`Arc::make_mut`), which copies
+/// it only while a step in front holds it.
 pub type BuildVariantTransform =
-    Box<dyn FnOnce(&Arc<VcfHeader>) -> Result<Box<dyn VariantTransform>>>;
+    Box<dyn FnOnce(&mut Arc<VcfHeader>) -> Result<Box<dyn VariantTransform>>>;
 
 pub enum VariantStepKind {
     /// A step that reads the lines of its position and fails alone.
     Tap(BuildVariantSink),
-    /// A step whose failure stops the chain (a writer).
+    /// A step whose failure stops the chain (a split).
     Sink(BuildVariantSink),
+    /// The `write` step: a sink that stops the chain when it fails and, after
+    /// a transform, takes the lines as the transform left them.
+    Write(BuildVariantSink),
     Transform(BuildVariantTransform),
 }
 
@@ -174,7 +185,7 @@ impl VariantStep {
         let path = path.to_path_buf();
         Self {
             label: "write".to_owned(),
-            kind: VariantStepKind::Sink(Box::new(move |header| {
+            kind: VariantStepKind::Write(Box::new(move |header| {
                 let writer = VcfWriter::create_shared(&path, Arc::clone(header), options)?;
                 Ok(Box::new(WriteSink { writer }) as Box<dyn VariantSink>)
             })),
@@ -354,6 +365,9 @@ type Shared = Arc<Vec<VcfLine>>;
 struct Worker<'scope> {
     step: usize,
     stops_chain: bool,
+    /// A `write` step: after a transform it takes the lines as the
+    /// transform left them ([`flow`]).
+    raw: bool,
     sender: SyncSender<Shared>,
     failed: Arc<AtomicBool>,
     stopped: Arc<AtomicBool>,
@@ -366,7 +380,7 @@ impl<'scope> Worker<'scope> {
         step: usize,
         header: Arc<VcfHeader>,
         mut sink: Box<dyn VariantSink>,
-        stops_chain: bool,
+        (stops_chain, raw): (bool, bool),
     ) -> Self {
         let (sender, batches) = mpsc::sync_channel::<Shared>(QUEUED_BATCHES);
         let failed = Arc::new(AtomicBool::new(false));
@@ -384,6 +398,7 @@ impl<'scope> Worker<'scope> {
         Self {
             step,
             stops_chain,
+            raw,
             sender,
             failed,
             stopped,
@@ -461,33 +476,57 @@ fn run<'scope>(
     // The sinks of each position; transform `k` sits between positions
     // `k` and `k + 1`.
     let mut positions: Vec<Vec<Worker<'scope>>> = vec![Vec::new()];
-    let mut transforms: Vec<(usize, Box<dyn VariantTransform>)> = Vec::new();
+    let mut transforms: Vec<Transforming> = Vec::new();
     let mut failure = None;
+    // The header as the last transform left it, which a `write` step
+    // writes; `header` is what the other steps read.
+    let mut written: Option<Arc<VcfHeader>> = None;
     for (step, VariantStep { kind, .. }) in steps.into_iter().enumerate() {
+        let raw = matches!(kind, VariantStepKind::Write(_));
         match kind {
             VariantStepKind::Tap(build) => match build(&header) {
                 Ok(sink) => {
-                    let worker = Worker::spawn(scope, step, Arc::clone(&header), sink, false);
+                    let worker =
+                        Worker::spawn(scope, step, Arc::clone(&header), sink, (false, false));
                     positions.last_mut().expect("one").push(worker);
                 }
                 Err(e) => results[step] = Some(Err(e)),
             },
-            VariantStepKind::Sink(build) => match build(&header) {
-                Ok(sink) => {
-                    let worker = Worker::spawn(scope, step, Arc::clone(&header), sink, true);
-                    positions.last_mut().expect("one").push(worker);
+            VariantStepKind::Sink(build) | VariantStepKind::Write(build) => {
+                let at = match (&written, raw) {
+                    (Some(written), true) => written,
+                    _ => &header,
+                };
+                match build(at) {
+                    Ok(sink) => {
+                        let worker = Worker::spawn(scope, step, Arc::clone(at), sink, (true, raw));
+                        positions.last_mut().expect("one").push(worker);
+                    }
+                    Err(e) => {
+                        failure = Some(Failure::Step(step, e));
+                        break;
+                    }
                 }
-                Err(e) => {
-                    failure = Some(Failure::Step(step, e));
-                    break;
-                }
-            },
+            }
             VariantStepKind::Transform(build) => {
-                match build(&header).and_then(|t| t.header(&header).map(|h| (t, h))) {
+                // The header in front is the builder's to change in place:
+                // no copy unless a step in front holds it.
+                drop(written.take());
+                match build(&mut header).and_then(|t| t.header(&header).map(|h| (t, h))) {
                     Ok((transform, after)) => {
-                        header = after;
-                        transforms.push((step, transform));
-                        positions.push(Vec::new());
+                        drop(std::mem::replace(&mut header, Arc::clone(&after)));
+                        written = Some(Arc::clone(&after));
+                        match AsWritten::new(after) {
+                            Ok((as_written, reread)) => {
+                                header = reread;
+                                transforms.push((step, transform, as_written));
+                                positions.push(Vec::new());
+                            }
+                            Err(e) => {
+                                failure = Some(Failure::Step(step, e));
+                                break;
+                            }
+                        }
                     }
                     Err(e) => {
                         failure = Some(Failure::Step(step, e));
@@ -511,7 +550,7 @@ fn run<'scope>(
             }
             results[step] = Some(result);
         }
-        for (step, mut transform) in transforms {
+        for (step, mut transform, _) in transforms {
             results[step] = Some(transform.products().map(|products| Products {
                 counters: Some(transform.counters()),
                 ..products
@@ -551,7 +590,7 @@ fn run<'scope>(
             _ => Err(stopped()),
         });
     }
-    for (step, _) in &transforms {
+    for (step, ..) in &transforms {
         results[*step] = Some(Err(stopped()));
     }
     not_run(results, &name, &text);
@@ -578,10 +617,74 @@ fn not_run(results: &mut [Option<Result<Products>>], name: &str, cause: &str) {
     }
 }
 
+/// A transform of a running chain: its step, the transform and what a
+/// reader of its file would read.
+type Transforming = (usize, Box<dyn VariantTransform>, AsWritten);
+
+/// The lines a transform leaves as a reader of its file reads them: each
+/// encoded as [`VcfWriter`] encodes it under the transform's header (a
+/// line the writer skips is dropped), then through ISO-8859-1 and back as
+/// UTF-8 ([`crate::java::iso_8859_1`], [`crate::java::decode_utf8`]).
+struct AsWritten {
+    header: Arc<VcfHeader>,
+    encoder: Encoder,
+    line: String,
+}
+
+impl AsWritten {
+    /// The edit of the lines under `header`, and the header the steps
+    /// after the transform read ([`VcfHeader::reread`]).
+    fn new(header: Arc<VcfHeader>) -> Result<(Self, Arc<VcfHeader>)> {
+        let reread = header
+            .read_back()
+            .map_err(|message| {
+                Error::Metric(format!(
+                    "the header this step writes cannot be read back: {message}"
+                ))
+            })?
+            .map_or_else(|| Arc::clone(&header), Arc::new);
+        let written = Self {
+            encoder: Encoder::new(&header),
+            header,
+            line: String::new(),
+        };
+        Ok((written, reread))
+    }
+
+    fn apply(&mut self, batch: &mut Vec<VcfLine>) -> Result<()> {
+        let mut failure = None;
+        batch.retain_mut(|line| {
+            if failure.is_some() {
+                return false;
+            }
+            self.line.clear();
+            match self
+                .encoder
+                .encode(&self.header, &line.text, &mut self.line)
+            {
+                Ok(Some(_)) => {
+                    std::mem::swap(&mut line.text, &mut self.line);
+                    if !line.text.is_ascii() {
+                        let bytes = crate::java::iso_8859_1(&line.text).into_owned();
+                        line.text = crate::java::decode_utf8(&bytes).into_owned();
+                    }
+                    true
+                }
+                Ok(None) => false,
+                Err(message) => {
+                    failure = Some(Error::Metric(message));
+                    false
+                }
+            }
+        });
+        failure.map_or(Ok(()), Err)
+    }
+}
+
 /// Read every batch through the transforms to the sinks of each position.
 fn drive(
     positions: &mut [Vec<Worker<'_>>],
-    transforms: &mut [(usize, Box<dyn VariantTransform>)],
+    transforms: &mut [Transforming],
     records: &mut dyn VariantRecords,
 ) -> std::result::Result<(), Failure> {
     let writer_failed = |positions: &[Vec<Worker<'_>>]| {
@@ -603,7 +706,7 @@ fn drive(
     }
     for k in 0..transforms.len() {
         let mut tail = Vec::new();
-        let (step, transform) = &mut transforms[k];
+        let (step, transform, _) = &mut transforms[k];
         transform
             .finish(&mut tail)
             .map_err(|e| Failure::Step(*step, e))?;
@@ -615,10 +718,14 @@ fn drive(
     Ok(())
 }
 
-/// Send `batch`, the stream at position `from`, down the chain.
+/// Send `batch`, the stream at position `from` as the transform in front
+/// of it left it, down the chain. At each position after a transform a
+/// `write` step takes the lines as the transform left them, as the
+/// transform's own file holds them; every other step takes them as a
+/// reader of that file reads them ([`AsWritten`]).
 fn flow(
     positions: &[Vec<Worker<'_>>],
-    transforms: &mut [(usize, Box<dyn VariantTransform>)],
+    transforms: &mut [Transforming],
     mut batch: Vec<VcfLine>,
     from: usize,
 ) -> std::result::Result<(), Failure> {
@@ -627,15 +734,30 @@ fn flow(
             return Ok(());
         }
         let last = position == transforms.len();
-        if !sinks.is_empty() {
+        if position > 0 {
+            let raw: Vec<&Worker<'_>> = sinks.iter().filter(|sink| sink.raw).collect();
+            if !raw.is_empty() {
+                let shared: Shared = Arc::new(batch.clone());
+                raw.iter().for_each(|sink| sink.send(&shared));
+            }
+            let (step, _, written) = &mut transforms[position - 1];
+            written
+                .apply(&mut batch)
+                .map_err(|e| Failure::Step(*step, e))?;
+        }
+        let read: Vec<&Worker<'_>> = sinks
+            .iter()
+            .filter(|sink| position == 0 || !sink.raw)
+            .collect();
+        if !read.is_empty() {
             let shared: Shared = if last {
                 Arc::new(std::mem::take(&mut batch))
             } else {
                 Arc::new(batch.clone())
             };
-            sinks.iter().for_each(|sink| sink.send(&shared));
+            read.iter().for_each(|sink| sink.send(&shared));
         }
-        if let Some((step, transform)) = transforms.get_mut(position) {
+        if let Some((step, transform, _)) = transforms.get_mut(position) {
             transform
                 .apply(&mut batch)
                 .map_err(|e| Failure::Step(*step, e))?;

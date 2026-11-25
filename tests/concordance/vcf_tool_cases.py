@@ -86,3 +86,75 @@ def compare_files(pairs):
 
 def files_in(directory):
     return sorted(p.name for p in Path(directory).iterdir())
+
+
+# Inputs of the W16 tools review (review_inputs): undeclared keys, extra genotype
+# columns, VCFv4.3, contig IDs outside the SAM name pattern, non-ASCII header text, and
+# SEQUENCE_DICTIONARY files.
+REVIEW_HEADER = (
+    "##fileformat=VCFv4.{version}\n##contig=<ID={contig},length=1000>\n"
+    '##INFO=<ID=DP,Number=1,Type=Integer,Description="d">\n'
+    '##FORMAT=<ID=GT,Number=1,Type=String,Description="g">\n'
+    '##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="q">\n'
+    '##FILTER=<ID=q10,Description="low">\n'
+    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t{samples}\n"
+)
+REVIEW_RECORDS = {
+    "v42": ["{c}\t10\t.\tA\tC\t30\tPASS\tDP=3\tGT\t0/1", "{c}\t20\t.\tAT\tA\t30\tPASS\tDP=3\tGT\t0/1"],
+    "undeclared_info": ["{c}\t10\t.\tA\tC\t30\tPASS\tDP=3;ZZ=3\tGT\t0/1"],
+    "undeclared_filter": ["{c}\t10\t.\tA\tC\t30\tNOPE\tDP=3\tGT\t0/1"],
+    "undeclared_format": ["{c}\t10\t.\tA\tC\t30\tPASS\tDP=3\tGT:XX\t0/1:7"],
+    "undeclared_flag": ["{c}\t10\t.\tA\tC\t30\tPASS\tDP=3;ZF;ZE=\tGT\t0/1"],
+    "extra_columns": ["{c}\t10\t.\tA\tC\t30\tPASS\tDP=3\tGT\t0/1\t1/1",
+                      "{c}\t20\t.\tA\tC\t30\tPASS\tDP=3\tGT:GQ\t0/1:30\tgarbage\tmore",
+                      "{c}\t30\t.\tA\tC\t30\tPASS\tDP=3\tGT\t0/1\t"],
+}
+# Contig IDs: the first four fail htsjdk's SAM name pattern, the last two pass.
+REVIEW_CONTIGS = ["a b", "*", "é1", "cĊ1", "x*", "HLA-A*01:01"]
+NON_ASCII = (
+    "##fileformat=VCFv4.{version}\n##source=caller éè 日本\n"
+    "##contig=<ID=c1,length=1000>\n"
+    '##INFO=<ID=DP,Number=1,Type=Integer,Description="d é">\n'
+    '##INFO=<ID=S,Number=1,Type=String,Description="Strings 日">\n'
+    '##FORMAT=<ID=GT,Number=1,Type=String,Description="g">\n'
+    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\n"
+    "c1\t10\tidé\tA\tC\t30\tPASS\tDP=3;S=é日\tGT\t0/1\t1/1\n"
+    "c1\t20\t.\tAT\tA\t30\tPASS\tDP=3;S=%C3%A9\tGT\t0/1\t0/0\n"
+    "c1\t30\t.\tA\tG\t30\tPASS\tS=Ã©\tGT\t0/1\t0/0\n"
+)
+REVIEW_DICTIONARIES = {
+    "nosq.dict": "@HD\tVN:1.6\n",
+    "dup.dict": "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n@SQ\tSN:c1\tLN:1000\n",
+    "big.dict": "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:99999999999\n",
+    "badname.dict": "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n@SQ\tSN:a b\tLN:5\n",
+    "ok.dict": "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n",
+}
+# Output names htsjdk cannot type (both tools fail) and names it writes as BGZF.
+BAD_OUTPUT_SUFFIXES = [".txt", ".VCF", ".vcf.gz.tbi", "", ".vcf."]
+BGZF_OUTPUT_SUFFIXES = [".Vcf.Gz", ".vcf.bgzf", ".gz"]
+
+
+def review_inputs(out):
+    """Write the review's inputs into `out`: NAME.vcf per REVIEW_RECORDS, v43.vcf,
+    unsorted_extra.vcf, contigN.vcf per REVIEW_CONTIGS, nonascii1.vcf, nonascii3.vcf and
+    the dictionaries."""
+    out.mkdir(parents=True, exist_ok=True)
+
+    def write(name, records, version=2, contig="c1", samples="S1"):
+        text = REVIEW_HEADER.format(version=version, contig=contig, samples=samples)
+        text += "".join(r.format(c=contig) + "\n" for r in records)
+        (out / name).write_text(text, encoding="utf-8")
+
+    for name, records in REVIEW_RECORDS.items():
+        write(f"{name}.vcf", records)
+    write("v43.vcf", REVIEW_RECORDS["v42"], version=3)
+    write("unsorted_extra.vcf", ["{c}\t10\t.\tA\tC\t30\tPASS\tDP=3\tGT\t0/1\t1/1\t0/0"],
+          samples="S2\tS1")
+    for i, contig in enumerate(REVIEW_CONTIGS):
+        write(f"contig{i}.vcf", REVIEW_RECORDS["v42"], contig=contig)
+    for version in (1, 3):
+        (out / f"nonascii{version}.vcf").write_text(NON_ASCII.format(version=version),
+                                                     encoding="utf-8")
+    for name, text in REVIEW_DICTIONARIES.items():
+        (out / name).write_text(text)
+    return out
