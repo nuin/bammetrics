@@ -1,6 +1,6 @@
-# Embedding bammetrics in pipelines, languages and package systems
+# Embedding BAMmetrics in pipelines, languages and package systems
 
-Status: plan, 2026-11-25, against bammetrics 0.34.0. Nothing here is built. Facts come from reading the repository and from partial web research. Items marked "unverified" were not checked. Design items use the prefixes EQ (open question) and ED (designer's call) so they do not collide with Q and D in docs/07.
+Status: plan, 2026-11-25, against BAMmetrics 0.34.0. Nothing here is built. Facts come from reading the repository and from partial web research. Items marked "unverified" were not checked. Design items use the prefixes EQ (open question) and ED (designer's call) so they do not collide with Q and D in docs/07.
 
 ## 1. Answer
 
@@ -8,18 +8,18 @@ Build a machine contract first, then ship binaries and wheels, then generate wor
 
 ## 2. Intent and why
 
-The owner asked for easy embedding "in most modern systems", naming Nextflow and WDL. Their own pipeline is Python, runs under an RQ worker, uses a homegrown workflow layer and uses no containers. bammetrics already has exit codes, five frozen JSON schemas, a Python module and a chain mode. Three things are missing: discovery (no JSON tool listing), delivery (no release, no PyPI, no bioconda) and generated wrappers.
+The owner asked for easy embedding "in most modern systems", naming Nextflow and WDL. Their own pipeline is Python, runs under an RQ worker, uses a homegrown workflow layer and uses no containers. BAMmetrics already has exit codes, five frozen JSON schemas, a Python module and a chain mode. Three things are missing: discovery (no JSON tool listing), delivery (no release, no PyPI, no bioconda) and generated wrappers.
 
-One fact drives the design. bammetrics has 77 registered tools (121 at 1.0.0 per docs/07: 91 Picard tools plus 15 analyses and the existing ones) and one option table in `crates/core/src/registry.rs`. Hand-written wrappers for 77 tools in five systems would be about 400 files that drift on every minor release. E4 regenerates all of them after each later W wave. A generator reading one JSON listing keeps them in step.
+One fact drives the design. BAMmetrics has 77 registered tools (121 at 1.0.0 per docs/07: 91 Picard tools plus 15 analyses and the existing ones) and one option table in `crates/core/src/registry.rs`. Hand-written wrappers for 77 tools in five systems would be about 400 files that drift on every minor release. E4 regenerates all of them after each later W wave. A generator reading one JSON listing keeps them in step.
 
 ## 3. Goals, non-goals, anti-goals
 
 Goals:
 
 - G1. A caller in any language lists tools, options, outputs and exit codes as versioned JSON, with no text parsing.
-- G2. One command installs a pinned bammetrics on a Linux analysis host with no compiler and no GitHub credentials.
+- G2. One command installs a pinned BAMmetrics on a Linux analysis host with no compiler and no GitHub credentials.
 - G3. Wrappers for Nextflow, WDL, Snakemake, CWL and Galaxy exist for every tool, generated, and each passes its system's own validator.
-- G5. R, C, C++, Nim, Elixir, Java and Go call bammetrics in process through one library, with output byte-equal to the CLI.
+- G5. R, C, C++, Nim, Elixir, Java and Go call BAMmetrics in process through one library, with output byte-equal to the CLI.
 - G4. The first consumer (the owner's Python pipeline) can drop its per-host source build.
 
 Non-goals:
@@ -115,7 +115,7 @@ Designer's call ED6: publish to PyPI and bioconda at E3 for 0.34.x, not at the 0
 
 ### 5.3 Layer 3: workflow wrappers
 
-One generator, `tools/gen_wrappers.py` (Python 3, standard library and `tomllib`), reads `bammetrics tools --format json` and writes `integrations/<system>/`. Each generated file starts with a header line naming the generator, the bammetrics version and the listing hash. A test regenerates and diffs, and any difference fails.
+One generator, `tools/gen_wrappers.py` (Python 3, standard library and `tomllib`), reads `bammetrics tools --format json` and writes `integrations/<system>/`. Each generated file starts with a header line naming the generator, the BAMmetrics version and the listing hash. A test regenerates and diffs, and any difference fails.
 
 | System | Unit | Shape | Validator |
 |---|---|---|---|
@@ -125,7 +125,7 @@ One generator, `tools/gen_wrappers.py` (Python 3, standard library and `tomllib`
 | CWL v1.2 | One `CommandLineTool` per verb | `inputs` with `inputBinding`, `outputs` with `glob` | `cwltool --validate` (unverified install) |
 | Galaxy | One tool XML per verb group, files only, nothing uploaded to the ToolShed | `<command>` with Cheetah, `<inputs>` and `<outputs>` from the listing, `<requirements>` naming the bioconda package | `planemo lint` (unverified install) |
 
-Grouping matters. The nf-core rules found in research (partly unverified) ask for one module per tool or tool/subtool, a bioconda package and a stub. bammetrics is one binary with 77 tools, so one module per verb group fits better than 77 modules. Each module takes a `verb` input, and its generated `meta.yml` lists the verbs.
+Grouping matters. The nf-core rules found in research (partly unverified) ask for one module per tool or tool/subtool, a bioconda package and a stub. BAMmetrics is one binary with 77 tools, so one module per verb group fits better than 77 modules. Each module takes a `verb` input, and its generated `meta.yml` lists the verbs.
 
 Designer's call ED7: generate all five systems from the start and submit nothing upstream. Generation costs one template per system. Upstream review needs the owner and a published bioconda package.
 
@@ -150,7 +150,7 @@ Python is the supported in-process route. Rules for a job runner such as RQ:
 |---|---|
 | Release the GIL | Done in `qc`, `check`, `report`, `collect`, `chain` and the per-tool functions |
 | No threads at import | BGZF pools and `SinkWorker`s are created per call. A test imports the module, forks, and runs a chain in the child with a 60 second timeout |
-| Fork after use | A parent that ran bammetrics and then forks can leave the child with locked mutexes (CPython warns on fork with threads since 3.12). Use `spawn` or `forkserver`, or keep bammetrics calls out of the parent |
+| Fork after use | A parent that ran BAMmetrics and then forks can leave the child with locked mutexes (CPython warns on fork with threads since 3.12). Use `spawn` or `forkserver`, or keep BAMmetrics calls out of the parent |
 | Cancel | A runner kills a subprocess but cannot kill an in-process call. Long jobs use the CLI unless a hard timeout exists elsewhere |
 | Panic | A Rust panic under PyO3 raises `PanicException`. An abort under a krilla surface kills the process (`crates/pdf` notes). A job that cannot afford an abort uses the CLI |
 
@@ -200,7 +200,7 @@ Designer's call ED10: one Rust surface, `bammetrics-embed`, under all six langua
 
 Facts from the pipeline branch ae8cc34 (CONSUMER): one `bammetrics chain` per sample with six taps. Success is exit code 0 plus a non-empty first partial file. Five other metric steps copy that one result. The ansible role builds v0.25.0 from source on each host with Rust 1.91.1. `target/release/bammetrics` on this machine reports 0.31.0.
 
-| Need | bammetrics side | Consumer side (not in this plan) | Wave |
+| Need | BAMmetrics side | Consumer side (not in this plan) | Wave |
 |---|---|---|---|
 | Skip the per-host build | Static musl binary, `SHA256SUMS`, `scripts/release.sh` | The role downloads, verifies sha256 and checks `--version` | E2 |
 | Version gate | `--version --json` with schemas and features | `bammetrics_chain.py` runs it once and refuses below the pinned minimum | E1 |
