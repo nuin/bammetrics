@@ -1027,6 +1027,36 @@ Of the rows of earlier waves, `mark-duplicates slice` peaks at 634.5 / 1024 MiB 
 HighAccuracy slice` at 1,976.9 / 3072 (1,975.3), `rrbs exome` at 453.7 / 1024 (528.1 at
 0.31.0) and `chain short form resumed slice` at 651.7 / 2048 (680.1 at 0.32.0).
 
+Every wave W16 row at 0.34.0 (2026-11-24, release/0.34.0, one run each; `make memgate`
+passes 83 fixture rows, `TIER=scale make memgate` passes 41 scale rows and skips the same
+6 as at 0.33.0, whose inputs were removed after earlier runs). The two scale rows read
+`python3 benches/vcf_scale.py ~/data/bammetrics-scale/waves/w16 1000000` (no real VCF is
+under `~/data`); the inputs were removed after the run. The 500 MiB of docs/07 section 5
+is the limit of the VCF writer rows:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `chain vcf copy` | fixture | 9.6 / 32 | 0.01 | |
+| `chain vcf genotype-concordance` | fixture | 10.8 / 32 | 0.02 | |
+| `chain vcf 200,000 records` | fixture | 30.4 / 64 | 1.86 | |
+| `chain vcf wide lines` | fixture | 60.5 / 128 | 2.25 | |
+| `chain vcf 100,000 contig lines` | fixture | 34.2 / 64 | 0.20 | |
+| `split-vcfs` | fixture | 9.9 / 32 | 0.01 | |
+| `make-sites-only-vcf` | fixture | 9.5 / 32 | 0.01 | |
+| `make-vcf-sample-name-map` | fixture | 8.0 / 32 | 0.00 | |
+| `chain vcf sites split 200,000 records` | fixture | 15.4 / 64 | 2.00 | |
+| `make-sites-only-vcf wide samples` | fixture | 36.9 / 96 | 2.01 | |
+| `make-sites-only-vcf at the header cap` | fixture | 292.6 / 500 | 6.43 | |
+| `make-sites-only-vcf 200,000 format keys` | fixture | 101.0 / 160 | 0.65 | |
+| `split-vcfs dictionary at the cap` | fixture | 239.8 / 500 | 1.35 | |
+| `chain vcf 1,000,000 records` | scale | 57.1 / 500 | 4.05 | |
+| `chain vcf sites split 1,000,000 records` | scale | 15.3 / 500 | 4.88 | |
+
+Of the rows of earlier waves at 0.34.0, `mark-duplicates slice` peaks at 665.0 / 1024 MiB,
+`fix-mate-information slice` at 623.5 / 3072, `downsample-sam HighAccuracy slice` at
+1,978.1 / 3072, `rrbs exome` at 532.5 / 1024, `chain short form resumed slice` at 676.3 /
+2048 and `chain write cram exome` at 418.1 / 1024.
+
 To add a scale row:
 
 1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing
