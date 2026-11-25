@@ -264,10 +264,9 @@ behaves how.
   record, `ERROR` or `INFO` summary, the `INFO` sorting line), the Picard face writes
   `O=` only, the verb prints the bad querynames to standard output without `-o` and the
   summary on standard error. Both exit 1 when a record disagrees. A file whose header is
-  not `SO:queryname` is sorted in memory (name, flags, position and `HI` of every record);
-  Picard sorts whole records through `SortingCollection`, spilling to `TMP_DIR` past
-  `MAX_RECORDS_IN_RAM`, so neither option changes anything here and memory grows with the
-  file. The order is the same, since both sorts are stable. A read name is compared by its
+  not `SO:queryname` is sorted through `spill::Sorter` on a key of name, flags,
+  position and `HI` per record, spilling to `TMP_DIR` past `MAX_RECORDS_IN_RAM` keys;
+  Picard sorts whole records through `SortingCollection` the same way. The order is the same, since both sorts are stable. A read name is compared by its
   bytes, as Picard compares it: htsjdk decodes a BAM read name byte by byte (Latin-1), so
   `String.compareTo` over those characters is byte order. The same decoding prints the
   name: the UTF-8 bytes `C3 A9` of an e-acute print as `Ã©` in the log, in `OUTPUT` and
