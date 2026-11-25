@@ -128,6 +128,8 @@ REVIEW_DICTIONARIES = {
     "big.dict": "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:99999999999\n",
     "badname.dict": "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n@SQ\tSN:a b\tLN:5\n",
     "ok.dict": "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n",
+    "cr.dict": "@HD\tVN:1.6\r@SQ\tSN:c1\tLN:1000\r@SQ\tSN:c2\tLN:5000\r",
+    "mixed.dict": "@HD\tVN:1.6\r\n@SQ\tSN:c1\tLN:1000\n@SQ\tSN:c2\tLN:5000\r@SQ\tSN:c3\tLN:20\r\n",
 }
 # Output names htsjdk cannot type (both tools fail) and names it writes as BGZF.
 BAD_OUTPUT_SUFFIXES = [".txt", ".VCF", ".vcf.gz.tbi", "", ".vcf."]
