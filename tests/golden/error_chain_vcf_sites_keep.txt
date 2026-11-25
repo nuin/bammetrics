@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/vcf_writer/calls.vcf
+make-sites-only-vcf
+--keep
+-o
+OUT/r.vcf.gz
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (make-sites-only-vcf): --keep writes the stream a transform leaves as a BAM, and this stream holds VCF records (from --keep)
+  write PATH.vcf.gz after the step writes its records as a VCF

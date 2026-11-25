@@ -2,6 +2,97 @@
 
 ## Unreleased
 
+## 0.34.0
+
+Wave W16 of docs/07, 77 tools: the VCF writer, the variant stream of `chain`, the VCF header inventory, and `SplitVcfs`, `MakeSitesOnlyVcf` and `MakeVcfSampleNameMap` (tools 75 to 77); decisions D236 to D254.
+
+### Added
+
+- The VCF header inventory (wave W16, `tests/concordance/vcf_header_inventory.py`): 21 Picard
+  3.5.0 VCF tools run once each through the Picard queue on
+  the corpus of `variant_vcfs.py` and `array_vcfs.py`; each case records the header lines
+  added, removed, rewritten, reordered and volatile, the output kind and the index in
+  `tests/concordance/vcf_headers.json`. `test_vcf_header_inventory.py` checks its shape,
+  and reruns Picard against it with `VCF_INVENTORY=1`. The writer tests hold every
+  pure-rewrite case to it.
+- The VCF writer (wave W16 of docs/07, `crates/core/src/vcf_writer.rs`): the header and
+  each record line as htsjdk 5.0.0's `VCFWriter` writes them for Picard 3.5.0
+  (`crates/core/src/vcf/full_header.rs`, `encode.rs`, `encode_genotypes.rs`): the header
+  sorted under `##fileformat=VCFv4.2` with the standard lines repaired, `QUAL` as `%.2f`,
+  sorted `FILTER` names and `INFO` keys, genotypes passed through unread (decoded and
+  written anew when the samples are out of sorted order). Plain or BGZF by the name, the
+  `.tbi` of a BGZF VCF (`vcf_writer/tabix.rs`), `.md5`, every file through `AtomicFile`.
+  The example `vcf_copy` copies a VCF through it.
+- The variant stream of `chain` (docs/chaining.md section 33): a VCF source carries its
+  record lines through `crates/core/src/stage/variant.rs` (batches, a thread per tap and
+  sink, the failure rules of the BAM chain). Its steps: `write` (a VCF) and the taps
+  `variant-calling` and `genotype-concordance`. `-o r.vcf.gz` adds the write; manifest 2
+  records kinds `vcf`, `index` (`.tbi`) and `md5`; `--resume` skips them. A step of the
+  other kind exits 2 before the first read, naming the stream's kind.
+- `tests/concordance/test_vcf_writer.py`: every VCF of `variant_vcfs.py` and 16 corner
+  files, plain and `.vcf.gz`, equal to Picard `VcfFormatConverter` line for line, the
+  `.tbi` equal by `tabix` queries, the inventory's pure-rewrite headers, error parity
+  (13 inputs, 2 past the windows of a `.tbi`), `.gz` and `.bgz` names, and the two taps.
+  14 golden records (`VCF_WRITER_CASES`, `tests/data/vcf_writer`), six memgate rows
+  (`chain vcf *`, `benches/vcf_wide.py` for wide lines and a long header).
+- The review of the VCF writer, each found against Picard: `GL` becomes `PL` when the
+  genotypes are decoded (a `PL` read earlier in the record wins); a missing value is one
+  `.` whatever the key's `Number`; a `GQ` that rounds to -1 is absent; a `QUAL` of `-0`
+  prints `0`; the text is written as ISO-8859-1 (`?` above U+00FF); a bare `\r` ends a
+  line; the `.tbi` reads `CHROM`, `POS`, `REF` and `END` of each written line, so a
+  record Picard indexes is indexed; a record past 536,903,680 fails the `.tbi` as in
+  Picard; the index and MD5 are renamed before the VCF, as one set. `-o r.gz` and
+  `-o r.bgz` on a VCF source write a BGZF VCF (D244); a source that is no VCF is named
+  with its reason (empty, a BCF, no `#`); `##fileformat` need not be the first line.
+  Memory: batches end at 4 MiB of text, the header is shared and held as one buffer,
+  decoded genotypes use one array per record (100,000 samples out of sorted order: 133
+  MiB, was 1 GiB; 1,000,000 `##contig` lines: 199 MiB, was 2.5 GiB).
+- `SplitVcfs`, `MakeSitesOnlyVcf` and `MakeVcfSampleNameMap` (wave W16, tools 75 to 77;
+  `crates/core/src/split_vcfs.rs`, `make_sites_only_vcf.rs`, `make_vcf_sample_name_map.rs`):
+  the SNP and indel records of a VCF to two files renamed as one set (`STRICT`,
+  `SEQUENCE_DICTIONARY`, `CREATE_INDEX`, Picard's `DEBUG` count); every record without
+  its genotypes or cut to `SAMPLE` (`vcf::SampleSubset`, `GenotypesContext.subsetToSamples`
+  written anew, a no-call for a name the input lacks); the sample map byte for byte,
+  input then sample, in the order of Picard's `HashMap`. Verbs `split-vcfs`,
+  `make-sites-only-vcf`, `make-vcf-sample-name-map` and Python functions. In a chain
+  (docs/chaining.md section 34) `make-sites-only-vcf` is the first transform of a variant
+  stream (stream `sites`) and `split-vcfs` a split; `make-vcf-sample-name-map` is no step.
+  `Encoder::read_type`, `VcfWriter::stage` and an index dictionary for the writer.
+  Decisions D246 to D251: no `.idx` beside a plain output (a note under the default
+  `CREATE_INDEX`), no `.md5` (Picard's VCF tools write none), a failed run leaves no file.
+  `tests/concordance/test_split_vcfs.py`, `test_make_sites_only_vcf.py`,
+  `test_make_vcf_sample_name_map.py` (every VCF of `variant_vcfs.py` and `types.vcf`,
+  plain and gzip, every option, error parity, chained against Picard),
+  `crates/cli/tests/vcf_tools_chain.rs`, 19 golden records (`VCF_TOOLS_CASES` on
+  `tests/data/vcf_tools`), seven memgate rows.
+
+### Fixed
+
+- The W16 tools review, each found against Picard 3.5.0: an output name htsjdk cannot type
+  (`o.txt`, `o.VCF`, `o.vcf.gz.tbi`, `-`) fails before any file, in the tools and the
+  chain's `write` step, as Picard's `Output format type is not set`; `SplitVcfs` refuses a
+  `VCFv4.3` input (`Writing VCF version VCF4_3 is not implemented`); a `##contig` ID outside
+  the SAM name pattern fails both tools (`SplitVcfs` only without `SEQUENCE_DICTIONARY`);
+  `MakeSitesOnlyVcf` under `VALIDATION_STRINGENCY` `LENIENT` or `SILENT` writes keys the
+  header lacks; a record with more genotype columns than samples keeps the first ones;
+  `SEQUENCE_DICTIONARY` without `@SQ` lines is an empty dictionary, a name given twice and
+  an `LN` past a Java `int` fail, and the file is read line by line (D253: 240 MiB at
+  its caps, was 918 MiB for 6,000,000 lines); `VERBOSITY` outside `ERROR`, `WARNING`,
+  `INFO`, `DEBUG` fails every tool, as Picard's `LogLevel` parse does; a `SAMPLE` with a
+  line end fails; `--sample` over 200,000 `FORMAT` keys takes 0.55 s (was 26.6 s: each key
+  was a scan of the genotype's keys). The chain hands on, after a transform, what a reader
+  of its file reads (D252), so `make-sites-only-vcf split-vcfs` equals the staged tools
+  for any header text. The three verbs read standard input (`-`), as they did; their help
+  said otherwise. `split-vcfs` with both outputs named prints no prefix note, and
+  `make-vcf-sample-name-map` takes a `file://` input on the verb as on the Picard face.
+  Two memgate rows (`benches/vcf_review.py`), two golden records
+  (`picard_make_sites_only_vcf_lenient`, `error_make_sites_only_vcf_name`);
+  `error_split_vcfs_one_file` loses the prefix note.
+- A VCF `QUAL` within 5e-5 of -1 is missing, as htsjdk reads the VCF 3 spelling; it failed
+  `VcfToIntervalList` (`vcf/site.rs`). A `GT` with an empty allele token (`0//1`, `1/`)
+  skips it, as `StringTokenizer` does; it failed `CollectVariantCallingMetrics` and
+  `GenotypeConcordance`.
+
 ## 0.33.0
 
 Wave W15 of docs/07, 74 tools: CRAM output for every `OUTPUT` and chain `write` step ending in `.cram` (`-o r.cram` on a chain too), and `SamFormatConverter`, `CompareSAMs` and `CheckTerminatorBlock` (tools 72 to 74, none a chain step); decisions D206 to D235.

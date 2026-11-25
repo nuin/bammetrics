@@ -1,0 +1,21 @@
+##fileformat=VCFv4.2
+##contig=<ID=c1,length=5000>
+##ALT=<ID=DEL,Description="Deletion">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele count">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	S2	S1
+c1	10	snp	A	C	50	PASS	AC=1	GT:GQ:DP	0/1:30:10	0/0:99:12
+c1	20	mnp	AC	GT	50	PASS	AC=1	GT:GQ	0/1:20	0/0:30
+c1	30	ins	A	AT	50	PASS	AC=2	GT	1/1	0/0
+c1	40	del	ACG	A	50	PASS	.	GT:DP	0/1:5	./.:.
+c1	50	mixed	A	C,AT	50	PASS	AC=1,1	GT	1/2	0/0
+c1	60	sym	A	<DEL>	50	PASS	END=70	GT	0/1	0/0
+c1	80	novar	A	.	50	PASS	.	GT	0/0	0/0
+c1	90	span	A	*	50	PASS	.	GT	0/1	0/0
+c1	95	span2	A	C,*	50	PASS	.	GT	1/2	0/0
+c1	100	lower	g	t	50	PASS	.	GT	0|1	1|1
+c1	110	multi	A	C,G	50	PASS	AC=1,1	GT	1/2	0/1
+c1	120	delins	AC	A,ACC	50	PASS	.	GT	1/2	0/0

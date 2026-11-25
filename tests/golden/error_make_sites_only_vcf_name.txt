@@ -1,0 +1,10 @@
+## argv
+make-sites-only-vcf
+tests/data/vcf_writer/calls.vcf
+-o
+OUT/sites.txt
+## exit
+2
+## stdout
+## stderr
+bammetrics make-sites-only-vcf: OUT/sites.txt: Output format type is not set, or could not be inferred from the output path. If a path was used, does it have a valid VCF extension (.vcf, .vcf.gz, .vcf.bgz, .bcf)?

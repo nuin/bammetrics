@@ -1,0 +1,189 @@
+## argv
+MakeSitesOnlyVcf
+I=tests/data/vcf_writer/calls.vcf
+O=OUT/sites.vcf.gz
+## exit
+0
+## stdout
+## stderr
+## file sites.vcf.gz
+##fileformat=VCFv4.2
+##FILTER=<ID=LowQual,Description="Low quality">
+##FILTER=<ID=q10,Description="Quality below 10">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allele depths">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=FT,Number=.,Type=String,Description="Genotype-level filter">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position">
+##contig=<ID=c1,length=5000>
+##contig=<ID=c2,length=3000>
+##contig=<ID=c3,length=1000>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+c1	100	.	G	C	50	PASS	.
+c1	107	.	A	G	50	PASS	.
+c1	114	.	G	A	50	PASS	.
+c1	121	.	A	T	50	PASS	.
+c1	128	.	T	C	50	PASS	.
+c1	135	.	C	T	50	PASS	.
+c1	142	.	C	A	50	PASS	.
+c1	149	.	T	C	50	PASS	.
+c1	156	.	A	G	50	PASS	.
+c1	163	.	A	T	50	PASS	.
+c1	170	.	T	C	50	LowQual	.
+c1	177	.	A	G	50	PASS	.
+c1	184	.	G	C	50	PASS	.
+c1	191	.	C	T	50	PASS	.
+c1	198	.	A	G	50	PASS	.
+c1	205	.	G	T	50	PASS	.
+c1	212	.	A	G	50	PASS	.
+c1	219	.	C	T	50	PASS	.
+c1	226	.	A	C	50	PASS	.
+c1	233	.	G	A	50	PASS	.
+c1	240	.	C	T	50	PASS	.
+c1	247	.	G	T	50	LowQual	.
+c1	254	.	T	C	50	PASS	.
+c1	261	.	A	G	50	PASS	.
+c1	268	.	A	C	50	PASS	.
+c1	275	.	A	G	50	PASS	.
+c1	282	.	A	G	50	PASS	.
+c1	289	.	T	G	50	PASS	.
+c1	296	.	T	C	50	PASS	.
+c1	303	.	T	C	50	PASS	.
+c1	310	.	G	C	50	PASS	.
+c1	317	.	T	C	50	PASS	.
+c1	324	.	A	G	50	LowQual	.
+c1	331	.	A	T	50	PASS	.
+c1	338	.	A	G	50	PASS	.
+c1	345	.	C	T	50	PASS	.
+c1	352	.	A	C	50	PASS	.
+c1	359	.	C	T	50	PASS	.
+c1	366	.	A	G	50	PASS	.
+c1	373	.	A	T	50	PASS	.
+c1	380	.	T	C	50	PASS	.
+c1	387	.	A	G	50	PASS	.
+c1	394	.	G	C	50	PASS	.
+c1	401	.	A	G	50	LowQual	.
+c1	408	.	C	T	50	PASS	.
+c1	415	.	C	G	50	PASS	.
+c1	422	.	T	C	50	PASS	.
+c1	429	.	A	G	50	PASS	.
+c1	436	.	T	A	50	PASS	.
+c1	443	.	A	G	50	PASS	.
+c1	450	.	T	C	50	PASS	.
+c1	457	.	A	T	50	PASS	.
+c1	464	.	A	G	50	PASS	.
+c1	471	.	G	A	50	PASS	.
+c1	478	.	A	C	50	LowQual	.
+c1	485	.	T	C	50	PASS	.
+c1	492	.	T	C	50	PASS	.
+c1	499	.	G	T	50	PASS	.
+c1	506	.	G	A	50	PASS	.
+c1	513	.	T	C	50	PASS	.
+c1	600	.	A	G,T	50	.	.
+c1	609	.	A	G,T	50	.	.
+c1	618	.	A	G,T	50	.	.
+c1	627	.	A	G,T	50	.	.
+c1	636	.	A	G,T	50	.	.
+c1	645	.	A	G,T	50	.	.
+c1	654	.	A	G,T	50	.	.
+c1	663	.	A	G,T	50	LowQual	.
+c1	1000	.	AC	A	50	PASS	.
+c1	1011	.	A	ATT	50	PASS	.
+c1	1022	.	ACCC	A	50	PASS	.
+c1	1033	.	A	AT	50	PASS	.
+c1	1044	.	AC	A	50	PASS	.
+c1	1055	.	A	ATTT	50	PASS	.
+c1	1066	.	ACCC	A	50	PASS	.
+c1	1077	.	A	ATT	50	PASS	.
+c1	1088	.	AC	A	50	q10	.
+c1	1099	.	A	AT	50	PASS	.
+c1	1110	.	ACCC	A	50	PASS	.
+c1	1121	.	A	ATTT	50	PASS	.
+c1	1132	.	AC	A	50	PASS	.
+c1	1143	.	A	ATT	50	PASS	.
+c1	1154	.	ACCC	A	50	PASS	.
+c1	1165	.	A	AT	50	PASS	.
+c1	1176	.	AC	A	50	PASS	.
+c1	1187	.	A	ATTT	50	q10	.
+c1	1198	.	ACCC	A	50	PASS	.
+c1	1209	.	A	ATT	50	PASS	.
+c1	1220	.	AC	A	50	PASS	.
+c1	1231	.	A	AT	50	PASS	.
+c1	1242	.	ACCC	A	50	PASS	.
+c1	1253	.	A	ATTT	50	PASS	.
+c1	1264	.	AC	A	50	PASS	.
+c1	1275	.	A	ATT	50	PASS	.
+c1	1286	.	ACCC	A	50	q10	.
+c1	1297	.	A	AT	50	PASS	.
+c1	1308	.	AC	A	50	PASS	.
+c1	1319	.	A	ATTT	50	PASS	.
+c1	1500	.	AT	GCC	50	PASS	.
+c1	1513	.	A	AT,ATT	50	PASS	.
+c1	1526	.	ACG	T	50	PASS	.
+c1	1539	.	ACT	A,AC	50	PASS	.
+c1	1552	.	AT	GCC	50	PASS	.
+c1	1565	.	A	AT,ATT	50	LowQual	.
+c1	1700	.	AC	GT	50	PASS	.
+c1	1710	.	A	<DEL>	50	PASS	END=1720
+c1	1730	.	A	G,AT	50	PASS	.
+c1	1740	.	A	G,AT	50	PASS	.
+c1	1800	.	A	G	50	PASS	.
+c1	1810	.	A	G	50	PASS	.
+c1	1820	.	A	.	50	PASS	.
+c1	1830	.	A	G	50	PASS	.
+c1	1840	.	C	T	50	PASS	.
+c2	100	.	C	T	50	PASS	.
+c2	117	.	T	A	50	PASS	.
+c2	134	.	T	G	50	PASS	.
+c2	151	.	AC	A	50	PASS	.
+c2	168	.	C	A	50	PASS	.
+c2	185	.	C	G	50	PASS	.
+c2	202	.	C	T	50	PASS	.
+c2	219	.	C	CGA	50	PASS	.
+c2	236	.	G	T	50	PASS	.
+c2	253	.	C	T	50	PASS	.
+c2	270	.	G	C	50	PASS	.
+c2	287	.	AC	A	50	PASS	.
+c2	304	.	A	G	50	LowQual	.
+c2	321	.	T	A	50	PASS	.
+c2	338	.	A	T	50	PASS	.
+c2	355	.	C	CGA	50	PASS	.
+c2	372	.	A	C	50	PASS	.
+c2	389	.	C	G	50	PASS	.
+c2	406	.	A	G	50	PASS	.
+c2	423	.	AC	A	50	PASS	.
+c2	440	.	C	G	50	PASS	.
+c2	457	.	A	G	50	PASS	.
+c2	474	.	G	C	50	PASS	.
+c2	491	.	C	CGA	50	PASS	.
+c2	508	.	G	A	50	PASS	.
+c2	525	.	T	A	50	LowQual	.
+c2	542	.	G	T	50	PASS	.
+c2	559	.	AC	A	50	PASS	.
+c2	576	.	C	A	50	PASS	.
+c2	593	.	A	T	50	PASS	.
+c2	610	.	T	C	50	PASS	.
+c2	627	.	C	CGA	50	PASS	.
+c2	644	.	G	T	50	PASS	.
+c2	661	.	A	G	50	PASS	.
+c2	678	.	T	A	50	PASS	.
+c2	695	.	AC	A	50	PASS	.
+c2	712	.	C	T	50	PASS	.
+c2	729	.	A	C	50	PASS	.
+c2	746	.	G	T	50	LowQual	.
+c2	763	.	C	CGA	50	PASS	.
+c2	900	.	G	A,C	50	PASS	.
+c2	909	.	G	A,C	50	PASS	.
+c2	918	.	G	A,C	50	PASS	.
+c2	950	.	GT	ACC	50	PASS	.
+c2	963	.	G	GA,GAA	50	PASS	.
+c2	1200	.	T	TG	50	PASS	.
+c2	1211	.	T	TG	50	PASS	.
+c2	1222	.	T	TG	50	q10	.
+c2	1233	.	T	TG	50	PASS	.
+c2	1244	.	T	TG	50	PASS	.
+c2	1255	.	TGA	T	50	q10	.
+## file sites.vcf.gz.tbi
+<index not recorded>

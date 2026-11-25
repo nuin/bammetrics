@@ -1,0 +1,9 @@
+## argv
+MakeSitesOnlyVcf
+I=tests/data/vcf_tools/none.vcf
+O=OUT/sites.vcf.gz
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/vcf_tools/none.vcf: No such file or directory (os error 2)

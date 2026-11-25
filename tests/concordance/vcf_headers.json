@@ -1,0 +1,2104 @@
+[
+  {
+    "tool": "CombineGenotypingArrayVcfs",
+    "run": true,
+    "picard_args": [
+      "I=arr1.vcf.gz",
+      "I=arr2.vcf.gz",
+      "O=combined.vcf"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [
+      "##chipWellBarcode=204126290001_R02C01",
+      "##analysisVersionNumber=2",
+      "##sampleAlias=NA12879",
+      "##expectedGender=Female",
+      "##fingerprintGender=U",
+      "##autocallGender=Female",
+      "##autocallDate=02/11/2011 1:01",
+      "##imagingDate=02/02/2011 02:01:07 AM",
+      "##p95Red=9037",
+      "##p95Green=7029",
+      "##scannerName=N580",
+      "##pipelineVersion=1.1.1",
+      "##gtcCallRate=0.913",
+      "##DNP(High)=DNP(High)|Staining|38186|55616",
+      "##DNP(Bgnd)=DNP(Bgnd)|Staining|12863|59631",
+      "##Biotin(High)=Biotin(High)|Staining|35438|23606",
+      "##Biotin(Bgnd)=Biotin(Bgnd)|Staining|30714|3279",
+      "##Extension(A)=Extension(A)|Extension|43581|33098",
+      "##Extension(T)=Extension(T)|Extension|14158|39555",
+      "##Extension(C)=Extension(C)|Extension|14629|19008",
+      "##Extension(G)=Extension(G)|Extension|31915|45478",
+      "##TargetRemoval=TargetRemoval|TargetRemoval|51415|14018",
+      "##Hyb(High)=Hyb(High)|Hybridization|21663|28803",
+      "##Hyb(Medium)=Hyb(Medium)|Hybridization|4710|16827",
+      "##Hyb(Low)=Hyb(Low)|Hybridization|12767|10655",
+      "##String(PM)=String(PM)|Stringency|5923|29277",
+      "##String(MM)=String(MM)|Stringency|50555|35314",
+      "##NSB(Bgnd)Red=NSB(Bgnd)Red|Non-SpecificBinding|24119|12657",
+      "##NSB(Bgnd)Purple=NSB(Bgnd)Purple|Non-SpecificBinding|31012|51629",
+      "##NSB(Bgnd)Blue=NSB(Bgnd)Blue|Non-SpecificBinding|21466|15751",
+      "##NSB(Bgnd)Green=NSB(Bgnd)Green|Non-SpecificBinding|41874|51951",
+      "##NP(A)=NP(A)|Non-Polymorphic|26569|27775",
+      "##NP(T)=NP(T)|Non-Polymorphic|13749|4222",
+      "##NP(C)=NP(C)|Non-Polymorphic|28290|30752",
+      "##NP(G)=NP(G)|Non-Polymorphic|20041|13977",
+      "##Restore=Restore|Restoration|7361|42847"
+    ],
+    "rewritten": [
+      {
+        "key": [
+          "#CHROM"
+        ],
+        "input": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1",
+        "output": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1\tA2"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=DUPE,Description=\"Duplicate assays at position\">",
+      "##FILTER=<ID=TRIALLELIC,Description=\"Tri-allelic assay\">",
+      "##FILTER=<ID=FAIL_REF,Description=\"Assay failed to map to reference\">",
+      "##FILTER=<ID=ZEROED_OUT_ASSAY,Description=\"Assay Zeroed out (marked as uncallable)\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=IGC,Number=1,Type=Float,Description=\"Illumina GenCall Confidence Score\">",
+      "##FORMAT=<ID=X,Number=1,Type=Integer,Description=\"Raw X intensity\">",
+      "##FORMAT=<ID=Y,Number=1,Type=Integer,Description=\"Raw Y intensity\">",
+      "##FORMAT=<ID=NORMX,Number=1,Type=Float,Description=\"Normalized X intensity\">",
+      "##FORMAT=<ID=NORMY,Number=1,Type=Float,Description=\"Normalized Y intensity\">",
+      "##FORMAT=<ID=R,Number=1,Type=Float,Description=\"Normalized R value\">",
+      "##FORMAT=<ID=THETA,Number=1,Type=Float,Description=\"Normalized Theta value\">",
+      "##FORMAT=<ID=BAF,Number=1,Type=Float,Description=\"B Allele Frequency\">",
+      "##FORMAT=<ID=LRR,Number=1,Type=Float,Description=\"Log R Ratio\">",
+      "##FORMAT=<ID=GTA,Number=1,Type=String,Description=\"Illumina Autocall Genotype\">",
+      "##FORMAT=<ID=GTZ,Number=1,Type=String,Description=\"Illumina zCall Genotype\">",
+      "##INFO=<ID=ALLELE_A,Number=1,Type=String,Description=\"A allele\">",
+      "##INFO=<ID=ALLELE_B,Number=1,Type=String,Description=\"B allele\">",
+      "##INFO=<ID=BEADSET_ID,Number=1,Type=Integer,Description=\"Bead set ID\">",
+      "##INFO=<ID=ILLUMINA_STRAND,Number=1,Type=String,Description=\"Probe strand\">",
+      "##INFO=<ID=SOURCE,Number=1,Type=String,Description=\"Probe source\">",
+      "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency\">",
+      "##INFO=<ID=AC,Number=A,Type=Integer,Description=\"Allele count in genotypes\">",
+      "##INFO=<ID=AN,Number=1,Type=Integer,Description=\"Total number of alleles\">",
+      "##arrayType=GSA-24v3-0_A1",
+      "##extendedIlluminaManifestVersion=2.0",
+      "##chipWellBarcode=204126290001_R02C01",
+      "##analysisVersionNumber=2",
+      "##sampleAlias=NA12879",
+      "##expectedGender=Female",
+      "##fingerprintGender=U",
+      "##autocallGender=Female",
+      "##autocallDate=02/11/2011 1:01",
+      "##imagingDate=02/02/2011 02:01:07 AM",
+      "##clusterFile=cluster_1.egt",
+      "##manifestFile=manifest_1.bpm",
+      "##extendedManifestFile=manifest_1.extended.csv",
+      "##autocallVersion=2.0.1",
+      "##zcallVersion=1.1",
+      "##zcallThresholds=thresholds_1.7.txt",
+      "##p95Red=9037",
+      "##p95Green=7029",
+      "##scannerName=N580",
+      "##pipelineVersion=1.1.1",
+      "##gtcCallRate=0.913",
+      "##DNP(High)=DNP(High)|Staining|38186|55616",
+      "##DNP(Bgnd)=DNP(Bgnd)|Staining|12863|59631",
+      "##Biotin(High)=Biotin(High)|Staining|35438|23606",
+      "##Biotin(Bgnd)=Biotin(Bgnd)|Staining|30714|3279",
+      "##Extension(A)=Extension(A)|Extension|43581|33098",
+      "##Extension(T)=Extension(T)|Extension|14158|39555",
+      "##Extension(C)=Extension(C)|Extension|14629|19008",
+      "##Extension(G)=Extension(G)|Extension|31915|45478",
+      "##TargetRemoval=TargetRemoval|TargetRemoval|51415|14018",
+      "##Hyb(High)=Hyb(High)|Hybridization|21663|28803",
+      "##Hyb(Medium)=Hyb(Medium)|Hybridization|4710|16827",
+      "##Hyb(Low)=Hyb(Low)|Hybridization|12767|10655",
+      "##String(PM)=String(PM)|Stringency|5923|29277",
+      "##String(MM)=String(MM)|Stringency|50555|35314",
+      "##NSB(Bgnd)Red=NSB(Bgnd)Red|Non-SpecificBinding|24119|12657",
+      "##NSB(Bgnd)Purple=NSB(Bgnd)Purple|Non-SpecificBinding|31012|51629",
+      "##NSB(Bgnd)Blue=NSB(Bgnd)Blue|Non-SpecificBinding|21466|15751",
+      "##NSB(Bgnd)Green=NSB(Bgnd)Green|Non-SpecificBinding|41874|51951",
+      "##NP(A)=NP(A)|Non-Polymorphic|26569|27775",
+      "##NP(T)=NP(T)|Non-Polymorphic|13749|4222",
+      "##NP(C)=NP(C)|Non-Polymorphic|28290|30752",
+      "##NP(G)=NP(G)|Non-Polymorphic|20041|13977",
+      "##Restore=Restore|Restoration|7361|42847",
+      "##contig=<ID=1,length=40000,assembly=GRCh37>",
+      "##contig=<ID=2,length=30000,assembly=GRCh37>",
+      "##contig=<ID=X,length=30000,assembly=GRCh37>",
+      "##contig=<ID=Y,length=12000,assembly=GRCh37>",
+      "##contig=<ID=MT,length=16569,assembly=GRCh37>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=DUPE,Description=\"Duplicate assays at position\">",
+      "##FILTER=<ID=FAIL_REF,Description=\"Assay failed to map to reference\">",
+      "##FILTER=<ID=TRIALLELIC,Description=\"Tri-allelic assay\">",
+      "##FILTER=<ID=ZEROED_OUT_ASSAY,Description=\"Assay Zeroed out (marked as uncallable)\">",
+      "##FORMAT=<ID=BAF,Number=1,Type=Float,Description=\"B Allele Frequency\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GTA,Number=1,Type=String,Description=\"Illumina Autocall Genotype\">",
+      "##FORMAT=<ID=GTZ,Number=1,Type=String,Description=\"Illumina zCall Genotype\">",
+      "##FORMAT=<ID=IGC,Number=1,Type=Float,Description=\"Illumina GenCall Confidence Score\">",
+      "##FORMAT=<ID=LRR,Number=1,Type=Float,Description=\"Log R Ratio\">",
+      "##FORMAT=<ID=NORMX,Number=1,Type=Float,Description=\"Normalized X intensity\">",
+      "##FORMAT=<ID=NORMY,Number=1,Type=Float,Description=\"Normalized Y intensity\">",
+      "##FORMAT=<ID=R,Number=1,Type=Float,Description=\"Normalized R value\">",
+      "##FORMAT=<ID=THETA,Number=1,Type=Float,Description=\"Normalized Theta value\">",
+      "##FORMAT=<ID=X,Number=1,Type=Integer,Description=\"Raw X intensity\">",
+      "##FORMAT=<ID=Y,Number=1,Type=Integer,Description=\"Raw Y intensity\">",
+      "##INFO=<ID=AC,Number=A,Type=Integer,Description=\"Allele count in genotypes\">",
+      "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency\">",
+      "##INFO=<ID=ALLELE_A,Number=1,Type=String,Description=\"A allele\">",
+      "##INFO=<ID=ALLELE_B,Number=1,Type=String,Description=\"B allele\">",
+      "##INFO=<ID=AN,Number=1,Type=Integer,Description=\"Total number of alleles\">",
+      "##INFO=<ID=BEADSET_ID,Number=1,Type=Integer,Description=\"Bead set ID\">",
+      "##INFO=<ID=ILLUMINA_STRAND,Number=1,Type=String,Description=\"Probe strand\">",
+      "##INFO=<ID=SOURCE,Number=1,Type=String,Description=\"Probe source\">",
+      "##arrayType=GSA-24v3-0_A1",
+      "##autocallVersion=2.0.1",
+      "##clusterFile=cluster_1.egt",
+      "##contig=<ID=1,length=40000,assembly=GRCh37>",
+      "##contig=<ID=2,length=30000,assembly=GRCh37>",
+      "##contig=<ID=X,length=30000,assembly=GRCh37>",
+      "##contig=<ID=Y,length=12000,assembly=GRCh37>",
+      "##contig=<ID=MT,length=16569,assembly=GRCh37>",
+      "##extendedIlluminaManifestVersion=2.0",
+      "##extendedManifestFile=manifest_1.extended.csv",
+      "##manifestFile=manifest_1.bpm",
+      "##zcallThresholds=thresholds_1.7.txt",
+      "##zcallVersion=1.1",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1\tA2"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "reference",
+        "picard_args": [
+          "I=arr1.vcf.gz",
+          "I=arr2.vcf.gz",
+          "O=combined.vcf",
+          "REFERENCE_SEQUENCE=ref.fa"
+        ],
+        "error": null,
+        "added": [],
+        "removed": [
+          "##chipWellBarcode=204126290001_R02C01",
+          "##analysisVersionNumber=2",
+          "##sampleAlias=NA12879",
+          "##expectedGender=Female",
+          "##fingerprintGender=U",
+          "##autocallGender=Female",
+          "##autocallDate=02/11/2011 1:01",
+          "##imagingDate=02/02/2011 02:01:07 AM",
+          "##p95Red=9037",
+          "##p95Green=7029",
+          "##scannerName=N580",
+          "##pipelineVersion=1.1.1",
+          "##gtcCallRate=0.913",
+          "##DNP(High)=DNP(High)|Staining|38186|55616",
+          "##DNP(Bgnd)=DNP(Bgnd)|Staining|12863|59631",
+          "##Biotin(High)=Biotin(High)|Staining|35438|23606",
+          "##Biotin(Bgnd)=Biotin(Bgnd)|Staining|30714|3279",
+          "##Extension(A)=Extension(A)|Extension|43581|33098",
+          "##Extension(T)=Extension(T)|Extension|14158|39555",
+          "##Extension(C)=Extension(C)|Extension|14629|19008",
+          "##Extension(G)=Extension(G)|Extension|31915|45478",
+          "##TargetRemoval=TargetRemoval|TargetRemoval|51415|14018",
+          "##Hyb(High)=Hyb(High)|Hybridization|21663|28803",
+          "##Hyb(Medium)=Hyb(Medium)|Hybridization|4710|16827",
+          "##Hyb(Low)=Hyb(Low)|Hybridization|12767|10655",
+          "##String(PM)=String(PM)|Stringency|5923|29277",
+          "##String(MM)=String(MM)|Stringency|50555|35314",
+          "##NSB(Bgnd)Red=NSB(Bgnd)Red|Non-SpecificBinding|24119|12657",
+          "##NSB(Bgnd)Purple=NSB(Bgnd)Purple|Non-SpecificBinding|31012|51629",
+          "##NSB(Bgnd)Blue=NSB(Bgnd)Blue|Non-SpecificBinding|21466|15751",
+          "##NSB(Bgnd)Green=NSB(Bgnd)Green|Non-SpecificBinding|41874|51951",
+          "##NP(A)=NP(A)|Non-Polymorphic|26569|27775",
+          "##NP(T)=NP(T)|Non-Polymorphic|13749|4222",
+          "##NP(C)=NP(C)|Non-Polymorphic|28290|30752",
+          "##NP(G)=NP(G)|Non-Polymorphic|20041|13977",
+          "##Restore=Restore|Restoration|7361|42847"
+        ],
+        "rewritten": [
+          {
+            "key": [
+              "#CHROM"
+            ],
+            "input": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1",
+            "output": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1\tA2"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=DUPE,Description=\"Duplicate assays at position\">",
+          "##FILTER=<ID=TRIALLELIC,Description=\"Tri-allelic assay\">",
+          "##FILTER=<ID=FAIL_REF,Description=\"Assay failed to map to reference\">",
+          "##FILTER=<ID=ZEROED_OUT_ASSAY,Description=\"Assay Zeroed out (marked as uncallable)\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=IGC,Number=1,Type=Float,Description=\"Illumina GenCall Confidence Score\">",
+          "##FORMAT=<ID=X,Number=1,Type=Integer,Description=\"Raw X intensity\">",
+          "##FORMAT=<ID=Y,Number=1,Type=Integer,Description=\"Raw Y intensity\">",
+          "##FORMAT=<ID=NORMX,Number=1,Type=Float,Description=\"Normalized X intensity\">",
+          "##FORMAT=<ID=NORMY,Number=1,Type=Float,Description=\"Normalized Y intensity\">",
+          "##FORMAT=<ID=R,Number=1,Type=Float,Description=\"Normalized R value\">",
+          "##FORMAT=<ID=THETA,Number=1,Type=Float,Description=\"Normalized Theta value\">",
+          "##FORMAT=<ID=BAF,Number=1,Type=Float,Description=\"B Allele Frequency\">",
+          "##FORMAT=<ID=LRR,Number=1,Type=Float,Description=\"Log R Ratio\">",
+          "##FORMAT=<ID=GTA,Number=1,Type=String,Description=\"Illumina Autocall Genotype\">",
+          "##FORMAT=<ID=GTZ,Number=1,Type=String,Description=\"Illumina zCall Genotype\">",
+          "##INFO=<ID=ALLELE_A,Number=1,Type=String,Description=\"A allele\">",
+          "##INFO=<ID=ALLELE_B,Number=1,Type=String,Description=\"B allele\">",
+          "##INFO=<ID=BEADSET_ID,Number=1,Type=Integer,Description=\"Bead set ID\">",
+          "##INFO=<ID=ILLUMINA_STRAND,Number=1,Type=String,Description=\"Probe strand\">",
+          "##INFO=<ID=SOURCE,Number=1,Type=String,Description=\"Probe source\">",
+          "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency\">",
+          "##INFO=<ID=AC,Number=A,Type=Integer,Description=\"Allele count in genotypes\">",
+          "##INFO=<ID=AN,Number=1,Type=Integer,Description=\"Total number of alleles\">",
+          "##arrayType=GSA-24v3-0_A1",
+          "##extendedIlluminaManifestVersion=2.0",
+          "##chipWellBarcode=204126290001_R02C01",
+          "##analysisVersionNumber=2",
+          "##sampleAlias=NA12879",
+          "##expectedGender=Female",
+          "##fingerprintGender=U",
+          "##autocallGender=Female",
+          "##autocallDate=02/11/2011 1:01",
+          "##imagingDate=02/02/2011 02:01:07 AM",
+          "##clusterFile=cluster_1.egt",
+          "##manifestFile=manifest_1.bpm",
+          "##extendedManifestFile=manifest_1.extended.csv",
+          "##autocallVersion=2.0.1",
+          "##zcallVersion=1.1",
+          "##zcallThresholds=thresholds_1.7.txt",
+          "##p95Red=9037",
+          "##p95Green=7029",
+          "##scannerName=N580",
+          "##pipelineVersion=1.1.1",
+          "##gtcCallRate=0.913",
+          "##DNP(High)=DNP(High)|Staining|38186|55616",
+          "##DNP(Bgnd)=DNP(Bgnd)|Staining|12863|59631",
+          "##Biotin(High)=Biotin(High)|Staining|35438|23606",
+          "##Biotin(Bgnd)=Biotin(Bgnd)|Staining|30714|3279",
+          "##Extension(A)=Extension(A)|Extension|43581|33098",
+          "##Extension(T)=Extension(T)|Extension|14158|39555",
+          "##Extension(C)=Extension(C)|Extension|14629|19008",
+          "##Extension(G)=Extension(G)|Extension|31915|45478",
+          "##TargetRemoval=TargetRemoval|TargetRemoval|51415|14018",
+          "##Hyb(High)=Hyb(High)|Hybridization|21663|28803",
+          "##Hyb(Medium)=Hyb(Medium)|Hybridization|4710|16827",
+          "##Hyb(Low)=Hyb(Low)|Hybridization|12767|10655",
+          "##String(PM)=String(PM)|Stringency|5923|29277",
+          "##String(MM)=String(MM)|Stringency|50555|35314",
+          "##NSB(Bgnd)Red=NSB(Bgnd)Red|Non-SpecificBinding|24119|12657",
+          "##NSB(Bgnd)Purple=NSB(Bgnd)Purple|Non-SpecificBinding|31012|51629",
+          "##NSB(Bgnd)Blue=NSB(Bgnd)Blue|Non-SpecificBinding|21466|15751",
+          "##NSB(Bgnd)Green=NSB(Bgnd)Green|Non-SpecificBinding|41874|51951",
+          "##NP(A)=NP(A)|Non-Polymorphic|26569|27775",
+          "##NP(T)=NP(T)|Non-Polymorphic|13749|4222",
+          "##NP(C)=NP(C)|Non-Polymorphic|28290|30752",
+          "##NP(G)=NP(G)|Non-Polymorphic|20041|13977",
+          "##Restore=Restore|Restoration|7361|42847",
+          "##contig=<ID=1,length=40000,assembly=GRCh37>",
+          "##contig=<ID=2,length=30000,assembly=GRCh37>",
+          "##contig=<ID=X,length=30000,assembly=GRCh37>",
+          "##contig=<ID=Y,length=12000,assembly=GRCh37>",
+          "##contig=<ID=MT,length=16569,assembly=GRCh37>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=DUPE,Description=\"Duplicate assays at position\">",
+          "##FILTER=<ID=FAIL_REF,Description=\"Assay failed to map to reference\">",
+          "##FILTER=<ID=TRIALLELIC,Description=\"Tri-allelic assay\">",
+          "##FILTER=<ID=ZEROED_OUT_ASSAY,Description=\"Assay Zeroed out (marked as uncallable)\">",
+          "##FORMAT=<ID=BAF,Number=1,Type=Float,Description=\"B Allele Frequency\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GTA,Number=1,Type=String,Description=\"Illumina Autocall Genotype\">",
+          "##FORMAT=<ID=GTZ,Number=1,Type=String,Description=\"Illumina zCall Genotype\">",
+          "##FORMAT=<ID=IGC,Number=1,Type=Float,Description=\"Illumina GenCall Confidence Score\">",
+          "##FORMAT=<ID=LRR,Number=1,Type=Float,Description=\"Log R Ratio\">",
+          "##FORMAT=<ID=NORMX,Number=1,Type=Float,Description=\"Normalized X intensity\">",
+          "##FORMAT=<ID=NORMY,Number=1,Type=Float,Description=\"Normalized Y intensity\">",
+          "##FORMAT=<ID=R,Number=1,Type=Float,Description=\"Normalized R value\">",
+          "##FORMAT=<ID=THETA,Number=1,Type=Float,Description=\"Normalized Theta value\">",
+          "##FORMAT=<ID=X,Number=1,Type=Integer,Description=\"Raw X intensity\">",
+          "##FORMAT=<ID=Y,Number=1,Type=Integer,Description=\"Raw Y intensity\">",
+          "##INFO=<ID=AC,Number=A,Type=Integer,Description=\"Allele count in genotypes\">",
+          "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency\">",
+          "##INFO=<ID=ALLELE_A,Number=1,Type=String,Description=\"A allele\">",
+          "##INFO=<ID=ALLELE_B,Number=1,Type=String,Description=\"B allele\">",
+          "##INFO=<ID=AN,Number=1,Type=Integer,Description=\"Total number of alleles\">",
+          "##INFO=<ID=BEADSET_ID,Number=1,Type=Integer,Description=\"Bead set ID\">",
+          "##INFO=<ID=ILLUMINA_STRAND,Number=1,Type=String,Description=\"Probe strand\">",
+          "##INFO=<ID=SOURCE,Number=1,Type=String,Description=\"Probe source\">",
+          "##arrayType=GSA-24v3-0_A1",
+          "##autocallVersion=2.0.1",
+          "##clusterFile=cluster_1.egt",
+          "##contig=<ID=1,length=40000,assembly=GRCh37>",
+          "##contig=<ID=2,length=30000,assembly=GRCh37>",
+          "##contig=<ID=X,length=30000,assembly=GRCh37>",
+          "##contig=<ID=Y,length=12000,assembly=GRCh37>",
+          "##contig=<ID=MT,length=16569,assembly=GRCh37>",
+          "##extendedIlluminaManifestVersion=2.0",
+          "##extendedManifestFile=manifest_1.extended.csv",
+          "##manifestFile=manifest_1.bpm",
+          "##zcallThresholds=thresholds_1.7.txt",
+          "##zcallVersion=1.1",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1\tA2"
+        ],
+        "output_kind": "plain",
+        "index": ".idx",
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "bgzf",
+        "extra_outputs": []
+      }
+    ]
+  },
+  {
+    "tool": "ConvertHaplotypeDatabaseToVcf",
+    "run": true,
+    "picard_args": [
+      "I=haplotypes.txt",
+      "O=haplotypes.vcf",
+      "REFERENCE_SEQUENCE=ref.fa"
+    ],
+    "error": null,
+    "added": [
+      "##fileformat=VCFv4.2",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=PS,Number=1,Type=String,Description=\"Phase-set identifier for phased genotypes.\">",
+      "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele Frequency, for each ALT allele, in the same order as listed\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##source=HaplotypeMap::writeAsVcf",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tHetGenotypeForPhasing"
+    ],
+    "removed": [],
+    "rewritten": [],
+    "reordered": false,
+    "volatile": [
+      {
+        "name": "reference",
+        "regex": "^##reference=file:",
+        "example_key": "reference"
+      }
+    ],
+    "input_header": [],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=PS,Number=1,Type=String,Description=\"Phase-set identifier for phased genotypes.\">",
+      "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele Frequency, for each ALT allele, in the same order as listed\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "<VOLATILE reference>",
+      "##source=HaplotypeMap::writeAsVcf",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tHetGenotypeForPhasing"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "plain",
+    "extra_outputs": [],
+    "variants": []
+  },
+  {
+    "tool": "CreateExtendedIlluminaManifest",
+    "run": false,
+    "reason": "writes an Illumina manifest, not a VCF"
+  },
+  {
+    "tool": "FilterVcf",
+    "run": true,
+    "picard_args": [
+      "I=calls3.vcf.gz",
+      "O=filtered.vcf"
+    ],
+    "error": null,
+    "added": [
+      "##FILTER=<ID=AllGtsFiltered,Description=\"Site filtered out because all genotypes are filtered out.\">",
+      "##FILTER=<ID=AlleleBalance,Description=\"Heterozygote allele balance below required threshold.\">",
+      "##FILTER=<ID=LowQD,Description=\"Site exhibits QD value below a hard limit.\">",
+      "##FILTER=<ID=StrandBias,Description=\"Site exhibits excessive allele/strand correlation.\">"
+    ],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=AllGtsFiltered,Description=\"Site filtered out because all genotypes are filtered out.\">",
+      "##FILTER=<ID=AlleleBalance,Description=\"Heterozygote allele balance below required threshold.\">",
+      "##FILTER=<ID=LowQD,Description=\"Site exhibits QD value below a hard limit.\">",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=StrandBias,Description=\"Site exhibits excessive allele/strand correlation.\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "thresholds",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "O=filtered.vcf",
+          "MIN_DP=5",
+          "MIN_GQ=10",
+          "MIN_AB=0.2",
+          "MAX_FS=60",
+          "MIN_QD=2"
+        ],
+        "error": null,
+        "added": [
+          "##FILTER=<ID=AllGtsFiltered,Description=\"Site filtered out because all genotypes are filtered out.\">",
+          "##FILTER=<ID=AlleleBalance,Description=\"Heterozygote allele balance below required threshold.\">",
+          "##FILTER=<ID=LowQD,Description=\"Site exhibits QD value below a hard limit.\">",
+          "##FILTER=<ID=StrandBias,Description=\"Site exhibits excessive allele/strand correlation.\">"
+        ],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=AllGtsFiltered,Description=\"Site filtered out because all genotypes are filtered out.\">",
+          "##FILTER=<ID=AlleleBalance,Description=\"Heterozygote allele balance below required threshold.\">",
+          "##FILTER=<ID=LowQD,Description=\"Site exhibits QD value below a hard limit.\">",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=StrandBias,Description=\"Site exhibits excessive allele/strand correlation.\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_kind": "plain",
+        "index": ".idx",
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "bgzf",
+        "extra_outputs": []
+      }
+    ]
+  },
+  {
+    "tool": "FindMendelianViolations",
+    "run": false,
+    "reason": "writes a text report, not a VCF"
+  },
+  {
+    "tool": "FixVcfHeader",
+    "run": true,
+    "picard_args": [
+      "I=calls3.vcf.gz",
+      "H=calls3.vcf",
+      "O=fixed.vcf",
+      "REFERENCE_SEQUENCE=ref.fa"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "header_without_contigs",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "H=calls3_nocontigs.vcf",
+          "O=fixed.vcf"
+        ],
+        "error": "Exception in thread \"main\" java.lang.IllegalArgumentException: A reference dictionary is required for creating Tribble indices on the fly",
+        "added": [],
+        "removed": [],
+        "rewritten": [],
+        "reordered": false,
+        "volatile": [],
+        "output_kind": null,
+        "index": null
+      },
+      {
+        "label": "header_of_truth",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "H=truth.vcf",
+          "O=fixed.vcf",
+          "REFERENCE_SEQUENCE=ref.fa"
+        ],
+        "error": "Exception in thread \"main\" picard.PicardException: The input VCF had a different # of samples than the input VCF header.",
+        "added": [],
+        "removed": [],
+        "rewritten": [],
+        "reordered": false,
+        "volatile": [],
+        "output_kind": null,
+        "index": null
+      }
+    ]
+  },
+  {
+    "tool": "GatherVcfs",
+    "run": true,
+    "picard_args": [
+      "I=gather_a.vcf",
+      "I=gather_b.vcf",
+      "O=gathered.vcf"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "plain",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "comment",
+        "picard_args": [
+          "I=gather_a.vcf",
+          "O=gathered.vcf",
+          "COMMENT=inventory comment"
+        ],
+        "error": null,
+        "added": [
+          "##GatherVcfs.comment=inventory comment"
+        ],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##GatherVcfs.comment=inventory comment",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_kind": "plain",
+        "index": ".idx",
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "plain",
+        "extra_outputs": []
+      }
+    ]
+  },
+  {
+    "tool": "GenotypeConcordance",
+    "run": true,
+    "picard_args": [
+      "CALL_VCF=call.vcf.gz",
+      "CALL_SAMPLE=C",
+      "TRUTH_VCF=truth.vcf.gz",
+      "TRUTH_SAMPLE=T",
+      "OUTPUT_VCF=true",
+      "O=gc"
+    ],
+    "error": null,
+    "added": [
+      "##INFO=<ID=CONC_ST,Number=.,Type=String,Description=\"The genotype concordance contingency state(s)\">"
+    ],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      },
+      {
+        "key": [
+          "#CHROM"
+        ],
+        "input": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tC\tC2",
+        "output": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tcall\ttruth"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tC\tC2"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=CONC_ST,Number=.,Type=String,Description=\"The genotype concordance contingency state(s)\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tcall\ttruth"
+    ],
+    "output_kind": "bgzf",
+    "index": ".tbi",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": []
+  },
+  {
+    "tool": "GtcToVcf",
+    "run": false,
+    "reason": "needs a binary GTC file, an EGT cluster file and a BPM or extended manifest; none exists in the repository"
+  },
+  {
+    "tool": "LiftoverVcf",
+    "run": true,
+    "picard_args": [
+      "I=calls3.vcf.gz",
+      "O=lifted.vcf",
+      "CHAIN=chain.txt",
+      "REJECT=rejected.vcf",
+      "REFERENCE_SEQUENCE=ref.fa"
+    ],
+    "error": null,
+    "added": [
+      "##INFO=<ID=ReverseComplementedAlleles,Number=0,Type=Flag,Description=\"The REF and the ALT alleles have been reverse complemented in liftover since the mapping from the previous reference to the current one was on the negative strand.\">",
+      "##INFO=<ID=SwappedAlleles,Number=0,Type=Flag,Description=\"The REF and the ALT alleles have been swapped in liftover due to changes in the reference. It is possible that not all INFO annotations reflect this swap, and in the genotypes, only the GT, PL, and AD fields have been modified. You should check the TAGS_TO_REVERSE parameter that was used during the LiftOver to be sure.\">"
+    ],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [
+      {
+        "name": "reference",
+        "regex": "^##reference=file:",
+        "example_key": "reference"
+      }
+    ],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=ReverseComplementedAlleles,Number=0,Type=Flag,Description=\"The REF and the ALT alleles have been reverse complemented in liftover since the mapping from the previous reference to the current one was on the negative strand.\">",
+      "##INFO=<ID=SwappedAlleles,Number=0,Type=Flag,Description=\"The REF and the ALT alleles have been swapped in liftover due to changes in the reference. It is possible that not all INFO annotations reflect this swap, and in the genotypes, only the GT, PL, and AD fields have been modified. You should check the TAGS_TO_REVERSE parameter that was used during the LiftOver to be sure.\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "<VOLATILE reference>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [
+      {
+        "name": "rejected.vcf",
+        "output_kind": "plain",
+        "index": null
+      }
+    ],
+    "variants": []
+  },
+  {
+    "tool": "MakeSitesOnlyVcf",
+    "run": true,
+    "picard_args": [
+      "I=calls3.vcf.gz",
+      "O=sites.vcf"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      },
+      {
+        "key": [
+          "#CHROM"
+        ],
+        "input": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3",
+        "output": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "gzip_output",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "O=sites.vcf.gz"
+        ],
+        "error": null,
+        "added": [],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          },
+          {
+            "key": [
+              "#CHROM"
+            ],
+            "input": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3",
+            "output": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+        ],
+        "output_kind": "bgzf",
+        "index": ".tbi",
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "bgzf",
+        "extra_outputs": []
+      }
+    ]
+  },
+  {
+    "tool": "MakeVcfSampleNameMap",
+    "run": false,
+    "reason": "writes a TSV of sample names and paths, not a VCF"
+  },
+  {
+    "tool": "MergePedIntoVcf",
+    "run": true,
+    "picard_args": [
+      "ORIGINAL_VCF=arr1.vcf.gz",
+      "MAP_FILE=zcall.map",
+      "PED_FILE=zcall.ped",
+      "ZCALL_THRESHOLDS_FILE=zcall_thresholds.txt",
+      "ZCALL_VERSION=1.0",
+      "O=ped_merged.vcf"
+    ],
+    "error": null,
+    "added": [
+      "##INFO=<ID=zthresh_X,Number=1,Type=Float,Description=\"zCall X threshold\">",
+      "##INFO=<ID=zthresh_Y,Number=1,Type=Float,Description=\"zCall Y threshold\">"
+    ],
+    "removed": [],
+    "rewritten": [],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=DUPE,Description=\"Duplicate assays at position\">",
+      "##FILTER=<ID=TRIALLELIC,Description=\"Tri-allelic assay\">",
+      "##FILTER=<ID=FAIL_REF,Description=\"Assay failed to map to reference\">",
+      "##FILTER=<ID=ZEROED_OUT_ASSAY,Description=\"Assay Zeroed out (marked as uncallable)\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=IGC,Number=1,Type=Float,Description=\"Illumina GenCall Confidence Score\">",
+      "##FORMAT=<ID=X,Number=1,Type=Integer,Description=\"Raw X intensity\">",
+      "##FORMAT=<ID=Y,Number=1,Type=Integer,Description=\"Raw Y intensity\">",
+      "##FORMAT=<ID=NORMX,Number=1,Type=Float,Description=\"Normalized X intensity\">",
+      "##FORMAT=<ID=NORMY,Number=1,Type=Float,Description=\"Normalized Y intensity\">",
+      "##FORMAT=<ID=R,Number=1,Type=Float,Description=\"Normalized R value\">",
+      "##FORMAT=<ID=THETA,Number=1,Type=Float,Description=\"Normalized Theta value\">",
+      "##FORMAT=<ID=BAF,Number=1,Type=Float,Description=\"B Allele Frequency\">",
+      "##FORMAT=<ID=LRR,Number=1,Type=Float,Description=\"Log R Ratio\">",
+      "##FORMAT=<ID=GTA,Number=1,Type=String,Description=\"Illumina Autocall Genotype\">",
+      "##FORMAT=<ID=GTZ,Number=1,Type=String,Description=\"Illumina zCall Genotype\">",
+      "##INFO=<ID=ALLELE_A,Number=1,Type=String,Description=\"A allele\">",
+      "##INFO=<ID=ALLELE_B,Number=1,Type=String,Description=\"B allele\">",
+      "##INFO=<ID=BEADSET_ID,Number=1,Type=Integer,Description=\"Bead set ID\">",
+      "##INFO=<ID=ILLUMINA_STRAND,Number=1,Type=String,Description=\"Probe strand\">",
+      "##INFO=<ID=SOURCE,Number=1,Type=String,Description=\"Probe source\">",
+      "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency\">",
+      "##INFO=<ID=AC,Number=A,Type=Integer,Description=\"Allele count in genotypes\">",
+      "##INFO=<ID=AN,Number=1,Type=Integer,Description=\"Total number of alleles\">",
+      "##arrayType=GSA-24v3-0_A1",
+      "##extendedIlluminaManifestVersion=2.0",
+      "##chipWellBarcode=204126290001_R02C01",
+      "##analysisVersionNumber=2",
+      "##sampleAlias=NA12879",
+      "##expectedGender=Female",
+      "##fingerprintGender=U",
+      "##autocallGender=Female",
+      "##autocallDate=02/11/2011 1:01",
+      "##imagingDate=02/02/2011 02:01:07 AM",
+      "##clusterFile=cluster_1.egt",
+      "##manifestFile=manifest_1.bpm",
+      "##extendedManifestFile=manifest_1.extended.csv",
+      "##autocallVersion=2.0.1",
+      "##zcallVersion=1.1",
+      "##zcallThresholds=thresholds_1.7.txt",
+      "##p95Red=9037",
+      "##p95Green=7029",
+      "##scannerName=N580",
+      "##pipelineVersion=1.1.1",
+      "##gtcCallRate=0.913",
+      "##DNP(High)=DNP(High)|Staining|38186|55616",
+      "##DNP(Bgnd)=DNP(Bgnd)|Staining|12863|59631",
+      "##Biotin(High)=Biotin(High)|Staining|35438|23606",
+      "##Biotin(Bgnd)=Biotin(Bgnd)|Staining|30714|3279",
+      "##Extension(A)=Extension(A)|Extension|43581|33098",
+      "##Extension(T)=Extension(T)|Extension|14158|39555",
+      "##Extension(C)=Extension(C)|Extension|14629|19008",
+      "##Extension(G)=Extension(G)|Extension|31915|45478",
+      "##TargetRemoval=TargetRemoval|TargetRemoval|51415|14018",
+      "##Hyb(High)=Hyb(High)|Hybridization|21663|28803",
+      "##Hyb(Medium)=Hyb(Medium)|Hybridization|4710|16827",
+      "##Hyb(Low)=Hyb(Low)|Hybridization|12767|10655",
+      "##String(PM)=String(PM)|Stringency|5923|29277",
+      "##String(MM)=String(MM)|Stringency|50555|35314",
+      "##NSB(Bgnd)Red=NSB(Bgnd)Red|Non-SpecificBinding|24119|12657",
+      "##NSB(Bgnd)Purple=NSB(Bgnd)Purple|Non-SpecificBinding|31012|51629",
+      "##NSB(Bgnd)Blue=NSB(Bgnd)Blue|Non-SpecificBinding|21466|15751",
+      "##NSB(Bgnd)Green=NSB(Bgnd)Green|Non-SpecificBinding|41874|51951",
+      "##NP(A)=NP(A)|Non-Polymorphic|26569|27775",
+      "##NP(T)=NP(T)|Non-Polymorphic|13749|4222",
+      "##NP(C)=NP(C)|Non-Polymorphic|28290|30752",
+      "##NP(G)=NP(G)|Non-Polymorphic|20041|13977",
+      "##Restore=Restore|Restoration|7361|42847",
+      "##contig=<ID=1,length=40000,assembly=GRCh37>",
+      "##contig=<ID=2,length=30000,assembly=GRCh37>",
+      "##contig=<ID=X,length=30000,assembly=GRCh37>",
+      "##contig=<ID=Y,length=12000,assembly=GRCh37>",
+      "##contig=<ID=MT,length=16569,assembly=GRCh37>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##Biotin(Bgnd)=Biotin(Bgnd)|Staining|30714|3279",
+      "##Biotin(High)=Biotin(High)|Staining|35438|23606",
+      "##DNP(Bgnd)=DNP(Bgnd)|Staining|12863|59631",
+      "##DNP(High)=DNP(High)|Staining|38186|55616",
+      "##Extension(A)=Extension(A)|Extension|43581|33098",
+      "##Extension(C)=Extension(C)|Extension|14629|19008",
+      "##Extension(G)=Extension(G)|Extension|31915|45478",
+      "##Extension(T)=Extension(T)|Extension|14158|39555",
+      "##FILTER=<ID=DUPE,Description=\"Duplicate assays at position\">",
+      "##FILTER=<ID=FAIL_REF,Description=\"Assay failed to map to reference\">",
+      "##FILTER=<ID=TRIALLELIC,Description=\"Tri-allelic assay\">",
+      "##FILTER=<ID=ZEROED_OUT_ASSAY,Description=\"Assay Zeroed out (marked as uncallable)\">",
+      "##FORMAT=<ID=BAF,Number=1,Type=Float,Description=\"B Allele Frequency\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GTA,Number=1,Type=String,Description=\"Illumina Autocall Genotype\">",
+      "##FORMAT=<ID=GTZ,Number=1,Type=String,Description=\"Illumina zCall Genotype\">",
+      "##FORMAT=<ID=IGC,Number=1,Type=Float,Description=\"Illumina GenCall Confidence Score\">",
+      "##FORMAT=<ID=LRR,Number=1,Type=Float,Description=\"Log R Ratio\">",
+      "##FORMAT=<ID=NORMX,Number=1,Type=Float,Description=\"Normalized X intensity\">",
+      "##FORMAT=<ID=NORMY,Number=1,Type=Float,Description=\"Normalized Y intensity\">",
+      "##FORMAT=<ID=R,Number=1,Type=Float,Description=\"Normalized R value\">",
+      "##FORMAT=<ID=THETA,Number=1,Type=Float,Description=\"Normalized Theta value\">",
+      "##FORMAT=<ID=X,Number=1,Type=Integer,Description=\"Raw X intensity\">",
+      "##FORMAT=<ID=Y,Number=1,Type=Integer,Description=\"Raw Y intensity\">",
+      "##Hyb(High)=Hyb(High)|Hybridization|21663|28803",
+      "##Hyb(Low)=Hyb(Low)|Hybridization|12767|10655",
+      "##Hyb(Medium)=Hyb(Medium)|Hybridization|4710|16827",
+      "##INFO=<ID=AC,Number=A,Type=Integer,Description=\"Allele count in genotypes\">",
+      "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency\">",
+      "##INFO=<ID=ALLELE_A,Number=1,Type=String,Description=\"A allele\">",
+      "##INFO=<ID=ALLELE_B,Number=1,Type=String,Description=\"B allele\">",
+      "##INFO=<ID=AN,Number=1,Type=Integer,Description=\"Total number of alleles\">",
+      "##INFO=<ID=BEADSET_ID,Number=1,Type=Integer,Description=\"Bead set ID\">",
+      "##INFO=<ID=ILLUMINA_STRAND,Number=1,Type=String,Description=\"Probe strand\">",
+      "##INFO=<ID=SOURCE,Number=1,Type=String,Description=\"Probe source\">",
+      "##INFO=<ID=zthresh_X,Number=1,Type=Float,Description=\"zCall X threshold\">",
+      "##INFO=<ID=zthresh_Y,Number=1,Type=Float,Description=\"zCall Y threshold\">",
+      "##NP(A)=NP(A)|Non-Polymorphic|26569|27775",
+      "##NP(C)=NP(C)|Non-Polymorphic|28290|30752",
+      "##NP(G)=NP(G)|Non-Polymorphic|20041|13977",
+      "##NP(T)=NP(T)|Non-Polymorphic|13749|4222",
+      "##NSB(Bgnd)Blue=NSB(Bgnd)Blue|Non-SpecificBinding|21466|15751",
+      "##NSB(Bgnd)Green=NSB(Bgnd)Green|Non-SpecificBinding|41874|51951",
+      "##NSB(Bgnd)Purple=NSB(Bgnd)Purple|Non-SpecificBinding|31012|51629",
+      "##NSB(Bgnd)Red=NSB(Bgnd)Red|Non-SpecificBinding|24119|12657",
+      "##Restore=Restore|Restoration|7361|42847",
+      "##String(MM)=String(MM)|Stringency|50555|35314",
+      "##String(PM)=String(PM)|Stringency|5923|29277",
+      "##TargetRemoval=TargetRemoval|TargetRemoval|51415|14018",
+      "##analysisVersionNumber=2",
+      "##arrayType=GSA-24v3-0_A1",
+      "##autocallDate=02/11/2011 1:01",
+      "##autocallGender=Female",
+      "##autocallVersion=2.0.1",
+      "##chipWellBarcode=204126290001_R02C01",
+      "##clusterFile=cluster_1.egt",
+      "##contig=<ID=1,length=40000,assembly=GRCh37>",
+      "##contig=<ID=2,length=30000,assembly=GRCh37>",
+      "##contig=<ID=X,length=30000,assembly=GRCh37>",
+      "##contig=<ID=Y,length=12000,assembly=GRCh37>",
+      "##contig=<ID=MT,length=16569,assembly=GRCh37>",
+      "##expectedGender=Female",
+      "##extendedIlluminaManifestVersion=2.0",
+      "##extendedManifestFile=manifest_1.extended.csv",
+      "##fingerprintGender=U",
+      "##gtcCallRate=0.913",
+      "##imagingDate=02/02/2011 02:01:07 AM",
+      "##manifestFile=manifest_1.bpm",
+      "##p95Green=7029",
+      "##p95Red=9037",
+      "##pipelineVersion=1.1.1",
+      "##sampleAlias=NA12879",
+      "##scannerName=N580",
+      "##zcallThresholds=thresholds_1.7.txt",
+      "##zcallVersion=1.1",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA1"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": []
+  },
+  {
+    "tool": "MergeVcfs",
+    "run": true,
+    "picard_args": [
+      "I=calls3.vcf.gz",
+      "I=calls3_nocontigs.vcf.gz",
+      "O=merged.vcf"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "with_dictionary_and_comment",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "I=calls3_nocontigs.vcf.gz",
+          "O=merged.vcf",
+          "D=ref.dict",
+          "COMMENT=inventory comment"
+        ],
+        "error": null,
+        "added": [
+          "##MergeVcfs.comment=inventory comment"
+        ],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##MergeVcfs.comment=inventory comment",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_kind": "plain",
+        "index": ".idx",
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "bgzf",
+        "extra_outputs": []
+      }
+    ]
+  },
+  {
+    "tool": "RenameSampleInVcf",
+    "run": true,
+    "picard_args": [
+      "I=truth.vcf",
+      "NEW_SAMPLE_NAME=RENAMED",
+      "O=renamed.vcf"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      },
+      {
+        "key": [
+          "#CHROM"
+        ],
+        "input": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tT",
+        "output": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tRENAMED"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tT"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tRENAMED"
+    ],
+    "output_kind": "plain",
+    "index": null,
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "plain",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "old_name_checked",
+        "picard_args": [
+          "I=truth.vcf",
+          "OLD_SAMPLE_NAME=T",
+          "NEW_SAMPLE_NAME=RENAMED",
+          "O=renamed.vcf"
+        ],
+        "error": null,
+        "added": [],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          },
+          {
+            "key": [
+              "#CHROM"
+            ],
+            "input": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tT",
+            "output": "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tRENAMED"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tT"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tRENAMED"
+        ],
+        "output_kind": "plain",
+        "index": null,
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "plain",
+        "extra_outputs": []
+      }
+    ]
+  },
+  {
+    "tool": "SortVcf",
+    "run": true,
+    "picard_args": [
+      "I=calls3.vcf.gz",
+      "O=sorted.vcf"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "gzip_output",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "O=sorted.vcf.gz"
+        ],
+        "error": null,
+        "added": [],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_kind": "bgzf",
+        "index": ".tbi",
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "bgzf",
+        "extra_outputs": []
+      },
+      {
+        "label": "with_dictionary",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "O=sorted.vcf",
+          "SEQUENCE_DICTIONARY=ref.dict"
+        ],
+        "error": null,
+        "added": [],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_kind": "plain",
+        "index": ".idx",
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "bgzf",
+        "extra_outputs": []
+      }
+    ]
+  },
+  {
+    "tool": "SplitVcfs",
+    "run": true,
+    "picard_args": [
+      "I=calls3.vcf.gz",
+      "SNP_OUTPUT=snps.vcf",
+      "INDEL_OUTPUT=indels.vcf",
+      "STRICT=false"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [
+      {
+        "name": "indels.vcf",
+        "output_kind": "plain",
+        "index": ".idx"
+      }
+    ],
+    "variants": []
+  },
+  {
+    "tool": "UpdateVcfSequenceDictionary",
+    "run": true,
+    "picard_args": [
+      "I=calls3.vcf.gz",
+      "SD=ref.dict",
+      "O=updated.vcf"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+    ],
+    "output_kind": "plain",
+    "index": null,
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "bgzf",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "changed_dictionary",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "SD=ref_new.dict",
+          "O=updated.vcf"
+        ],
+        "error": null,
+        "added": [
+          "##contig=<ID=c4,length=500>"
+        ],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "contig",
+              "c1"
+            ],
+            "input": "##contig=<ID=c1,length=5000>",
+            "output": "##contig=<ID=c1,length=6000>"
+          },
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##contig=<ID=c1,length=6000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##contig=<ID=c4,length=500>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_kind": "plain",
+        "index": null,
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "bgzf",
+        "extra_outputs": []
+      }
+    ]
+  },
+  {
+    "tool": "VcfFormatConverter",
+    "run": true,
+    "picard_args": [
+      "I=sites_only.vcf",
+      "O=converted.vcf",
+      "REQUIRE_INDEX=false"
+    ],
+    "error": null,
+    "added": [],
+    "removed": [],
+    "rewritten": [
+      {
+        "key": [
+          "FORMAT",
+          "FT"
+        ],
+        "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+        "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+      }
+    ],
+    "reordered": true,
+    "volatile": [],
+    "input_header": [
+      "##fileformat=VCFv4.2",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+    ],
+    "output_header": [
+      "##fileformat=VCFv4.2",
+      "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+      "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+      "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+      "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+      "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+      "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+      "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+      "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+      "##contig=<ID=c1,length=5000>",
+      "##contig=<ID=c2,length=3000>",
+      "##contig=<ID=c3,length=1000>",
+      "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+    ],
+    "output_kind": "plain",
+    "index": ".idx",
+    "line_ending": "LF",
+    "trailing_newline": true,
+    "input_kind": "plain",
+    "extra_outputs": [],
+    "variants": [
+      {
+        "label": "gzip_indexed",
+        "picard_args": [
+          "I=calls3.vcf.gz",
+          "O=converted.vcf.gz"
+        ],
+        "error": null,
+        "added": [],
+        "removed": [],
+        "rewritten": [
+          {
+            "key": [
+              "FORMAT",
+              "FT"
+            ],
+            "input": "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+            "output": "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">"
+          }
+        ],
+        "reordered": true,
+        "volatile": [],
+        "input_header": [
+          "##fileformat=VCFv4.2",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=FT,Number=1,Type=String,Description=\"Genotype filter\">",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_header": [
+          "##fileformat=VCFv4.2",
+          "##FILTER=<ID=LowQual,Description=\"Low quality\">",
+          "##FILTER=<ID=q10,Description=\"Quality below 10\">",
+          "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allele depths\">",
+          "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##FORMAT=<ID=FT,Number=.,Type=String,Description=\"Genotype-level filter\">",
+          "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype quality\">",
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+          "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+          "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position\">",
+          "##contig=<ID=c1,length=5000>",
+          "##contig=<ID=c2,length=3000>",
+          "##contig=<ID=c3,length=1000>",
+          "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3"
+        ],
+        "output_kind": "bgzf",
+        "index": ".tbi",
+        "line_ending": "LF",
+        "trailing_newline": true,
+        "input_kind": "bgzf",
+        "extra_outputs": []
+      },
+      {
+        "label": "plain_without_index_refused",
+        "picard_args": [
+          "I=sites_only.vcf",
+          "O=converted.vcf"
+        ],
+        "error": "Exception in thread \"main\" htsjdk.tribble.TribbleException: An index is required, but none found with file ending .idx, for input source: file://<FIXTURES>/sites_only.vcf",
+        "added": [],
+        "removed": [],
+        "rewritten": [],
+        "reordered": false,
+        "volatile": [],
+        "output_kind": null,
+        "index": null
+      }
+    ]
+  },
+  {
+    "tool": "VcfToAdpc",
+    "run": false,
+    "reason": "writes an ADPC file, not a VCF"
+  },
+  {
+    "tool": "VcfToIntervalList",
+    "run": false,
+    "reason": "writes an interval list, not a VCF"
+  }
+]

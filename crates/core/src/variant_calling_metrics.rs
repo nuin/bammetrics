@@ -490,6 +490,7 @@ pub const ACCUMULATE_TOOL: Tool = Tool {
     collector: None,
 };
 
+#[derive(Clone, Debug)]
 pub struct Options {
     pub prefix: PathBuf,
     pub dbsnp: PathBuf,
@@ -559,45 +560,143 @@ fn files(prefix: &Path, summary: &SummaryRow, details: &[DetailRow]) -> ToolOutp
 /// overlapping a target interval, when given).
 pub fn collect(input: &Path, opts: &Options) -> Result<(SummaryRow, Vec<DetailRow>)> {
     let mut reader = VcfReader::open(input)?;
-    let samples = reader.samples();
-    let header_dictionary: Dictionary = reader.dictionary().ok_or_else(|| Error::Intervals {
-        path: input.to_path_buf(),
-        message: "no ##contig line (Picard's VariantProcessor fails with a NullPointerException)"
-            .to_owned(),
-    })?;
-    let dictionary = match &opts.sequence_dictionary {
-        Some(path) => vcf::read_dictionary(path)?,
-        None => header_dictionary.clone(),
-    };
-    let regions = opts
-        .target_intervals
-        .as_deref()
-        .map(|p| Regions::read(p).map(|r| r.uniqued()))
-        .transpose()?;
-    let dbsnp = DbSnpSets::load(&opts.dbsnp, Some(&dictionary), regions.as_ref())?;
-    if opts.gvcf_input && samples.len() != 1 {
-        return Err(Error::Usage(format!(
-            "Expected to have exactly 1 sample in a GVCF, found {}",
-            samples.len()
-        )));
-    }
-    let mut metrics = CallingMetrics::new(dbsnp, &samples);
+    let mut calling = Calling::new(input, &reader.samples(), reader.dictionary(), opts)?;
     while let Some(vc) = reader.next_variant()? {
-        if !header_dictionary.iter().any(|c| c.name == vc.contig) {
-            continue;
+        calling.accept(&vc);
+    }
+    Ok(calling.finish())
+}
+
+/// `doWork` as records arrive: the counts of the records on a contig of the
+/// input's `##contig` lines (and over a target interval, when given).
+pub struct Calling {
+    contigs: std::collections::HashSet<String>,
+    regions: Option<Regions>,
+    gvcf_input: bool,
+    metrics: CallingMetrics,
+}
+
+impl Calling {
+    /// The dictionary, the target intervals and the dbSNP bit sets of
+    /// `opts`, for a VCF (`input`, for messages) with these samples and
+    /// `##contig` lines.
+    pub fn new(
+        input: &Path,
+        samples: &[String],
+        header_dictionary: Option<Dictionary>,
+        opts: &Options,
+    ) -> Result<Self> {
+        let header_dictionary = header_dictionary.ok_or_else(|| Error::Intervals {
+            path: input.to_path_buf(),
+            message:
+                "no ##contig line (Picard's VariantProcessor fails with a NullPointerException)"
+                    .to_owned(),
+        })?;
+        let dictionary = match &opts.sequence_dictionary {
+            Some(path) => vcf::read_dictionary(path)?,
+            None => header_dictionary.clone(),
+        };
+        let regions = opts
+            .target_intervals
+            .as_deref()
+            .map(|p| Regions::read(p).map(|r| r.uniqued()))
+            .transpose()?;
+        let dbsnp = DbSnpSets::load(&opts.dbsnp, Some(&dictionary), regions.as_ref())?;
+        if opts.gvcf_input && samples.len() != 1 {
+            return Err(Error::Usage(format!(
+                "Expected to have exactly 1 sample in a GVCF, found {}",
+                samples.len()
+            )));
         }
-        if let Some(regions) = &regions
+        Ok(Self {
+            contigs: header_dictionary.into_iter().map(|c| c.name).collect(),
+            regions,
+            gvcf_input: opts.gvcf_input,
+            metrics: CallingMetrics::new(dbsnp, samples),
+        })
+    }
+
+    pub fn accept(&mut self, vc: &Variant) {
+        if !self.contigs.contains(&vc.contig) {
+            return;
+        }
+        if let Some(regions) = &self.regions
             && !regions.overlaps(&vc.contig, vc.start, vc.end)
         {
-            continue;
+            return;
         }
-        if opts.gvcf_input {
-            metrics.accept(&vc.sub_context(0));
+        if self.gvcf_input {
+            self.metrics.accept(&vc.sub_context(0));
         } else {
-            metrics.accept(&vc);
+            self.metrics.accept(vc);
         }
     }
-    Ok(metrics.finish())
+
+    pub fn finish(self) -> (SummaryRow, Vec<DetailRow>) {
+        self.metrics.finish()
+    }
+}
+
+/// The tool as a tap of a variant stream (docs/chaining.md section 33):
+/// the counts of the lines at its position, each decoded as the tool
+/// decodes a record of its `INPUT`. Picard reads an indexed `INPUT`; the
+/// tap reads the stream in its order and needs no index.
+pub fn variant_tap(inv: &Invocation) -> Result<crate::stage::variant::BuildVariantSink> {
+    use crate::stage::variant::VariantSink;
+    let opts = Options::from_invocation(inv)?;
+    let source = inv.input.clone();
+    Ok(Box::new(move |header| {
+        let samples = header.samples().to_vec();
+        let calling = Calling::new(&source, &samples, header.dictionary().cloned(), &opts)?;
+        Ok(Box::new(CallingTap {
+            calling,
+            samples: samples.len(),
+            prefix: opts.prefix,
+            source,
+            lines: 0,
+        }) as Box<dyn VariantSink>)
+    }))
+}
+
+/// [`variant_tap`]'s sink.
+struct CallingTap {
+    calling: Calling,
+    samples: usize,
+    prefix: PathBuf,
+    source: PathBuf,
+    lines: u64,
+}
+
+impl crate::stage::variant::VariantSink for CallingTap {
+    fn accept_batch(
+        &mut self,
+        _header: &vcf::VcfHeader,
+        batch: &[crate::stage::variant::VcfLine],
+    ) -> Result<()> {
+        for line in batch {
+            self.lines += 1;
+            if line.text.starts_with('#') {
+                continue;
+            }
+            let vc = vcf::variant_from_line(&line.text, self.samples).map_err(|message| {
+                Error::Intervals {
+                    path: self.source.clone(),
+                    message: format!("record {}: {message}", self.lines),
+                }
+            })?;
+            self.calling.accept(&vc);
+        }
+        Ok(())
+    }
+
+    fn finish(self: Box<Self>) -> Result<crate::stage::Products> {
+        let (summary, details) = self.calling.finish();
+        Ok(crate::stage::Products::metrics(files(
+            &self.prefix,
+            &summary,
+            &details,
+        )))
+    }
 }
 
 /// `Math.round(double)`.

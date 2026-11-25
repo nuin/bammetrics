@@ -4,8 +4,42 @@
 
 use std::io::{self, BufRead, Read};
 
+/// Replace `line` by the next line of `reader` without its end, as
+/// htsjdk's line readers read a VCF (`LongLineBufferedReader.readLine`):
+/// a line ends at `\n`, `\r` or `\r\n`. Returns the bytes taken from the
+/// reader, the line end included: 0 at the end of the input.
+pub(super) fn read_line(reader: &mut impl BufRead, line: &mut Vec<u8>) -> io::Result<usize> {
+    line.clear();
+    let mut taken = 0usize;
+    loop {
+        let buffer = reader.fill_buf()?;
+        if buffer.is_empty() {
+            return Ok(taken);
+        }
+        match buffer.iter().position(|&b| b == b'\n' || b == b'\r') {
+            None => {
+                let n = buffer.len();
+                line.extend_from_slice(buffer);
+                reader.consume(n);
+                taken += n;
+            }
+            Some(at) => {
+                let carriage = buffer[at] == b'\r';
+                line.extend_from_slice(&buffer[..at]);
+                reader.consume(at + 1);
+                taken += at + 1;
+                if carriage && reader.fill_buf()?.first() == Some(&b'\n') {
+                    reader.consume(1);
+                    taken += 1;
+                }
+                return Ok(taken);
+            }
+        }
+    }
+}
+
 pub(super) struct LineCap {
-    inner: Box<dyn BufRead>,
+    inner: Box<dyn BufRead + Send>,
     max_line_bytes: usize,
     max_lines: u64,
     /// Bytes handed out since the last line feed.
@@ -22,7 +56,11 @@ pub(super) struct LineCap {
 }
 
 impl LineCap {
-    pub(super) fn new(inner: Box<dyn BufRead>, max_line_bytes: usize, max_lines: u64) -> Self {
+    pub(super) fn new(
+        inner: Box<dyn BufRead + Send>,
+        max_line_bytes: usize,
+        max_lines: u64,
+    ) -> Self {
         Self {
             inner,
             max_line_bytes,
@@ -84,14 +122,21 @@ impl BufRead for LineCap {
     fn consume(&mut self, amount: usize) {
         if let Ok(buffer) = self.inner.fill_buf() {
             let taken = &buffer[..amount.min(buffer.len())];
-            for (at, segment) in taken.split(|&b| b == b'\n').enumerate() {
-                if at == 0 {
+            // A `\r` ends a line for the byte cap and the header count, as
+            // [`read_line`] reads it; only a `\n` counts against the line
+            // cap, so `\r\n` is one line.
+            let mut start = 0usize;
+            for segment in taken.split(|&b| b == b'\n' || b == b'\r') {
+                if start == 0 {
                     self.line_bytes = self.line_bytes.saturating_add(segment.len());
                 } else {
-                    self.lines = self.lines.saturating_add(1);
+                    if taken[start - 1] == b'\n' {
+                        self.lines = self.lines.saturating_add(1);
+                    }
                     self.line_bytes = segment.len();
                     self.at_line_start = true;
                 }
+                start += segment.len() + 1;
                 self.longest = self.longest.max(self.line_bytes);
                 if self.at_line_start
                     && let Some(&first) = segment.first()
@@ -113,6 +158,26 @@ mod tests {
 
     fn capped(text: &'static [u8], max_line_bytes: usize, max_lines: u64) -> LineCap {
         LineCap::new(Box::new(text), max_line_bytes, max_lines)
+    }
+
+    #[test]
+    fn lines_end_at_lf_cr_and_crlf() {
+        let mut reader: &[u8] = b"a\nb\r\nc\rd\r\r\ne";
+        let mut line = Vec::new();
+        let mut lines = Vec::new();
+        while read_line(&mut reader, &mut line).expect("reads") > 0 {
+            lines.push(String::from_utf8(line.clone()).expect("text"));
+        }
+        assert_eq!(lines, ["a", "b", "c", "d", "", "e"]);
+    }
+
+    #[test]
+    fn a_cr_ends_a_line_for_the_byte_cap_and_not_for_the_count() {
+        let mut out = String::new();
+        capped(b"ab\rcd\rde", 2, 0)
+            .read_to_string(&mut out)
+            .expect("each line within the cap, no line feed counted");
+        assert!(capped(b"ab\rcde", 2, 0).read_to_string(&mut out).is_err());
     }
 
     #[test]

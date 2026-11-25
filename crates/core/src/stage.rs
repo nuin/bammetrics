@@ -45,6 +45,7 @@ mod sinks;
 mod spool;
 #[cfg(test)]
 mod tests;
+pub mod variant;
 
 pub use exec::{Halt, halt, run_chain};
 pub(crate) use sinks::fill;
@@ -58,10 +59,12 @@ pub const BATCH_RECORDS: usize = 1024;
 /// Batches a tap or sink thread may have queued before the reader waits.
 pub(crate) const QUEUED_BATCHES: usize = 8;
 
-/// What a stream carries. Variant streams are a later wave.
+/// What a stream carries: alignments, or the record lines of a VCF
+/// ([`variant`], wave W16).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Alignments,
+    Variants,
 }
 
 /// The stream at one position of a chain.

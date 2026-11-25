@@ -87,6 +87,7 @@ pub(super) fn split_step(
         notes: inv.notes,
         formats: Vec::new(),
         write: None,
+        vcf: None,
         inputs: inv.inputs,
     };
     Ok((planned, false))

@@ -1,0 +1,10 @@
+## argv
+chain
+tests/data/markdup.bam
+write
+OUT/c.vcf.gz
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (write): OUT/c.vcf.gz names a VCF, and this chain's source is no VCF: its stream holds alignments

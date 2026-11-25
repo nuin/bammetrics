@@ -1,0 +1,52 @@
+## argv
+chain
+tests/data/vcf_writer/corners.vcf
+-o
+OUT/c.vcf
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: 1 step finished, 1 file written
+## file c.vcf
+##fileformat=VCFv4.2
+##ALT=<ID=NON_REF,Description="Any other allele">
+##FILTER=<ID=LowQual,Description="Low quality">
+##FILTER=<ID=q10,Description="Quality below 10">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allele depths">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=FT,Number=.,Type=String,Description="Genotype-level filter">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="PL">
+##FORMAT=<ID=XA,Number=A,Type=Float,Description="Per alternate">
+##FORMAT=<ID=XS,Number=1,Type=String,Description="Text">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele freq",Source="gatk",Version="3">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">
+##INFO=<ID=FL,Number=0,Type=Flag,Description="A flag">
+##INFO=<ID=FY,Number=.,Type=Flag,Description="A flag of any count">
+##INFO=<ID=MQ,Number=1,Type=Float,Description="RMS Mapping Quality">
+##INFO=<ID=NODESC,Number=1,Type=Integer,Description="Not provided in original VCF header">
+##INFO=<ID=XT,Number=1,Type=String,Description="Extra attrs">
+##INFO=<ID=ZZ,Number=.,Type=String,Description="Has \"quotes\" and, commas">
+##META=<ID=Assay,Type=String,Number=.,Values=Exome]>
+##SAMPLE=<ID=S1,Assay=WholeGenome>
+##contig=<ID=c2,length=3000,assembly=b37,md5=abc>
+##contig=<ID=c1,length=5000>
+##key=value with spaces
+##source=a caller
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	S2	S1
+c2	5	.	N	A	30.50	PASS	AF=1e-5	GT	0/1	0/1
+c2	6	.	C	T,G	1.01	PASS	AF=0.1,0.000001	GT:AD:XA	1/2:1,2,3:0.5	0/1
+c2	7	.	C	T	2.68	PASS	FL;FY=2	GT	0/1	0/1
+c1	10	.	A	C	30	PASS	AF=0.5;DP=10;FL	GT:AD:DP:GQ:PL	0/1:3,7:10:31:10,0,100	1|1
+c1	11	rs1;rs2	AC	A,ACT	30	LowQual;q10	AF=0.25,0.5;DP=3	GT:AD	0/1:1,2,3	./.
+c1	12	rs3	G	T	12.35	LowQual	.	GT:FT	0/1:PASS	0/1:a;b;q10
+c1	13	.	G	.	.	.	FL;XT=ab	GT	0/0	0/0
+c1	14	.	G	<NON_REF>	100	PASS	DP=7;MQ=60;NODESC=3	GT:PL	0/0:0,10,100	0/0:0,10,100
+c1	15	.	GTTT	G	0	q10	AF=1.0;ZZ=x,y	GT:GQ:XS	1/1:.:x	0|1:99
+c1	16	.	C	T	1000000.50	PASS	DP=.	GT:AD:DP	0|1	1:2,3:5
+c1	17	.	C	T	.	PASS	DP=.	GT	0/1	.
+c1	18	.	C	T	45.68	PASS	DP=11	GQ:XS	20:a	.:b
+c1	19	.	A	C,T,G	.	.	.	GT:XA	0/3:1,2,3	./.
+c1	20	.	A	C	Infinity	.	.	GT	0/1	1

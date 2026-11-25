@@ -269,6 +269,38 @@ fn kind_of(path: &Path) -> Option<Kind> {
         .map(|sniffed| sniffed.kind)
 }
 
+/// True when `path` is a regular file holding a BAM, a CRAM or SAM text.
+pub fn holds_alignments(path: &Path) -> bool {
+    kind_of(path).is_some()
+}
+
+/// True when `path` is a regular file that starts with the gzip magic and
+/// fails to inflate before its first `SNIFF_HEAD` bytes, with no BAM magic
+/// at the start of what did inflate: cut or damaged gzip or BGZF data. A
+/// cut `.vcf.gz` is such a file; [`sniff`] calls it a BAM, whose reader
+/// then reports the cut.
+pub fn cut_gzip(path: &Path) -> bool {
+    if sniffable(path) != Some(true) {
+        return false;
+    }
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
+    let mut magic = Vec::with_capacity(GZIP_MAGIC.len());
+    let read = (&mut file)
+        .take(GZIP_MAGIC.len() as u64)
+        .read_to_end(&mut magic);
+    if read.is_err() || magic != GZIP_MAGIC {
+        return false;
+    }
+    let source = Cursor::new(magic).chain(file);
+    let mut inflated = Vec::new();
+    let result = crate::gzip::GzipReader::new(io::BufReader::new(source))
+        .take(SNIFF_HEAD as u64)
+        .read_to_end(&mut inflated);
+    result.is_err() && !inflated.starts_with(&BAM_MAGIC)
+}
+
 /// True when `path` is a regular file that starts with the CRAM magic.
 pub fn is_cram(path: &Path) -> bool {
     kind_of(path) == Some(Kind::Cram)

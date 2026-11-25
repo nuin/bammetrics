@@ -53,6 +53,12 @@ fn source_line(source: &Source, chain: &Chain) -> String {
             thousands(bytes),
             order.name()
         ),
+        (Some(bytes), None) => format!(
+            "{} ({}, {} bytes; a file, it can be read again)",
+            chain.source,
+            source.kind,
+            thousands(bytes)
+        ),
         _ => format!("{} (a pipe: it is read once)", shown_source(chain)),
     }
 }
@@ -126,6 +132,7 @@ fn role(chain: &Chain, step: &Planned, first_read: bool) -> String {
             format!("{kind} of {}", step.reads)
         }
         (Role::Split, _, _) => format!("split of {}", step.reads),
+        (Role::Write, _, None) if step.vcf.is_some() => format!("VCF of {}", step.reads),
         _ => format!("tap on {}", step.reads),
     }
 }

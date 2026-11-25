@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/markdup.bam
+mark-duplicates
+-o
+OUT/r.vcf.gz
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: -o OUT/r.vcf.gz names a VCF, and this chain's source is no VCF: its stream holds alignments (from -o)
+  -o out.bam writes the BAM of a chain with a transform

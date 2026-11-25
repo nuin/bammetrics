@@ -42,8 +42,8 @@ fn first_stage_replays(steps: &[Step]) -> bool {
 }
 
 /// How the error of a step that did not fail by itself starts.
-const STOPPED: &str = "stopped: ";
-const NOT_RUN: &str = "not run: ";
+pub(super) const STOPPED: &str = "stopped: ";
+pub(super) const NOT_RUN: &str = "not run: ";
 
 /// Why a step has an error that is not its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

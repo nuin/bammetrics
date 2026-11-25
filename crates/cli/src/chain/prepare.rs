@@ -24,8 +24,8 @@ use clap::ValueEnum;
 
 use super::args::{
     AS, COMPRESSION_LEVEL, INDEX, KEEP, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
-    chain_option_on_step, find_step, is_chain_key, is_materialized, is_split, is_transform,
-    materialize_leaves, not_a_step, step_parser_flags, unknown_step, write_flags,
+    chain_option_on_step, find_step, is_chain_key, is_materialized, is_split, is_step,
+    is_transform, materialize_leaves, not_a_step, step_parser_flags, unknown_step, write_flags,
 };
 use super::claims::{
     Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs, refuse_unresolved,
@@ -43,6 +43,7 @@ use crate::verbs::{self, Files, Verb};
 
 pub(super) mod materialize;
 mod split;
+pub(crate) mod variant;
 
 /// The stream of the source.
 const SOURCE_STREAM: &str = "in";
@@ -147,12 +148,17 @@ pub struct Planned {
     /// The formats of each metrics file, `picard` first.
     pub(crate) formats: Vec<Format>,
     pub(crate) write: Option<WriteOptions>,
+    /// The options of a `write` step on a variant stream: its VCF is the
+    /// first of `files`.
+    pub(crate) vcf: Option<bammetrics_core::vcf_writer::VcfOptions>,
     /// The files the tool reads by name.
     pub(crate) inputs: Vec<PathBuf>,
 }
 
 /// A chain, ready to run: nothing has been read or written.
 pub struct Chain {
+    /// What the stream holds: alignments, or the records of a VCF source.
+    pub stream: stage::Kind,
     /// The source as given: a path, or `-`.
     pub source: String,
     /// The file the source is read from (`/dev/stdin` for `-`).
@@ -248,12 +254,13 @@ impl Planned {
 
     /// True for a transform that edits the stream as it passes
     /// ([`stage::streams`]): it takes and emits its records in its own
-    /// segment.
+    /// segment. Every transform of a variant stream streams.
     pub fn streams(&self) -> bool {
         self.role == Role::Transform
-            && self
-                .tool
-                .is_some_and(|tool| stage::streams_with(tool, &self.argv))
+            && self.tool.is_some_and(|tool| {
+                stage::streams_with(tool, &self.argv)
+                    || stage::variant::transform_label(tool).is_some()
+            })
     }
 }
 
@@ -318,10 +325,26 @@ fn own_message<'m>(tool: &str, message: &'m str) -> &'m str {
 }
 
 /// The verb and role of a step that is not `write`.
-fn tool_role(spec: &StepSpec, number: usize) -> Result<(&'static Verb, Role), VerbError> {
+fn tool_role(
+    spec: &StepSpec,
+    number: usize,
+    stream: stage::Kind,
+) -> Result<(&'static Verb, Role), VerbError> {
     let label = format!("step {number}");
     let verb = find_step(&spec.verb)
         .ok_or_else(|| unknown_step(&spec.verb, Some(&place(spec, &label))))?;
+    let variant_role = variant::role_of(verb);
+    let wrong_kind = match stream {
+        stage::Kind::Variants => variant_role.is_none(),
+        stage::Kind::Alignments => variant_role.is_some(),
+    };
+    if wrong_kind {
+        let label = format!("step {number} ({})", verb.name);
+        return Err(variant::refusal(verb, &place(spec, &label), stream).hint(STEPS_HINT));
+    }
+    if let Some(role) = variant_role {
+        return Ok((verb, role));
+    }
     if is_transform(verb) {
         return Ok((verb, Role::Transform));
     }
@@ -359,13 +382,13 @@ fn empty_path<'a>(draft: &'a Draft) -> Option<&'a str> {
 
 /// Step `number` with its arguments parsed, and the arguments that belong
 /// to the chain refused.
-fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
+fn draft(spec: &StepSpec, number: usize, stream: stage::Kind) -> Result<Draft<'_>, VerbError> {
     let (what, name, flags) = if spec.verb == WRITE {
         (What::Write, WRITE, write_flags())
     } else if spec.verb == QC {
         (What::Qc, QC, qc_step::flags())
     } else {
-        let (verb, role) = tool_role(spec, number)?;
+        let (verb, role) = tool_role(spec, number, stream)?;
         (What::Tool(verb, role), verb.name, step_parser_flags(verb))
     };
     let label = format!("step {number} ({name})");
@@ -376,6 +399,9 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
         let keep = grammar::unknown_option(&error)
             .and_then(|spelled| spelled.trim_start_matches('-').split('=').next())
             .is_some_and(|name| name.eq_ignore_ascii_case("keep"));
+        if keep && stream == stage::Kind::Variants {
+            return variant::keep_refusal(&place(spec, &label));
+        }
         if keep {
             return usage(format!(
                 "{}: --keep writes the stream a transform leaves, and {name} leaves none",
@@ -436,6 +462,18 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
     let hands_on = role == Role::Transform || materialize_leaves(verb);
     if let (true, Files::Bam, Some(given)) = (hands_on, verb.files, draft.parsed.last(Key::Output))
     {
+        if verb.input == "VCF" {
+            return Err(draft
+                .usage(format!(
+                    "{} names a VCF, and a transform writes none in a chain",
+                    given.spelled
+                ))
+                .from(given.spelled.clone())
+                .hint(format!(
+                    "-o {} on the chain, or a write step after it, writes the VCF",
+                    given.values[0]
+                )));
+        }
         return Err(draft
             .usage(format!(
                 "{} names a BAM, and a transform writes none in a chain",
@@ -477,6 +515,7 @@ struct Position {
 fn stream_name(draft: &Draft, verb: &Verb) -> Result<String, VerbError> {
     let Some(given) = draft.parsed.last(AS) else {
         let default = stage::label_of(verb.tool())
+            .or_else(|| stage::variant::transform_label(verb.tool()))
             .or_else(|| stage::materialize::leaves(verb.tool()))
             .unwrap_or(verb.name);
         return Ok(default.to_owned());
@@ -559,7 +598,10 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             let picard = verb
                 .picard_arguments(&parsed, &draft.flags)
                 .unwrap_or_default();
-            if materialize_leaves(verb) || !stage::streams_with(verb.tool(), &picard) {
+            if materialize_leaves(verb)
+                || !(stage::streams_with(verb.tool(), &picard)
+                    || stage::variant::transform_label(verb.tool()).is_some())
+            {
                 segment += 1;
             }
         }
@@ -583,6 +625,8 @@ struct Context<'a> {
     threads: usize,
     /// The chain's `--tmp-dir`.
     tmp_dir: Option<&'a Path>,
+    /// The chain's `--validation-stringency`.
+    stringency: Stringency,
 }
 
 impl Context<'_> {
@@ -990,6 +1034,7 @@ fn tool_step(
         notes: inv.notes,
         formats,
         write: None,
+        vcf: None,
         inputs: inv.inputs,
     };
     Ok((planned, named.uses_prefix))
@@ -1109,6 +1154,7 @@ fn write_step(
         notes: Vec::new(),
         formats: Vec::new(),
         write: Some(options),
+        vcf: None,
         inputs: Vec::new(),
     };
     Ok((planned, uses_prefix))
@@ -1284,6 +1330,20 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         .hint("give the source as a file"));
     }
     let is_cram = reference(spec, &source_path)?;
+    let stream = if bammetrics_core::vcf::is_vcf(&source_path) {
+        stage::Kind::Variants
+    } else {
+        stage::Kind::Alignments
+    };
+    let variants = stream == stage::Kind::Variants;
+    let reads_vcf = spec
+        .steps
+        .iter()
+        .filter_map(|step| find_step(&step.verb))
+        .any(|verb| variant::role_of(verb).is_some());
+    if !variants && reads_vcf && bammetrics_core::cram::cut_gzip(&source_path) {
+        return Err(super::resolve::cut_gzip_source(&source_path));
+    }
     let (prefix, prefix_origin) = prefix(spec, &source)?;
     let formats = chain_formats(spec)?;
     let also = also(spec)?;
@@ -1298,7 +1358,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         .steps
         .iter()
         .enumerate()
-        .map(|(index, step)| draft(step, index + 1))
+        .map(|(index, step)| draft(step, index + 1, stream))
         .collect::<Result<Vec<_>, _>>()?;
     let (prefix, prefix_origin) = match prefix_origin {
         PrefixOrigin::SourceName => {
@@ -1329,6 +1389,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         also: &per_file,
         threads,
         tmp_dir: spec.tmp_dir.as_deref().map(Path::new),
+        stringency,
     };
     let mut steps: Vec<Planned> = Vec::with_capacity(drafts.len());
     let mut prefix_used = false;
@@ -1363,6 +1424,17 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         let keep = draft.parsed.flag(KEEP);
         let index = steps.len();
         let (mut step, uses_prefix) = match draft.what {
+            What::Write if variants => variant::write_step(&cx, &draft, position)?,
+            What::Tool(verb, Role::Tap) if variants => {
+                variant::tap_step(&cx, draft, verb, position)?
+            }
+            What::Tool(verb, Role::Transform) if variants => {
+                variant::transform_step(&cx, draft, verb, position)?
+            }
+            What::Tool(verb, Role::Split) if variants => {
+                variant::split_step(&cx, draft, verb, position)?
+            }
+            What::Qc if variants => return Err(variant::qc_refusal(&draft)),
             What::Tool(verb, Role::Split) => split::split_step(&cx, draft, verb, position)?,
             What::Tool(verb, role) => tool_step(&cx, draft, (verb, role), position)?,
             What::Write => write_step(&cx, &draft, position)?,
@@ -1437,6 +1509,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         )));
     }
     Ok(Chain {
+        stream,
         source,
         source_path,
         reference,

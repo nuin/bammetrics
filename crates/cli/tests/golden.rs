@@ -106,6 +106,16 @@ const FIXTURES: &[(&str, &str)] = &[
     ("NO_EOF", "tests/data/doctor/no_eof.bam"),
     ("CUT", "tests/data/doctor/cut.bam"),
     ("DS", "tests/data/downsampled.bam"),
+    ("VW_CALLS", "tests/data/vcf_writer/calls.vcf"),
+    ("VW_CALLS_GZ", "tests/data/vcf_writer/calls.vcf.gz"),
+    ("VW_CUT", "tests/data/vcf_writer/cut.vcf.gz"),
+    ("VW_DBSNP", "tests/data/vcf_writer/dbsnp.vcf"),
+    ("VW_TRUTH", "tests/data/vcf_writer/truth.vcf"),
+    ("VW_CALL", "tests/data/vcf_writer/call.vcf"),
+    ("VW_CORNERS", "tests/data/vcf_writer/corners.vcf"),
+    ("VW_BAD", "tests/data/vcf_writer/bad_filter.vcf"),
+    ("VT_TYPES", "tests/data/vcf_tools/types.vcf"),
+    ("VT_ONE", "tests/data/vcf_tools/u.vcf"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -1297,6 +1307,64 @@ const CRAM_WRITER_CASES: &[Case] = &[
     case!("picard_revert_original_base_qualities_cram", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=OUT/reverted.cram", "R=REF"),
 ];
 
+/// The VCF writer and the variant stream of the chain (wave W16,
+/// docs/chaining.md section 33): `-o` naming a VCF, `write` with its
+/// index and MD5, the two taps, the plan, and the refusals of a step of
+/// the other kind.
+#[rustfmt::skip]
+const VCF_WRITER_CASES: &[Case] = &[
+    case!("chain_vcf_out_gz", "chain", "VW_CALLS", "-o", "OUT/r.vcf.gz"),
+    case!("chain_vcf_out_plain", "chain", "VW_CALLS_GZ", "-o", "OUT/r.vcf"),
+    case!("chain_vcf_corners", "chain", "VW_CORNERS", "-o", "OUT/c.vcf"),
+    case!("chain_vcf_write_md5", "chain", "VW_CALLS", "write", "OUT/w.vcf.bgz", "--index", "--md5", "--compression-level", "1"),
+    case!("chain_vcf_taps", "chain", "VW_CALLS_GZ", "variant-calling", "--dbsnp", "VW_DBSNP", "write", "OUT/w.vcf", "-o", "OUT/s"),
+    case!("chain_vcf_concordance", "chain", "VW_CALL", "-o", "OUT/g", "+", "genotype-concordance", "--truth-vcf", "VW_TRUTH", "--truth-sample", "T", "--call-sample", "C"),
+    case!("plan_chain_vcf", "chain", "VW_CALLS", "variant-calling", "--dbsnp", "VW_DBSNP", "-o", "OUT/r.vcf.gz", "--dry-run"),
+    case!("error_chain_vcf_bam_step", "chain", "VW_CALLS", "insert-size", "-o", "OUT/s"),
+    case!("error_chain_vcf_tap_on_bam", "chain", "MD", "-o", "OUT/s", "+", "variant-calling", "--dbsnp", "VW_DBSNP"),
+    case!("error_chain_vcf_out_on_bam", "chain", "MD", "mark-duplicates", "-o", "OUT/r.vcf.gz"),
+    case!("error_chain_write_vcf_on_bam", "chain", "MD", "write", "OUT/c.vcf.gz"),
+    case!("error_chain_vcf_out_cut_gzip", "chain", "VW_CUT", "-o", "OUT/r.vcf.gz"),
+    case!("error_chain_split_vcfs_cut_gzip", "chain", "VW_CUT", "split-vcfs", "-o", "OUT/s"),
+    case!("error_chain_bam_out_on_vcf", "chain", "VW_CALLS", "-o", "OUT/r.bam"),
+    case!("error_chain_vcf_plain_index", "chain", "VW_CALLS", "write", "OUT/r.vcf", "--index"),
+    case!("error_chain_vcf_undeclared_filter", "chain", "VW_BAD", "-o", "OUT/r.vcf"),
+    case!("error_chain_vcf_qc", "chain", "VW_CALLS", "-o", "OUT/s", "+", "qc"),
+];
+
+/// SplitVcfs, MakeSitesOnlyVcf and MakeVcfSampleNameMap (wave W16) on
+/// tests/data/vcf_tools (tests/data/make_vcf_tools_fixtures.py) and the
+/// writer's fixtures: the Picard faces, the verbs, the chain steps and the
+/// errors.
+#[rustfmt::skip]
+const VCF_TOOLS_CASES: &[Case] = &[
+    case!("picard_split_vcfs", "SplitVcfs", "I=VW_CALLS", "SNP_OUTPUT=OUT/snp.vcf.gz", "INDEL_OUTPUT=OUT/indel.vcf.gz", "STRICT=false"),
+    // Plain outputs under the default CREATE_INDEX: no .idx, a note; Picard's DEBUG line.
+    case!("picard_split_vcfs_plain_debug", "SplitVcfs", "I=VT_TYPES", "SNP_OUTPUT=OUT/snp.vcf", "INDEL_OUTPUT=OUT/indel.vcf", "STRICT=false", "VERBOSITY=DEBUG", "CREATE_MD5_FILE=true"),
+    case!("verb_split_vcfs", "split-vcfs", "VT_TYPES", "-o", "OUT/t", "--strict", "false"),
+    case!("error_split_vcfs_strict", "SplitVcfs", "I=VT_TYPES", "SNP_OUTPUT=OUT/snp.vcf.gz", "INDEL_OUTPUT=OUT/indel.vcf.gz"),
+    case!("error_split_vcfs_plain_index", "SplitVcfs", "I=VT_TYPES", "SNP_OUTPUT=OUT/snp.vcf", "INDEL_OUTPUT=OUT/indel.vcf.gz", "STRICT=false", "CREATE_INDEX=true"),
+    case!("error_split_vcfs_one_file", "split-vcfs", "VT_TYPES", "--snp-output", "OUT/x.vcf.gz", "--indel-output", "OUT/x.vcf.gz"),
+    case!("picard_make_sites_only_vcf", "MakeSitesOnlyVcf", "I=VW_CALLS", "O=OUT/sites.vcf.gz"),
+    case!("picard_make_sites_only_vcf_samples", "MakeSitesOnlyVcf", "I=VT_TYPES", "O=OUT/sites.vcf", "SAMPLE=S1", "SAMPLE=NOPE", "CREATE_INDEX=false"),
+    case!("verb_make_sites_only_vcf", "make-sites-only-vcf", "VW_CALLS_GZ", "-o", "OUT/sites.vcf", "--create-index", "false", "--sample", "S2"),
+    case!("error_make_sites_only_vcf_missing", "MakeSitesOnlyVcf", "I=tests/data/vcf_tools/none.vcf", "O=OUT/sites.vcf.gz"),
+    // The W16 tools review: an undeclared FILTER written as read below STRICT, and an
+    // output name htsjdk cannot type.
+    case!("picard_make_sites_only_vcf_lenient", "MakeSitesOnlyVcf", "I=tests/data/vcf_writer/bad_filter.vcf", "O=OUT/sites.vcf", "CREATE_INDEX=false", "VALIDATION_STRINGENCY=LENIENT"),
+    case!("error_make_sites_only_vcf_name", "make-sites-only-vcf", "VW_CALLS", "-o", "OUT/sites.txt"),
+    case!("picard_make_vcf_sample_name_map", "MakeVcfSampleNameMap", "I=VW_TRUTH", "I=VT_ONE", "O=OUT/cohort.sample_map"),
+    // The sample T twice: both lines and Picard's warning.
+    case!("verb_make_vcf_sample_name_map", "make-vcf-sample-name-map", "VW_TRUTH", "VT_ONE", "tests/data/vcf_writer/../vcf_writer/truth.vcf", "-o", "OUT/cohort.sample_map"),
+    case!("error_make_vcf_sample_name_map_two_samples", "MakeVcfSampleNameMap", "I=VW_CALL", "O=OUT/cohort.sample_map"),
+    case!("chain_vcf_sites_split", "chain", "VW_CALLS", "make-sites-only-vcf", "split-vcfs", "--strict", "false", "-o", "OUT/r"),
+    case!("chain_vcf_sites_samples", "chain", "VT_TYPES", "make-sites-only-vcf", "--sample", "S1", "-o", "OUT/s.vcf.gz"),
+    case!("plan_chain_vcf_sites_split", "chain", "VW_CALLS", "make-sites-only-vcf", "--sample", "S1", "split-vcfs", "--strict", "false", "variant-calling", "--dbsnp", "VW_DBSNP", "-o", "OUT/r", "--dry-run"),
+    case!("error_chain_vcf_sites_keep", "chain", "VW_CALLS", "make-sites-only-vcf", "--keep", "-o", "OUT/r.vcf.gz"),
+    case!("error_chain_vcf_sample_map", "chain", "VW_CALLS", "make-vcf-sample-name-map", "-o", "OUT/r"),
+    case!("error_chain_split_vcfs_on_bam", "chain", "MD", "split-vcfs", "-o", "OUT/r"),
+];
+
 /// `SamFormatConverter` (wave W15): the conversions by the name of `O`, the
 /// verb, and the errors Picard gives or bammetrics adds.
 #[rustfmt::skip]
@@ -1609,6 +1677,17 @@ fn record_after(case: &Case, before: &[&[&str]]) -> String {
             text.push_str(&bam_text(&path, None));
             continue;
         }
+        // A block-compressed VCF is recorded as its text, its .tbi as a
+        // line: the index holds offsets into the compressed bytes, and
+        // tests/concordance/test_vcf_writer.py holds its queries to Picard's.
+        if name.ends_with(".vcf.gz") || name.ends_with(".vcf.bgz") {
+            text.push_str(&bgzf_text(&path));
+            continue;
+        }
+        if name.ends_with(".tbi") {
+            text.push_str("<index not recorded>\n");
+            continue;
+        }
         if name.ends_with(".bai") && wrote_bam {
             text.push_str("<index not recorded>\n");
             continue;
@@ -1636,6 +1715,17 @@ fn record_after(case: &Case, before: &[&[&str]]) -> String {
     }
     let _ = fs::remove_dir_all(&out_dir);
     normalize(&text, out)
+}
+
+/// The text of a BGZF file, inflated.
+fn bgzf_text(path: &Path) -> String {
+    use std::io::Read;
+    let file = fs::File::open(path).expect("open the VCF");
+    let mut text = Vec::new();
+    bammetrics_core::gzip::GzipReader::new(std::io::BufReader::new(file))
+        .read_to_end(&mut text)
+        .expect("inflate the VCF");
+    String::from_utf8_lossy(&text).into_owned()
 }
 
 /// True when the first gzip member of `path` inflates to the BAM magic.
@@ -2090,6 +2180,16 @@ fn documented_cram_output_commands_on_the_fixtures() {
 }
 
 #[test]
+fn documented_vcf_writer_commands_on_the_fixtures() {
+    check(VCF_WRITER_CASES);
+}
+
+#[test]
+fn documented_vcf_tool_commands_on_the_fixtures() {
+    check(VCF_TOOLS_CASES);
+}
+
+#[test]
 fn documented_sam_format_converter_commands_on_the_fixtures() {
     check(SAM_FORMAT_CONVERTER_CASES);
 }
@@ -2226,6 +2326,8 @@ fn case_names_are_unique() {
         .chain(CRAM_WRITER_CASES)
         .chain(SAM_FORMAT_CONVERTER_CASES)
         .chain(COMPARE_TERMINATOR_CASES)
+        .chain(VCF_WRITER_CASES)
+        .chain(VCF_TOOLS_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .chain(RESUME_CASES.iter().map(|s| s.name))

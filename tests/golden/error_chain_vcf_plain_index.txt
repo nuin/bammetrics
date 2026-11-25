@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/vcf_writer/calls.vcf
+write
+OUT/r.vcf
+--index
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (write): OUT/r.vcf: the index of a plain VCF is tribble's .idx, which this writer does not write (decision D238); name the output .vcf.gz for its .tbi, or leave the index out
+  write OUT/r.vcf.gz --index writes a block-compressed VCF and its .tbi

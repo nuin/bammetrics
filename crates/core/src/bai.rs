@@ -70,6 +70,7 @@ mod tests;
 
 pub use header::IndexHeader;
 pub use indexer::{Alignment, BamSource, Counts, Indexer, Refusal, index_bam};
+pub(crate) use indexer::{region_to_bin, window};
 
 pub const MAGIC: [u8; 4] = *b"BAI\x01";
 

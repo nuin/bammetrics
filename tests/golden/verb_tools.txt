@@ -78,6 +78,9 @@ position-based-downsample-sam                      PositionBasedDownsampleSam
 sam-format-converter                               SamFormatConverter
 compare-s-a-ms                                     CompareSAMs
 check-terminator-block                             CheckTerminatorBlock
+split-vcfs                                         SplitVcfs
+make-sites-only-vcf                                MakeSitesOnlyVcf
+make-vcf-sample-name-map                           MakeVcfSampleNameMap
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

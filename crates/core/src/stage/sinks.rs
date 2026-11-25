@@ -120,6 +120,11 @@ impl Sink for CollectorSink {
 /// the extension, the kind and the wave.
 const LATER_KINDS: [(&str, &str, &str); 2] = [("fastq", "FASTQ", "W22"), ("fq", "FASTQ", "W22")];
 
+/// The lower-case endings of a name the VCF writer writes as a VCF
+/// (`vcf_writer::VcfFormat::of`) that say `.vcf`: the `write` step of an
+/// alignment stream refuses them, as `-o` on such a chain does.
+const VCF_NAMES: [&str; 5] = [".vcf", ".vcf.gz", ".vcf.bgz", ".vcf.gzip", ".vcf.bgzf"];
+
 /// The kind and wave of a name `write` cannot make yet (`out.fastq.gz`);
 /// `None` for any other name, which is written as a BAM or, for `out.sam`
 /// and `out.cram`, as SAM text and as a CRAM.
@@ -227,6 +232,12 @@ impl WriteOptions {
             )));
         }
         let name = self.path.to_string_lossy().to_ascii_lowercase();
+        if VCF_NAMES.iter().any(|extension| name.ends_with(extension)) {
+            return Err(Error::Usage(format!(
+                "{} names a VCF, and this chain's source is no VCF: its stream holds alignments",
+                self.path.display()
+            )));
+        }
         if name.ends_with(".sam.gz") {
             return Err(Error::Usage(format!(
                 "{}: SAM text is written uncompressed: name the file .sam, or .bam for a BAM",
