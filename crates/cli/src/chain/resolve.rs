@@ -96,7 +96,7 @@ fn result_of(text: &str) -> Option<Kind> {
 /// The length of the VCF extension `-o` ends in: `.vcf`, `.vcf.gz` or
 /// `.vcf.bgz`, in any case, on a name that is not a directory. On a chain
 /// whose source is a VCF, a name htsjdk writes block-compressed (`.gz`,
-/// `.gzip`, `.bgz`, `.bgzf`) is one too (decision D243).
+/// `.gzip`, `.bgz`, `.bgzf`) is one too (decision D244).
 fn vcf_extension(text: &str, vcf_source: bool) -> Option<usize> {
     if Path::new(text).is_dir() || text.ends_with('/') {
         return None;
@@ -154,6 +154,9 @@ fn vcf_output(spec: &mut Spec, text: &str) -> Result<bool, VerbError> {
             .map(Path::new)
             .unwrap_or(Path::new("-"));
         let empty = std::fs::metadata(source).is_ok_and(|m| m.is_file() && m.len() == 0);
+        if bammetrics_core::cram::cut_gzip(source) {
+            return Err(cut_gzip_source(source).from("-o"));
+        }
         if !empty && bammetrics_core::cram::holds_alignments(source) {
             return Err(usage(format!(
                 "-o {text} names a VCF, and this chain's source is no VCF: its stream holds \
@@ -184,6 +187,18 @@ fn vcf_output(spec: &mut Spec, text: &str) -> Result<bool, VerbError> {
     });
     spec.prefix = Some(text[..text.len() - extension].to_owned());
     Ok(true)
+}
+
+/// The refusal of a source that starts as gzip and does not inflate to a
+/// BAM, SAM text or a VCF: a cut or damaged file, whose records a chain
+/// cannot tell.
+pub(super) fn cut_gzip_source(source: &Path) -> VerbError {
+    usage(format!(
+        "the source {} is truncated or damaged gzip or BGZF data: it inflates to no BAM, SAM \
+         text or VCF header",
+        source.display()
+    ))
+    .hint("gzip -t FILE tests a gzip or BGZF file")
 }
 
 /// `-o r.bam`: the implicit `write` and the prefix `r`.

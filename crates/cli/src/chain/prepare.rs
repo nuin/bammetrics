@@ -1336,6 +1336,14 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         stage::Kind::Alignments
     };
     let variants = stream == stage::Kind::Variants;
+    let reads_vcf = spec
+        .steps
+        .iter()
+        .filter_map(|step| find_step(&step.verb))
+        .any(|verb| variant::role_of(verb).is_some());
+    if !variants && reads_vcf && bammetrics_core::cram::cut_gzip(&source_path) {
+        return Err(super::resolve::cut_gzip_source(&source_path));
+    }
     let (prefix, prefix_origin) = prefix(spec, &source)?;
     let formats = chain_formats(spec)?;
     let also = also(spec)?;

@@ -440,6 +440,37 @@ pub struct VcfReader {
     line: u64,
 }
 
+/// A BGZF reader that names a cut block: noodles reports a file that ends
+/// inside a block as `failed to fill whole buffer`.
+struct CutBlock<R>(R);
+
+fn cut_block(error: io::Error) -> io::Error {
+    if error.kind() == io::ErrorKind::UnexpectedEof {
+        io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "truncated BGZF data: the file ends inside a block",
+        )
+    } else {
+        error
+    }
+}
+
+impl<R: Read> Read for CutBlock<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf).map_err(cut_block)
+    }
+}
+
+impl<R: BufRead> BufRead for CutBlock<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.0.fill_buf().map_err(cut_block)
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.0.consume(amount);
+    }
+}
+
 /// `path` as text lines under the caps, more than `max_header_lines`
 /// lines starting with `#` included: plain, or gzip when its first two
 /// bytes are the gzip magic, as `GZIPInputStream` reads a `.vcf.gz` for
@@ -472,7 +503,7 @@ fn open_text(
     let bgzf = read == magic.len() && magic[3] & 0x04 != 0 && magic[12..14] == *b"BC";
     let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
     let text: Box<dyn BufRead + Send> = if gzip && bgzf {
-        Box::new(noodles::bgzf::io::Reader::new(file))
+        Box::new(CutBlock(noodles::bgzf::io::Reader::new(file)))
     } else if gzip {
         Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
             io::BufReader::new(file),

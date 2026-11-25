@@ -28,7 +28,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, SyncSender};
+use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread::{self, Scope, ScopedJoinHandle};
 
 use super::exec::{NOT_RUN, STOPPED};
@@ -368,9 +368,17 @@ struct Worker<'scope> {
     /// A `write` step: after a transform it takes the lines as the
     /// transform left them ([`flow`]).
     raw: bool,
-    sender: SyncSender<Shared>,
+    /// `None` once the last batch is sent.
+    sender: Option<SyncSender<Shared>>,
     failed: Arc<AtomicBool>,
     stopped: Arc<AtomicBool>,
+    /// A message when the sink took every batch without an error; closed
+    /// when its thread ends early.
+    took_all: Receiver<()>,
+    /// Whether the sink may finish, sent once every sink took every batch:
+    /// a sink finishes (a writer renames its file into place) only when no
+    /// step that stops the chain failed on a record. Closed means no.
+    finish: Option<Sender<bool>>,
     handle: ScopedJoinHandle<'scope, Option<Result<Products>>>,
 }
 
@@ -383,6 +391,8 @@ impl<'scope> Worker<'scope> {
         (stops_chain, raw): (bool, bool),
     ) -> Self {
         let (sender, batches) = mpsc::sync_channel::<Shared>(QUEUED_BATCHES);
+        let (took_all_tx, took_all) = mpsc::channel::<()>();
+        let (finish, may_finish) = mpsc::channel::<bool>();
         let failed = Arc::new(AtomicBool::new(false));
         let stopped = Arc::new(AtomicBool::new(false));
         let (seen_failed, seen_stopped) = (Arc::clone(&failed), Arc::clone(&stopped));
@@ -393,27 +403,52 @@ impl<'scope> Worker<'scope> {
                     return Some(Err(e));
                 }
             }
-            (!seen_stopped.load(Ordering::Acquire)).then(|| sink.finish())
+            // The main thread may be gone; its answer then reads as no.
+            let _ = took_all_tx.send(());
+            let go = may_finish.recv().unwrap_or(false);
+            (go && !seen_stopped.load(Ordering::Acquire)).then(|| sink.finish())
         });
         Self {
             step,
             stops_chain,
             raw,
-            sender,
+            sender: Some(sender),
             failed,
             stopped,
+            took_all,
+            finish: Some(finish),
             handle,
         }
     }
 
     fn send(&self, batch: &Shared) {
-        if !self.failed.load(Ordering::Acquire) && self.sender.send(Arc::clone(batch)).is_err() {
+        let Some(sender) = &self.sender else {
+            return;
+        };
+        if !self.failed.load(Ordering::Acquire) && sender.send(Arc::clone(batch)).is_err() {
             self.failed.store(true, Ordering::Release);
         }
     }
 
-    fn join(self) -> (usize, bool, Option<Result<Products>>) {
-        drop(self.sender);
+    /// Close the queue and wait until the sink took every batch: true when
+    /// it did without an error.
+    fn settle(&mut self) -> bool {
+        drop(self.sender.take());
+        self.took_all.recv().is_ok()
+    }
+
+    /// Let the sink finish, or not, then wait for its thread.
+    fn join_with(mut self, go: bool) -> (usize, bool, Option<Result<Products>>) {
+        if let Some(finish) = self.finish.take() {
+            // A thread that ended early no longer listens.
+            let _ = finish.send(go);
+        }
+        self.join()
+    }
+
+    fn join(mut self) -> (usize, bool, Option<Result<Products>>) {
+        drop(self.sender.take());
+        drop(self.finish.take());
         let ended = self.handle.join().unwrap_or_else(|panic| {
             Some(Err(Error::Metric(format!(
                 "the step stopped: {}",
@@ -539,11 +574,22 @@ fn run<'scope>(
     if failure.is_none() {
         failure = drive(&mut positions, &mut transforms, records).err();
     }
-    let workers: Vec<Worker<'scope>> = positions.into_iter().flatten().collect();
+    let mut workers: Vec<Worker<'scope>> = positions.into_iter().flatten().collect();
+    if failure.is_none() {
+        // A sink may fail on the last batches after the reader handed them
+        // on; no sink finishes until every sink took every batch, so a
+        // failing split or writer leaves no file of the other steps.
+        let settled: Vec<bool> = workers.iter_mut().map(Worker::settle).collect();
+        failure = workers
+            .iter()
+            .zip(&settled)
+            .find(|(worker, took_all)| worker.stops_chain && !**took_all)
+            .map(|(worker, _)| Failure::Sink(worker.step));
+    }
     let Some(failure) = failure else {
         let mut writer_failed = None;
         for worker in workers {
-            let (step, stops, ended) = worker.join();
+            let (step, stops, ended) = worker.join_with(true);
             let result = ended.unwrap_or_else(|| Err(Error::Metric("stopped".to_owned())));
             if let (true, Err(e)) = (stops, &result) {
                 writer_failed.get_or_insert((step, e.to_string()));
@@ -943,6 +989,61 @@ mod tests {
             steps: vec![count(None)],
         };
         assert!(run_variant_chain(missing).is_err());
+        std::fs::remove_dir_all(dir).expect("clean");
+    }
+    /// A split that fails, slowly, on the last batch it takes.
+    struct FailLate;
+
+    impl VariantSink for FailLate {
+        fn accept_batch(&mut self, _header: &VcfHeader, _batch: &[VcfLine]) -> Result<()> {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            Err(Error::Metric("the split failed".to_owned()))
+        }
+
+        fn finish(self: Box<Self>) -> Result<Products> {
+            Ok(Products::default())
+        }
+    }
+
+    #[test]
+    fn a_split_failing_in_the_last_batch_leaves_no_file_of_the_writer() {
+        let dir = scratch("late");
+        let input = source(&dir, 6);
+        let out = dir.join("out.vcf");
+        let plan = VariantPlan {
+            source: VcfSource::new(&input),
+            steps: vec![
+                VariantStep::write(&out, VcfOptions::default()),
+                count(None),
+                VariantStep {
+                    label: "split".to_owned(),
+                    kind: VariantStepKind::Sink(Box::new(|_| {
+                        Ok(Box::new(FailLate) as Box<dyn VariantSink>)
+                    })),
+                },
+            ],
+        };
+        let results = run_variant_chain(plan).expect("runs");
+        assert!(
+            results[2]
+                .as_ref()
+                .is_err_and(|e| e.to_string().contains("the split failed"))
+        );
+        for result in &results[..2] {
+            assert!(
+                result
+                    .as_ref()
+                    .is_err_and(|e| halt(e) == Some(Halt::Stopped)),
+                "{:?}",
+                result.as_ref().err()
+            );
+        }
+        assert!(!out.exists());
+        let left: Vec<_> = std::fs::read_dir(&dir)
+            .expect("dir")
+            .map(|e| e.expect("entry").file_name())
+            .collect();
+        assert_eq!(left, ["in.vcf"]);
         std::fs::remove_dir_all(dir).expect("clean");
     }
 }

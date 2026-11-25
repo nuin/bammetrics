@@ -442,7 +442,7 @@ pub fn read_sequence_dictionary(path: &Path) -> Result<vcf::Dictionary> {
 /// The `@SQ` lines of the text header at `path` (inflated for a name
 /// ending in `.gz`), up to the first line that does not start with `@`.
 fn read_text_dictionary(path: &Path) -> Result<vcf::Dictionary> {
-    use std::io::{BufRead, Read};
+    use std::io::Read;
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -461,9 +461,9 @@ fn read_text_dictionary(path: &Path) -> Result<vcf::Dictionary> {
     let mut dictionary = Vec::new();
     let mut raw = Vec::new();
     let mut read = 0u64;
+    let mut after_cr = false;
     loop {
-        raw.clear();
-        let n = reader.read_until(b'\n', &mut raw).map_err(input)?;
+        let n = read_any_line(&mut reader, &mut raw, &mut after_cr).map_err(input)?;
         if n == 0 {
             break;
         }
@@ -481,8 +481,7 @@ fn read_text_dictionary(path: &Path) -> Result<vcf::Dictionary> {
             continue;
         }
         let line = crate::java::decode_utf8(&raw);
-        let line = line.trim_end_matches(['\n', '\r']);
-        dictionary.push(sq_line(line).map_err(failed)?);
+        dictionary.push(sq_line(&line).map_err(failed)?);
         if dictionary.len() > MAX_DICTIONARY_CONTIGS {
             return Err(failed(format!(
                 "more than {MAX_DICTIONARY_CONTIGS} @SQ lines, the most a SEQUENCE_DICTIONARY \
@@ -492,6 +491,45 @@ fn read_text_dictionary(path: &Path) -> Result<vcf::Dictionary> {
     }
     dictionary.shrink_to_fit();
     Ok(dictionary)
+}
+
+/// The next line of `reader` into `line` without its end, which is `\n`,
+/// `\r` or `\r\n` as htsjdk's `BufferedLineReader` ends a line. Neither
+/// byte occurs inside a UTF-8 sequence, so these cuts are the cuts of the
+/// decoded text. `after_cr` carries a `\r` that ended the last line. Gives
+/// the bytes consumed, 0 at the end.
+fn read_any_line(
+    reader: &mut impl std::io::BufRead,
+    line: &mut Vec<u8>,
+    after_cr: &mut bool,
+) -> std::io::Result<u64> {
+    line.clear();
+    let mut consumed = 0u64;
+    loop {
+        let buffer = reader.fill_buf()?;
+        if buffer.is_empty() {
+            return Ok(consumed);
+        }
+        if std::mem::take(after_cr) && buffer[0] == b'\n' {
+            reader.consume(1);
+            consumed += 1;
+            continue;
+        }
+        match buffer.iter().position(|&b| b == b'\n' || b == b'\r') {
+            Some(end) => {
+                line.extend_from_slice(&buffer[..end]);
+                *after_cr = buffer[end] == b'\r';
+                reader.consume(end + 1);
+                return Ok(consumed + end as u64 + 1);
+            }
+            None => {
+                line.extend_from_slice(buffer);
+                let taken = buffer.len();
+                reader.consume(taken);
+                consumed += taken as u64;
+            }
+        }
+    }
 }
 
 /// One `@SQ` line: its `SN` and its `LN`, a Java `int`.

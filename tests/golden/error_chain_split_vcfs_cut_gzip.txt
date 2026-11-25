@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/vcf_writer/cut.vcf.gz
+split-vcfs
+-o
+OUT/s
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: the source tests/data/vcf_writer/cut.vcf.gz is truncated or damaged gzip or BGZF data: it inflates to no BAM, SAM text or VCF header
+  gzip -t FILE tests a gzip or BGZF file

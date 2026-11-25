@@ -226,6 +226,29 @@ fn the_sequence_dictionary_is_read_as_picards_sam_reader_reads_it() {
             .contains("For input string: \"99999999999\""),
         "{error}"
     );
+    let names = |path: &Path| {
+        read_sequence_dictionary(path)
+            .expect("reads")
+            .into_iter()
+            .map(|c| (c.name, c.length))
+            .collect::<Vec<_>>()
+    };
+    let cr = write(
+        "cr.dict",
+        "@HD\tVN:1.6\r@SQ\tSN:c1\tLN:1000\r@SQ\tSN:c2\tLN:5000\r",
+    );
+    let mixed = write(
+        "mixed.dict",
+        "@HD\tVN:1.6\r\n@SQ\tSN:c1\tLN:1000\n@SQ\tSN:c2\tLN:5000\r@SQ\tSN:c3\tLN:20\r\n\r\nc1\t1\t2\t+\t.\n",
+    );
+    let three = |n| {
+        [("c1", 1000), ("c2", 5000), ("c3", 20)][..n]
+            .iter()
+            .map(|&(name, length)| (name.to_string(), Some(length)))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names(&cr), three(2));
+    assert_eq!(names(&mixed), three(3));
     std::fs::remove_dir_all(dir).expect("clean");
 }
 

@@ -76,7 +76,7 @@ writer behind every `OUTPUT` and `write` step ending in `.cram`, `SamFormatConve
 `CompareSAMs` and `CheckTerminatorBlock` (tools 72 to 74, 0.33.0, wave W15; docs/07 D206
 to D235), and the VCF writer with the variant stream of `chain`, the header inventory of
 21 Picard VCF tools, `SplitVcfs`, `MakeSitesOnlyVcf` and `MakeVcfSampleNameMap` (tools 75 to
-77, 0.34.0, wave W16; docs/chaining.md sections 33 and 34, docs/07 D236 to D254).
+77, 0.34.0, wave W16; docs/chaining.md sections 33 and 34, docs/07 D236 to D256).
 CHANGELOG.md has each.
 
 Remaining for bammetrics:

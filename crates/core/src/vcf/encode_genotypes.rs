@@ -788,4 +788,41 @@ mod tests {
             assert!(encode(&line).is_err(), "{bad}");
         }
     }
+
+    /// A missing value is one `.` whatever `Number` says, so a header that
+    /// claims a billion values per sample, or a ploidy of 1,000 under
+    /// `Number=G`, costs one byte per missing cell.
+    #[test]
+    fn a_missing_value_is_one_dot_for_any_count() {
+        let text = "##fileformat=VCFv4.2\n\
+                    ##FORMAT=<ID=GT,Number=1,Type=String,Description=\"g\">\n\
+                    ##FORMAT=<ID=BIG,Number=1000000000,Type=Integer,Description=\"b\">\n\
+                    ##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"p\">\n\
+                    ##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"d\">\n\
+                    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS2\tS1\n";
+        let h = VcfHeader::read(&mut text.as_bytes()).expect("a header");
+        let gt = vec!["1"; 1000].join("/");
+        for (genotypes, expected) in [
+            (
+                "GT:BIG:DP\t0/1:.:5\t0/1:7:6".to_owned(),
+                "GT:BIG:DP\t0/1:.:5\t0/1:7:6".to_owned(),
+            ),
+            (
+                "GT:DP\t0/1:5\t0/1".to_owned(),
+                "GT:DP\t0/1:5\t0/1".to_owned(),
+            ),
+            (
+                format!("GT:PL:DP\t{gt}:.:5\t0/1:1,2,3:6"),
+                format!("GT:DP:PL\t{gt}:5\t0/1:6:1,2,3"),
+            ),
+        ] {
+            let line = format!("c1\t1\t.\tA\tC\t.\t.\t.\t{genotypes}");
+            let mut out = String::new();
+            Encoder::new(&h)
+                .encode(&h, &line, &mut out)
+                .expect("encodes");
+            assert_eq!(out, format!("c1\t1\t.\tA\tC\t.\t.\t.\t{expected}"));
+            assert!(out.len() < line.len() + 16, "{}", out.len());
+        }
+    }
 }

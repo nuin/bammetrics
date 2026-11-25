@@ -593,7 +593,7 @@ both built with rustc 1.100.0.
 
 ## VCF writer and the variant stream (wave W16)
 
-No real VCF exists under `~/data`. `python3 benches/vcf_scale.py
+No real VCF exists under `~/data`; the scale data is synthetic. `python3 benches/vcf_scale.py
 ~/data/bammetrics-scale/waves/w16 1000000` wrote 1,000,000 records on three 100 Mb contigs
 (three samples with `GT:GQ:DP:AD`, 104,444,492 bytes of text), the same records with the
 samples out of sorted order, and a dbSNP of every tenth site; the files were removed after
@@ -609,7 +609,7 @@ REQUIRE_INDEX=false` with `-Xmx8g` (its `CREATE_INDEX` default writes the `.tbi`
 
 Both copies inflate to the text Picard writes, all 1,000,012 lines, and a `tabix` query of
 `chr2:5000000-9000000` returns the same 13,378 records from both indexes. The memgate row
-`chain vcf 1,000,000 records` (both chains in one `sh -c`) peaked at 57.3 MiB against the
+`chain vcf 1,000,000 synthetic records` (both chains in one `sh -c`) peaked at 57.3 MiB against the
 500 MiB of docs/07 section 5, in 6.82 s. The 1,000,000 records hold 33,183,346 bytes of
 BGZF at level 5 and a 174,281-byte `.tbi`.
 
@@ -1029,7 +1029,7 @@ HighAccuracy slice` at 1,976.9 / 3072 (1,975.3), `rrbs exome` at 453.7 / 1024 (5
 
 Every wave W16 row at 0.34.0 (2026-11-24, release/0.34.0, one run each; `make memgate`
 passes 83 fixture rows, `TIER=scale make memgate` passes 41 scale rows and skips the same
-6 as at 0.33.0, whose inputs were removed after earlier runs). The two scale rows read
+6 as at 0.33.0, whose inputs were removed after earlier runs). The two scale rows read synthetic data,
 `python3 benches/vcf_scale.py ~/data/bammetrics-scale/waves/w16 1000000` (no real VCF is
 under `~/data`); the inputs were removed after the run. The 500 MiB of docs/07 section 5
 is the limit of the VCF writer rows:
@@ -1049,8 +1049,8 @@ is the limit of the VCF writer rows:
 | `make-sites-only-vcf at the header cap` | fixture | 292.6 / 500 | 6.43 | |
 | `make-sites-only-vcf 200,000 format keys` | fixture | 101.0 / 160 | 0.65 | |
 | `split-vcfs dictionary at the cap` | fixture | 239.8 / 500 | 1.35 | |
-| `chain vcf 1,000,000 records` | scale | 57.1 / 500 | 4.05 | |
-| `chain vcf sites split 1,000,000 records` | scale | 15.3 / 500 | 4.88 | |
+| `chain vcf 1,000,000 synthetic records` | scale | 57.1 / 500 | 4.05 | |
+| `chain vcf sites split 1,000,000 synthetic records` | scale | 15.3 / 500 | 4.88 | |
 
 Of the rows of earlier waves at 0.34.0, `mark-duplicates slice` peaks at 665.0 / 1024 MiB,
 `fix-mate-information slice` at 623.5 / 3072, `downsample-sam HighAccuracy slice` at

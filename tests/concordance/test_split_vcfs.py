@@ -237,6 +237,10 @@ REVIEW_CASES = [
     ("v42.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=badname.dict"], 0),
     ("v42.vcf", ".vcf.gz", ["SEQUENCE_DICTIONARY=ok.dict"], 0),
     ("contig0.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=ok.dict"], 0),
+    ("v42.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=cr.dict"], 0),
+    ("v42.vcf", ".vcf.gz", ["SEQUENCE_DICTIONARY=cr.dict"], 0),
+    ("v42.vcf", ".vcf", ["CREATE_INDEX=false", "SEQUENCE_DICTIONARY=mixed.dict"], 0),
+    ("v42.vcf", ".vcf.gz", ["SEQUENCE_DICTIONARY=mixed.dict"], 0),
 ] + [(f"contig{i}.vcf", ".vcf", ["CREATE_INDEX=false"], 1 if i < 4 else 0)
      for i in range(len(REVIEW_CONTIGS))]
 

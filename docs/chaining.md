@@ -2329,6 +2329,8 @@ Refused before the first read, exit 2:
 | `chain in.bam variant-calling --dbsnp d.vcf` | `step 1 (variant-calling): CollectVariantCallingMetrics reads VCF records, and this chain's stream holds alignments (the source is a BAM, CRAM or SAM file): it cannot be a step of this chain` |
 | `chain calls.vcf vcf-to-interval-list` | `step 1 (vcf-to-interval-list): VcfToIntervalList reads a VCF file of its own: it cannot be a step; ...` |
 | `chain in.bam mark-duplicates -o r.vcf.gz` | `-o r.vcf.gz names a VCF, and this chain's source is no VCF: its stream holds alignments` |
+| `chain in.bam write c.vcf.gz` | `step 1 (write): c.vcf.gz names a VCF, and this chain's source is no VCF: its stream holds alignments`; also `.vcf`, `.vcf.bgz`, `.vcf.gzip` and `.vcf.bgzf` in any case (decision D256) |
+| `chain cut.vcf.gz -o r.vcf.gz`, `chain cut.vcf.gz split-vcfs` | `the source cut.vcf.gz is truncated or damaged gzip or BGZF data: it inflates to no BAM, SAM text or VCF header`, for a file that starts with the gzip magic and fails to inflate |
 | `chain calls.vcf -o r.bam` | `-o r.bam names a BAM, SAM or CRAM, and this chain's source is a VCF: its stream holds VCF records` |
 | `chain calls.vcf write r.vcf --index` | the index of a plain VCF is tribble's `.idx`, which this writer does not write (decision D238) |
 | `chain calls.vcf write -` | a VCF is written to a file |
@@ -2394,10 +2396,10 @@ under 64 MiB; 20,000 and 100,000 samples out of sorted order 61 and 133 MiB; 3,1
 | `test_error_parity`, `test_unsorted_records_fail_the_index` | 13 refused inputs fail both tools with no file left; unsorted records fail the index in both and copy equal without it |
 | `test_index_limits_fail_in_both`, `test_compressed_names_are_bgzf` | a record past the windows of a `.tbi`, by its start or its `END`, fails the index in both; `.gz`, `.bgz` and `.GZ` names are BGZF with a `.tbi` in both |
 | `test_variant_calling_tap`, `test_genotype_concordance_tap` | the taps write the bodies the tools write alone |
-| `crates/core/src/stage/variant.rs` tests | taps see the lines of their position, a transform's counters, a tap fails alone, a failing writer stops the chain and leaves no file |
+| `crates/core/src/stage/variant.rs` tests | taps see the lines of their position, a transform's counters, a tap fails alone, a failing writer stops the chain and leaves no file, a split that fails on the last batch leaves no file of the `write` step before it |
 | `crates/cli/tests/vcf_chain.rs` | `--resume` skips a VCF `write` and reruns a changed tap; the manifest records kinds `vcf`, `index` and `md5` |
 
-Golden records: the 14 of `VCF_WRITER_CASES` on `tests/data/vcf_writer`
+Golden records: the 17 of `VCF_WRITER_CASES` on `tests/data/vcf_writer`
 (`tests/data/make_vcf_writer_fixtures.py`).
 
 ### 33.4 Departures from docs/07
@@ -2429,7 +2431,12 @@ bammetrics chain calls.vcf.gz split-vcfs --strict false --snp-output s.vcf.gz --
   stream ends. Without `--snp-output` and `--indel-output` they are `PREFIX.snp.vcf.gz`
   and `PREFIX.indel.vcf.gz` under the step's `-o` or the chain's prefix (`PREFIX.STREAM`
   when a transform comes after the step). Its failure stops the chain, as a `write` step's does, so
-  `--strict` (the default) on a record of another type exits 1 and leaves no file. Its
+  `--strict` (the default) on a record of another type exits 1 and leaves no file. No
+  sink of a variant stream finishes (a `write` step renames its file, a tap hands on its
+  metrics) until every sink took every batch without an error (decision D255), so a
+  failure in the last batch of 1024 lines leaves no file of the other steps either. A
+  failure while a split or writer closes its files, after the others finished, leaves
+  theirs. Its
   note counts the records `--strict false` dropped.
 - `--keep` on a step of a variant stream exits 2: a kept stream is a BAM.
 - After a transform each step but `write` reads the stream as a reader of the transform's

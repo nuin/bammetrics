@@ -1412,10 +1412,10 @@ needs = ["benches/vcf_scale.py"]
 max_rss_mib = 64
 max_seconds = 60
 
-# The scale input: python3 benches/vcf_scale.py ~/data/bammetrics-scale/waves/w16 1000000
+# The scale input is synthetic: python3 benches/vcf_scale.py ~/data/bammetrics-scale/waves/w16 1000000
 # (104 MB of text): 57.3 MiB, 6.8 s; removed after the measurement of docs/benchmarks.md.
 [[command]]
-name = "chain vcf 1,000,000 records"
+name = "chain vcf 1,000,000 synthetic records"
 tier = "scale"
 argv = [
     "sh", "-c",
@@ -1518,7 +1518,7 @@ max_rss_mib = 500
 max_seconds = 60
 
 [[command]]
-name = "chain vcf sites split 1,000,000 records"
+name = "chain vcf sites split 1,000,000 synthetic records"
 tier = "scale"
 argv = [
     "sh", "-c",

@@ -7,6 +7,7 @@
   corners.vcf               header and record corners of test_vcf_writer.py, samples out of
                             sorted order so the genotypes are decoded and written anew
   bad_filter.vcf            a record whose FILTER no ##FILTER line declares
+  cut.vcf.gz                the first 200 bytes of calls.vcf.gz: a BGZF block cut short
 
 Run with the repository's .venv python (pysam): python tests/data/make_vcf_writer_fixtures.py
 """
@@ -34,6 +35,7 @@ def main():
             shutil.copyfile(files[source], OUT / target)
     (OUT / "corners.vcf").write_text(CORNERS["corners_unsorted_samples"])
     (OUT / "bad_filter.vcf").write_text(ERRORS["undeclared_filter"])
+    (OUT / "cut.vcf.gz").write_bytes((OUT / "calls.vcf.gz").read_bytes()[:200])
     for path in sorted(OUT.iterdir()):
         print(path.relative_to(HERE.parent.parent))
 
