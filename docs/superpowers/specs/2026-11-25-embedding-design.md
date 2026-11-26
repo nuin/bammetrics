@@ -225,7 +225,7 @@ Format follows docs/07: wave id, version, scope, agents, exit check. Agent count
 | E6 | 0.34.6 | Layer 4b: `crates/embed`, schema `embed-1`, cancel flag in `pass.rs` and `stage/exec.rs`, cbindgen header, static and shared libraries in the E2 release script, C and C++ headers and tests | E1, E2 | 10 (2 branches: the crate and cancel; C and C++ with the release script) | Every call equals the CLI: same exit code, same files byte for byte, on the golden fixture cases a script picks. 8 concurrent chains pass. A cancel leaves no file. Golden and `make concordance` unchanged |
 | E7 | 0.34.7 | Layer 4c: Go, Java, Nim, R and Elixir packages, built but not published | E6 | 14 (3 branches: Go, Java and Nim over the C header; R with extendr; Elixir with Rustler) | Each language runs the fixture chain, `read_table` and a cancel in its own test runner, output equal to the CLI byte for byte |
 
-Total: 66 agents (6, 10, 10, 10, 6, 10, 14). docs/07 Q1 reads 40 as the cap per workflow (14 at most each) and budgets 572 agents over 48 waves. ED12 puts the E waves outside the 572, each run as one workflow under the per-workflow cap, and the global cap of 8 concurrent holds. EQ3 asks the owner to confirm this reading.
+Total: 66 agents (6, 10, 10, 10, 6, 10, 14). docs/07 Q1 reads 40 as the cap per workflow (14 at most each) and budgets 572 agents over 48 waves. The owner answered EQ3 on 2026-11-26: the E waves count inside the programme budget, which rises from 572 to 638 agents. Each E wave runs as one workflow under the per-workflow cap, and the global cap of 8 concurrent holds. No W wave is cut.
 
 Slot against the parity programme:
 
@@ -238,7 +238,7 @@ Slot against the parity programme:
 
 Designer's call ED11: patch numbers 0.34.1 to 0.34.5 for E waves. docs/07 fixes the minor of every W wave (W17 is 0.35.0, W46 is 1.6.0). Shifting 30 later versions would change docs, golden records and the stub schedule. The cost is that a patch release adds an option and a schema, which semver readers dislike. The repository is below 1.0.0, and docs/07's stability rule allows additions. E3 also adds a seventh publish to docs/07 line 292, so the docs/07 edits listed under ED6 apply. The alternative is to number E waves from 0.35.0 and move every W wave up by 5, which is cleaner and needs a docs sweep. Version strings appear in report snapshots, so a late change rewrites them.
 
-Designer's call ED12: E waves are outside docs/07's 572 agents and 48 waves, and chain events are not part of E1. A later wave may add an event stream to `chain` under its own D-row.
+Designer's call ED12, revised by the owner's EQ3 answer: E waves are inside docs/07's budget, raised to 638 agents over 55 waves, and chain events are not part of E1. A later wave may add an event stream to `chain` under its own D-row.
 
 Conflict zones between E and W waves: `crates/cli/src/info.rs` (E1 only), `docs/schema/` (E1 adds one file), the counts in `README.md` and `CLAUDE.md` (the integrator owns both), `bammetrics.pyi` (generated), `Cargo.toml` and `pyproject.toml` versions (integrator).
 
@@ -252,7 +252,7 @@ Most important first. Each blocks the wave named.
 |---|---|---|---|
 | EQ1 | Publish 0.34.x to PyPI and bioconda now (ED6), or wait for the 0.39.0 phase end? It needs a licence (ROADMAP plans MIT or Apache-2.0), a PyPI account and token, and a bioconda PR. Public uploads cannot be undone | Do not publish. Build everything, upload nothing | E3 |
 | EQ2 | Which Linux host runs the musl and aarch64 checks, may the binary be copied there, and is a Linux VM or the Mac Studio acceptable instead? The fixtures are fake data, so the clinical-code rule holds | Ask before E2 | E2 sign-off |
-| EQ3 | Are the E waves outside docs/07's 572 agents, run as separate workflows of at most 14 (ED12)? | Yes | E1 |
+| EQ3 | Are the E waves outside docs/07's 572 agents, run as separate workflows of at most 14 (ED12)? | Answered 2026-11-26: inside, with the budget raised to 638. No W wave is cut | E1 |
 | EQ4 | Number E waves as patches 0.34.1 to 0.34.5 (ED11), or shift W17 onward by five minors? | Patches | E1 |
 | EQ5 | May `.github/workflows/ci.yml` become `workflow_dispatch` only, so E wave PRs start no run? | Leave it. Every E PR starts one run | every E PR |
 | EQ6 | Is a container image wanted? Nextflow, WDL and Galaxy users expect one, the owner's runs use none for now | Dockerfile built locally, nothing published | E3 |
@@ -277,7 +277,7 @@ Most important first. Each blocks the wave named.
 | ED10 | One crate `bammetrics-embed` with JSON in and out under R, C, C++, Nim, Elixir, Java and Go | Tools are names and option maps, so new tools need no binding edits |
 | ED15 | No `pdf` in the embedded library; cancel through a per-batch flag | krilla aborts on a panic; a host cannot kill a thread |
 | ED11 | E waves as patch releases 0.34.1 to 0.34.5 | Keeps W numbering and 30 later versions. Gated by EQ4 |
-| ED12 | E waves outside docs/07's 572 agents. No chain events in E1 | Per-workflow cap reading of docs/07 Q1. Chain events need their own decision |
+| ED12 | E waves inside docs/07's budget, raised to 638 agents (owner, EQ3). No chain events in E1 | The owner raised the budget so no W wave is cut. Chain events need their own decision |
 | ED13 | The `tools` listing covers verbs without a registry row from the clap command | Options are read, not written twice |
 | ED14 | Homebrew formula file, Apptainer note, crates.io not published, MultiQC needs no work | Section 5.2 rows |
 
