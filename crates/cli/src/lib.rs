@@ -247,14 +247,7 @@ pub fn run() -> error::Result<u8> {
             config::VERB => return Ok(config::run(rest)?),
             chain::recipes::LIST_VERB => return Ok(chain::recipes::run_list(rest)?),
             "tools" => {
-                let (format, rest) = info::info_format("tools", rest)?;
-                if let Some(extra) = rest.first() {
-                    return Err(VerbError::usage(
-                        "tools",
-                        format!("unexpected argument {extra:?}"),
-                    )
-                    .into());
-                }
+                let (format, _) = info::info_format("tools", rest)?;
                 match format {
                     info::InfoFormat::Json => {
                         events::print_stdout(&info::listing(&Cli::command()).render());

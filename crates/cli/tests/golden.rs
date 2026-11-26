@@ -250,6 +250,7 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_sex_check_bad_sex", "sex-check", "IS", "--sex", "unknown"),
     case!("verb_tools", "tools"),
     case!("verb_tools_json", "tools", "--format", "json"),
+    case!("verb_tools_help", "tools", "--help"),
     case!("verb_tools_text", "tools", "--format", "text"),
     case!("verb_help_insert_size_json", "help", "insert-size", "--format", "json"),
     case!("verb_help_class_json", "help", "--format=json", "CollectHsMetrics"),
