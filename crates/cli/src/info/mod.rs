@@ -60,6 +60,12 @@ pub fn help_json(args: &[String]) -> Result<String, VerbError> {
                 .hint("bammetrics tools --format json lists every verb"),
         );
     };
+    if let Some(extra) = args.get(1) {
+        return Err(VerbError::usage(
+            "help",
+            format!("--format json takes one verb or Picard class, not {extra:?}"),
+        ));
+    }
     if let Some(verb) = verbs::find(topic).or_else(|| verbs::for_class(topic)) {
         return Ok(tool_entry(verb).render());
     }
@@ -197,6 +203,16 @@ fn subcommand(name: &'static str, about: String, long_about: String, flags: &[Fl
     command
 }
 
+/// The `--format` option of `tools` and `help`, declared so their help and
+/// the listing show it; `info_format` reads the value.
+fn format_arg() -> Arg {
+    Arg::new("format")
+        .long("format")
+        .value_name("FORMAT")
+        .value_parser(["text", "json"])
+        .help("The output form: text (default) or json.")
+}
+
 /// `base` (the clap verbs `qc`, `plan`, `check`, `report`) with every
 /// grammar verb added, so top-level `--help` and the completion scripts
 /// list all of them. `chain` is listed with its own options; its steps
@@ -237,12 +253,17 @@ pub fn command(base: Command) -> Command {
     command
         .subcommand(Command::new("recipes").about(about("recipes")))
         .subcommand(Command::new("config").about(about("config")))
-        .subcommand(Command::new("tools").about(about("tools")))
+        .subcommand(
+            Command::new("tools")
+                .about(about("tools"))
+                .arg(format_arg()),
+        )
         .subcommand(Command::new("presets").about(about("presets")))
         .subcommand(
             Command::new("help")
                 .about(about("help"))
-                .arg(Arg::new("TOPIC")),
+                .arg(Arg::new("TOPIC"))
+                .arg(format_arg()),
         )
         .subcommand(
             Command::new("completions").about(about("completions")).arg(

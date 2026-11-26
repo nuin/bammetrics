@@ -63,7 +63,8 @@ json
     {
       "names": [
         "MINIMUM_HISTOGRAM_WIDTH",
-        "MW"
+        "MW",
+        "MIN_HISTOGRAM_WIDTH"
       ],
       "flag": "--minimum-histogram-width",
       "short": null,
@@ -174,7 +175,7 @@ json
         "QUIET"
       ],
       "flag": "--quiet",
-      "short": null,
+      "short": "-q",
       "type": "bool",
       "kind": "ignored",
       "repeated": false,
@@ -291,7 +292,8 @@ json
     {
       "names": [
         "REFERENCE_SEQUENCE",
-        "R"
+        "R",
+        "REFERENCE"
       ],
       "flag": "--reference-sequence",
       "short": "-R",
@@ -301,6 +303,40 @@ json
       "required": false,
       "written": false,
       "help": "this metric does not read the reference"
+    }
+  ],
+  "verb_options": [
+    {
+      "flag": "--format",
+      "short": null,
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+    },
+    {
+      "flag": "--sample",
+      "short": null,
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+    },
+    {
+      "flag": "--threads",
+      "short": "-@",
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+    },
+    {
+      "flag": "--verbose",
+      "short": "-v",
+      "takes_value": false,
+      "repeated": false,
+      "required": false,
+      "help": "Print the Picard command line and each file written on standard error."
     }
   ]
 }

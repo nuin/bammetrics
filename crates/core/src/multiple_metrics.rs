@@ -225,6 +225,17 @@ pub fn file_extensions(tool: &str) -> Option<&'static [(&'static str, &'static s
         })
 }
 
+/// Every extension a `CollectMultipleMetrics` program writes after the
+/// prefix, in program order; `CollectSequencingArtifactMetrics` names its
+/// own files and adds none here.
+pub fn program_extensions() -> Vec<&'static str> {
+    PROGRAMS
+        .iter()
+        .flat_map(|p| p.files.iter().map(|(_, extension)| *extension))
+        .filter(|extension| !extension.is_empty())
+        .collect()
+}
+
 /// Programs Picard 3.5.0 lists that bammetrics does not have.
 const NOT_IMPLEMENTED: [&str; 1] = ["RnaSeqMetrics"];
 

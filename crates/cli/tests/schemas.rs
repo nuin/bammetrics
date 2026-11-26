@@ -324,7 +324,12 @@ fn tools_listing_equals_the_registry() {
                 .iter()
                 .map(|n| n.as_str().expect("name"))
                 .collect();
-            assert_eq!(names, row.names, "{}", verb.name);
+            assert_eq!(
+                names[..row.names.len()],
+                *row.names,
+                "{}: the Picard names come first",
+                verb.name
+            );
             let kind = match row.kind {
                 Kind::Value => "value",
                 Kind::Output => "output",
@@ -405,7 +410,161 @@ fn listing_marks_aliases_ignored_and_rejected_options() {
             _ => panic!("code"),
         })
         .collect();
-    assert_eq!(codes, ["0", "1", "2", "10", "11", "100", "130"]);
+    assert_eq!(
+        codes,
+        ["0", "1", "2", "10", "11", "100", "129", "130", "143"]
+    );
+}
+
+/// Every flag and short of one tool entry, options and verb options.
+fn spellings(tool: &Json) -> Vec<String> {
+    let mut all = Vec::new();
+    for key in ["options", "verb_options"] {
+        for option in array(tool, key) {
+            for member in ["flag", "short"] {
+                if let Some(spelling) = option.get(member).and_then(Json::as_str) {
+                    all.push(spelling.to_owned());
+                }
+            }
+        }
+    }
+    all
+}
+
+#[test]
+fn no_two_options_of_a_tool_share_a_flag_or_short() {
+    let doc = tools_listing();
+    for tool in array(&doc, "tools") {
+        let mut seen = std::collections::HashSet::new();
+        for spelling in spellings(tool) {
+            assert!(
+                seen.insert(spelling.clone()),
+                "{}: {spelling} is listed twice",
+                text(tool, "verb")
+            );
+        }
+    }
+}
+
+#[test]
+fn rejected_options_have_no_flag_and_verb_options_are_listed() {
+    let doc = tools_listing();
+    let tools = array(&doc, "tools");
+    let tool = |verb: &str| tools.iter().find(|t| text(t, "verb") == verb).expect(verb);
+    for t in tools {
+        for option in array(t, "options") {
+            if text(option, "kind") == "rejected" {
+                assert_eq!(option.get("flag"), Some(&Json::Null), "{}", text(t, "verb"));
+                assert_eq!(
+                    option.get("short"),
+                    Some(&Json::Null),
+                    "{}",
+                    text(t, "verb")
+                );
+            }
+        }
+    }
+    let flags = |verb: &str| -> Vec<&str> {
+        array(tool(verb), "verb_options")
+            .iter()
+            .map(|o| text(o, "flag"))
+            .collect()
+    };
+    for verb in ["view-sam", "bam-index-stats", "split-vcfs"] {
+        assert!(flags(verb).contains(&"--output"), "{verb}");
+    }
+    assert!(flags("insert-size").contains(&"--threads"));
+    assert!(!flags("insert-size").contains(&"--quiet"));
+    let width = array(tool("insert-size"), "options")
+        .iter()
+        .find(|o| first_name(o) == "MINIMUM_HISTOGRAM_WIDTH")
+        .expect("row");
+    assert!(
+        array(width, "names")
+            .iter()
+            .any(|n| n.as_str() == Some("MIN_HISTOGRAM_WIDTH"))
+    );
+}
+
+#[test]
+fn recipes_member_lists_the_compiled_in_recipes() {
+    let doc = tools_listing();
+    let names: Vec<&str> = array(&doc, "recipes")
+        .iter()
+        .map(|r| text(r, "name"))
+        .collect();
+    assert_eq!(names, ["prep", "qc-only", "downsample"]);
+    for recipe in array(&doc, "recipes") {
+        assert!(!text(recipe, "description").is_empty());
+    }
+}
+
+/// Every file a golden record of a prefix verb writes is the `-o` prefix
+/// plus a listed suffix (and, for a `--format` list, a format extension).
+#[test]
+fn prefix_verbs_write_the_listed_suffixes() {
+    let doc = tools_listing();
+    let prefix: Vec<(&str, Vec<&str>)> = array(&doc, "tools")
+        .iter()
+        .filter(|t| text(t, "files") == "prefix")
+        .map(|t| {
+            let suffixes = array(t, "extensions")
+                .iter()
+                .map(|e| e.as_str().expect("suffix"))
+                .collect();
+            (text(t, "verb"), suffixes)
+        })
+        .collect();
+    let mut checked = std::collections::HashSet::new();
+    for entry in fs::read_dir(root().join("tests/golden")).expect("golden") {
+        let path = entry.expect("entry").path();
+        let record = fs::read_to_string(&path).expect("record");
+        let mut lines = record.lines();
+        if lines.next() != Some("## argv") {
+            continue;
+        }
+        let argv: Vec<&str> = lines
+            .by_ref()
+            .take_while(|l| !l.starts_with("## "))
+            .collect();
+        let Some((_, suffixes)) = prefix.iter().find(|(verb, _)| Some(verb) == argv.first()) else {
+            continue;
+        };
+        let stem = argv
+            .iter()
+            .position(|a| *a == "-o")
+            .and_then(|at| argv.get(at + 1))
+            .and_then(|value| value.strip_prefix("OUT/"))
+            .filter(|stem| !stem.is_empty() && !stem.ends_with('/'));
+        let Some(stem) = stem else { continue };
+        for name in record.lines().filter_map(|l| l.strip_prefix("## file ")) {
+            let rest = name
+                .strip_prefix(stem)
+                .unwrap_or_else(|| panic!("{}: {name} lacks the prefix {stem}", path.display()));
+            assert!(
+                suffixes
+                    .iter()
+                    .any(|s| rest == *s || rest.starts_with(&format!("{s}."))),
+                "{}: {name} is {stem} plus none of {suffixes:?}",
+                path.display()
+            );
+            checked.insert(argv[0].to_owned());
+        }
+    }
+    // Golden records cover these prefix verbs; the rest have none that writes.
+    for verb in [
+        "gc-bias",
+        "multiple-metrics",
+        "sequencing-artifact",
+        "convert-sequencing-artifact-to-oxo-g",
+        "rrbs",
+        "create-baf-regress-file",
+        "create-verify-i-d-intensity-contamination-file",
+        "arrays-variant-calling",
+        "split-vcfs",
+    ] {
+        assert!(checked.contains(verb), "no golden record checks {verb}");
+    }
 }
 
 fn parsed(out: &Output) -> Json {
@@ -447,4 +606,42 @@ fn json_flag_alone_or_with_more_is_a_usage_error() {
         assert!(out.stdout.is_empty(), "{args:?}");
         assert!(!out.stderr.is_empty(), "{args:?}");
     }
+}
+
+#[test]
+fn short_version_json_equals_the_long_form_and_help_json_takes_one_topic() {
+    let long = bammetrics(&["--version", "--json"]);
+    for args in [&["-V", "--json"][..], &["--json", "-V"]] {
+        let out = bammetrics(args);
+        assert_eq!(out.status.code(), Some(0), "{args:?}");
+        assert_eq!(out.stdout, long.stdout, "{args:?}");
+    }
+    let out = bammetrics(&["help", "insert-size", "--format", "json", "extra"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+}
+
+#[test]
+fn tools_and_help_declare_format_and_the_listing_omits_help() {
+    let doc = tools_listing();
+    let verbs = array(&doc, "verbs");
+    for name in ["tools", "help"] {
+        let verb = verbs.iter().find(|v| text(v, "name") == name).expect(name);
+        let flags: Vec<&str> = array(verb, "options")
+            .iter()
+            .map(|o| text(o, "flag"))
+            .collect();
+        assert_eq!(flags, ["--format"], "{name}");
+    }
+    for name in ["collect", "chain"] {
+        let verb = verbs.iter().find(|v| text(v, "name") == name).expect(name);
+        assert!(
+            array(verb, "options")
+                .iter()
+                .all(|o| text(o, "flag") != "--help"),
+            "{name}"
+        );
+    }
+    let out = bammetrics(&["help", "tools"]);
+    assert!(String::from_utf8_lossy(&out.stdout).contains("--format"));
 }

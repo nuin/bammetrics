@@ -11,7 +11,7 @@ Wave E1: the machine contract, no registry tool (77 tools).
 - `bammetrics tools --format json` (schema `bammetrics.tools/1`, `docs/schema/tools-1.json`):
   every tool and verb, its options, chain role and the exit code table. `help VERB --format json`
   prints one tool's entry and `--version --json` the `bammetrics` member.
-- Exit codes 100 and 130 in the `docs/cli.md` table, held to `EXIT_CODES` by a test.
+- Exit codes 100, 129, 130 and 143 in the `docs/cli.md` table, held to `EXIT_CODES` by a test.
 - `docs/embedding.md`: what a workflow engine reads, exit codes by engine, frozen schemas.
 
 ## 0.34.0

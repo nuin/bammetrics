@@ -49,8 +49,16 @@ json
       "meaning": "CheckTerminatorBlock found a DEFECTIVE file end"
     },
     {
+      "code": 129,
+      "meaning": "interrupted by SIGHUP (128 + 1, as a shell reports it); partial outputs removed"
+    },
+    {
       "code": 130,
-      "meaning": "interrupted by SIGINT, SIGTERM or SIGHUP; partial outputs removed"
+      "meaning": "interrupted by SIGINT (128 + 2, as a shell reports it); partial outputs removed"
+    },
+    {
+      "code": 143,
+      "meaning": "interrupted by SIGTERM (128 + 15, as a shell reports it); partial outputs removed"
     }
   ],
   "tools": [
@@ -111,7 +119,8 @@ json
         {
           "names": [
             "MINIMUM_HISTOGRAM_WIDTH",
-            "MW"
+            "MW",
+            "MIN_HISTOGRAM_WIDTH"
           ],
           "flag": "--minimum-histogram-width",
           "short": null,
@@ -222,7 +231,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -339,7 +348,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -349,6 +359,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -382,7 +426,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -408,7 +453,8 @@ json
         },
         {
           "names": [
-            "EXPECTED_PAIR_ORIENTATIONS"
+            "EXPECTED_PAIR_ORIENTATIONS",
+            "EXPECTED_PAIR_ORIENTATION"
           ],
           "flag": "--expected-pair-orientations",
           "short": null,
@@ -545,7 +591,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -658,6 +704,40 @@ json
           "required": false,
           "written": false,
           "help": "false fails a BAM whose header is not coordinate sorted (default true)."
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -799,7 +879,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -916,7 +996,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -926,6 +1007,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -945,7 +1060,8 @@ json
         {
           "names": [
             "TARGET_INTERVALS",
-            "TI"
+            "TI",
+            "TARGETS"
           ],
           "flag": "--target-intervals",
           "short": null,
@@ -959,7 +1075,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -1147,7 +1264,8 @@ json
         {
           "names": [
             "BAIT_INTERVALS",
-            "BI"
+            "BI",
+            "BAITS"
           ],
           "flag": "--bait-intervals",
           "short": null,
@@ -1244,7 +1362,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -1344,6 +1462,48 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--panel",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Baits and targets in one file: --bait-intervals FILE --target-intervals FILE."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -1391,7 +1551,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -1543,7 +1704,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -1656,6 +1817,32 @@ json
           "required": false,
           "written": false,
           "help": "false fails a BAM whose header is not coordinate sorted (default true)."
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -1798,7 +1985,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -1915,7 +2102,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -1925,6 +2113,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -2053,7 +2275,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -2170,7 +2392,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -2180,6 +2403,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -2308,7 +2565,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -2425,7 +2682,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -2435,6 +2693,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -2523,7 +2815,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -2640,7 +2932,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -2650,6 +2943,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -2893,7 +3220,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -2996,7 +3323,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -3006,6 +3334,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -3017,7 +3379,19 @@ json
       "reads_stdin": true,
       "files": "prefix",
       "writes": "metrics file",
-      "extensions": [],
+      "extensions": [
+        ".alignment_summary_metrics",
+        ".insert_size_metrics",
+        ".quality_distribution_metrics",
+        ".quality_by_cycle_metrics",
+        ".base_distribution_by_cycle_metrics",
+        ".gc_bias.detail_metrics",
+        ".gc_bias.summary_metrics",
+        ".quality_yield_metrics",
+        ".mt_copy_number_metrics",
+        ".adapter_content_metrics",
+        ".telomere_metrics"
+      ],
       "chain_role": "materialize",
       "options": [
         {
@@ -3037,7 +3411,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -3239,7 +3614,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -3353,6 +3728,32 @@ json
           "written": false,
           "help": "false fails a BAM whose header is not coordinate sorted (default true)."
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -3410,7 +3811,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -3453,7 +3855,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -3552,6 +3954,40 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -3571,7 +4007,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -3801,7 +4238,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -3900,6 +4337,40 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -3917,7 +4388,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -4147,7 +4619,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -4247,6 +4719,40 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -4263,7 +4769,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -4507,7 +5014,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -4607,6 +5114,40 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -4637,7 +5178,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -4922,7 +5464,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -5021,6 +5563,40 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -5229,7 +5805,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -5346,7 +5922,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -5356,6 +5933,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -5367,7 +5978,10 @@ json
       "reads_stdin": true,
       "files": "prefix",
       "writes": "metrics file",
-      "extensions": [],
+      "extensions": [
+        ".variant_calling_detail_metrics",
+        ".variant_calling_summary_metrics"
+      ],
       "chain_role": "tap",
       "options": [
         {
@@ -5387,7 +6001,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -5524,7 +6139,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -5624,6 +6239,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -5634,7 +6275,10 @@ json
       "reads_stdin": true,
       "files": "prefix",
       "writes": "metrics file",
-      "extensions": [],
+      "extensions": [
+        ".variant_calling_detail_metrics",
+        ".variant_calling_summary_metrics"
+      ],
       "chain_role": "none",
       "options": [
         {
@@ -5654,7 +6298,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -5724,7 +6369,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -5824,6 +6469,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -5834,7 +6505,11 @@ json
       "reads_stdin": true,
       "files": "prefix",
       "writes": "metrics file",
-      "extensions": [],
+      "extensions": [
+        ".genotype_concordance_summary_metrics",
+        ".genotype_concordance_detail_metrics",
+        ".genotype_concordance_contingency_metrics"
+      ],
       "chain_role": "tap",
       "options": [
         {
@@ -5854,7 +6529,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -6085,7 +6761,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -6185,6 +6861,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -6215,7 +6917,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -6242,7 +6945,9 @@ json
         {
           "names": [
             "SEQUENCE_DICTIONARY",
-            "SD"
+            "SD",
+            "FROM_BAM",
+            "DICT"
           ],
           "flag": "--sequence-dictionary",
           "short": null,
@@ -6351,7 +7056,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -6450,6 +7155,40 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the interval list), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Accepted and ignored: an interval list has no sample."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no BAM record is read, a BAM gives only its header."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -6617,7 +7356,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -6646,7 +7386,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -6732,6 +7472,40 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the comparison), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Accepted and ignored: a comparison has no sample."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -6953,7 +7727,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -7027,6 +7801,40 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the sequence dictionary), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Accepted and ignored: a sequence dictionary has no sample."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -7071,7 +7879,8 @@ json
         {
           "names": [
             "METRICS_FILE",
-            "M"
+            "M",
+            "METRICS"
           ],
           "flag": "--metrics-file",
           "short": "-M",
@@ -7602,7 +8411,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -7631,7 +8441,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -7679,6 +8489,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes a BAM and a Picard metrics file. A list (picard,json) adds each further format beside the metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -7690,7 +8526,11 @@ json
       "files": "prefix",
       "writes": "metrics file",
       "extensions": [
-        ""
+        ".pre_adapter_detail_metrics",
+        ".pre_adapter_summary_metrics",
+        ".bait_bias_detail_metrics",
+        ".bait_bias_summary_metrics",
+        ".error_summary_metrics"
       ],
       "chain_role": "tap",
       "options": [
@@ -7711,7 +8551,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -7971,7 +8812,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -8085,6 +8926,32 @@ json
           "written": false,
           "help": "false fails a BAM whose header is not coordinate sorted (default true)."
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -8095,7 +8962,9 @@ json
       "reads_stdin": true,
       "files": "prefix",
       "writes": "metrics file",
-      "extensions": [],
+      "extensions": [
+        ".oxog_metrics"
+      ],
       "chain_role": "none",
       "options": [
         {
@@ -8181,7 +9050,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -8209,8 +9079,8 @@ json
           "names": [
             "OUTPUT"
           ],
-          "flag": "--output",
-          "short": "-o",
+          "flag": null,
+          "short": null,
           "type": "text",
           "kind": "rejected",
           "repeated": false,
@@ -8250,7 +9120,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -8350,6 +9220,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -8366,7 +9262,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -8598,7 +9495,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -8698,6 +9595,40 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -8717,7 +9648,9 @@ json
         {
           "names": [
             "TARGET_INTERVALS",
-            "TI"
+            "TI",
+            "TARGETS",
+            "PANEL"
           ],
           "flag": "--target-intervals",
           "short": null,
@@ -8893,7 +9826,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -9010,7 +9943,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -9020,6 +9954,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -9038,7 +10006,8 @@ json
       "options": [
         {
           "names": [
-            "EXPECTED_SEX"
+            "EXPECTED_SEX",
+            "SEX"
           ],
           "flag": "--expected-sex",
           "short": null,
@@ -9066,7 +10035,8 @@ json
         {
           "names": [
             "TARGET_INTERVALS",
-            "TI"
+            "TI",
+            "TARGETS"
           ],
           "flag": "--target-intervals",
           "short": null,
@@ -9188,7 +10158,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -9305,7 +10275,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -9315,6 +10286,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -9348,8 +10353,8 @@ json
             "OUTPUT",
             "O"
           ],
-          "flag": "--output",
-          "short": "-o",
+          "flag": null,
+          "short": null,
           "type": "text",
           "kind": "rejected",
           "repeated": false,
@@ -9415,7 +10420,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -9505,7 +10510,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -9515,6 +10521,48 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--output",
+          "short": "-o",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "The index statistics; standard output without one, or with -."
+        },
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the index statistics), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -9641,7 +10689,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -9718,7 +10766,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -9728,6 +10777,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the bad querynames), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -9856,7 +10939,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -9959,7 +11042,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -9969,6 +11053,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -10027,7 +11145,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -10083,7 +11202,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -10169,6 +11288,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM index has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -10319,7 +11464,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -10348,7 +11494,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -10421,6 +11567,24 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: one thread reads and one writes."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -10505,8 +11669,8 @@ json
             "OUTPUT",
             "O"
           ],
-          "flag": "--output",
-          "short": "-o",
+          "flag": null,
+          "short": null,
           "type": "text",
           "kind": "rejected",
           "repeated": false,
@@ -10573,7 +11737,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -10676,7 +11840,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -10686,6 +11851,48 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--output",
+          "short": "-o",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "The SAM text; standard output without one, or with -."
+        },
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the SAM text), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -10810,7 +12017,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -10853,7 +12061,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -10900,6 +12108,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the sorted BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -10973,7 +12207,8 @@ json
         {
           "names": [
             "TARGET_INTERVALS",
-            "TI"
+            "TI",
+            "TARGETS"
           ],
           "flag": "--target-intervals",
           "short": null,
@@ -10986,7 +12221,8 @@ json
         },
         {
           "names": [
-            "EXCLUDE_INTERVALS"
+            "EXCLUDE_INTERVALS",
+            "EXCLUDE"
           ],
           "flag": "--exclude-intervals",
           "short": null,
@@ -11083,7 +12319,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -11200,7 +12436,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -11210,6 +12447,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -11457,7 +12728,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -11574,7 +12845,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -11584,6 +12856,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -11738,7 +13044,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -11855,7 +13161,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -11865,6 +13172,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -11979,7 +13320,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -12096,7 +13437,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -12106,6 +13448,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -12274,7 +13650,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -12391,7 +13767,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -12401,6 +13778,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -12569,7 +13980,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -12668,6 +14079,40 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -12779,7 +14224,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -12835,7 +14281,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -12882,6 +14328,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -12992,7 +14464,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -13048,7 +14521,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -13095,6 +14568,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -13206,7 +14705,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -13262,7 +14762,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -13309,6 +14809,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -13406,7 +14932,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -13462,7 +14989,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -13509,6 +15036,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -13566,7 +15119,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -13688,7 +15242,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -13735,6 +15289,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -13792,7 +15372,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -13914,7 +15495,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -13961,6 +15542,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -14267,7 +15874,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -14310,7 +15918,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -14357,6 +15965,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -14508,7 +16142,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -14551,7 +16186,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -14598,6 +16233,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -14695,7 +16356,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -14751,7 +16413,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -14798,6 +16460,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM files have no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -14950,7 +16638,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -15006,7 +16695,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15053,6 +16742,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM files have no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -15164,7 +16879,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -15206,7 +16922,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15253,6 +16969,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -15311,7 +17053,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -15354,7 +17097,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15453,6 +17196,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the read group checksum has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -15594,7 +17363,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15711,7 +17480,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -15721,6 +17491,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -15902,7 +17706,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15992,7 +17796,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -16002,6 +17807,40 @@ json
           "required": false,
           "written": false,
           "help": "this metric does not read the reference"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -16014,7 +17853,8 @@ json
       "files": "prefix",
       "writes": "metrics file",
       "extensions": [
-        ""
+        ".rrbs_summary_metrics",
+        ".rrbs_detail_metrics"
       ],
       "chain_role": "tap",
       "options": [
@@ -16210,7 +18050,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -16310,6 +18150,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -16320,7 +18186,9 @@ json
       "reads_stdin": true,
       "files": "prefix",
       "writes": "metrics file",
-      "extensions": [],
+      "extensions": [
+        ".bafregress_metrics"
+      ],
       "chain_role": "none",
       "options": [
         {
@@ -16367,7 +18235,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -16423,7 +18292,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -16510,6 +18379,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -16520,7 +18415,9 @@ json
       "reads_stdin": true,
       "files": "prefix",
       "writes": "metrics file",
-      "extensions": [],
+      "extensions": [
+        ".verifyidintensity_metrics"
+      ],
       "chain_role": "none",
       "options": [
         {
@@ -16567,7 +18464,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -16623,7 +18521,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -16710,6 +18608,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -16720,7 +18644,11 @@ json
       "reads_stdin": true,
       "files": "prefix",
       "writes": "metrics file",
-      "extensions": [],
+      "extensions": [
+        ".arrays_variant_calling_detail_metrics",
+        ".arrays_variant_calling_summary_metrics",
+        ".arrays_control_code_summary_metrics"
+      ],
       "chain_role": "none",
       "options": [
         {
@@ -16740,7 +18668,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -16876,7 +18805,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -16962,6 +18891,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no BAM is read; NUM_PROCESSORS changes nothing."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -17244,7 +19199,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -17313,7 +19269,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -17372,6 +19328,32 @@ json
           "required": false,
           "written": false,
           "help": "no BAM is written"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the interval list has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -17443,7 +19425,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -17512,7 +19495,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -17598,6 +19581,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BED has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -17670,7 +19679,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -17726,7 +19736,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -17825,6 +19835,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the interval list has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -17980,7 +20016,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -18067,6 +20103,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the interval list has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -18123,7 +20185,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -18193,7 +20256,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -18279,6 +20342,40 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the count), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Accepted and ignored: a count has no sample."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -18472,7 +20569,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -18501,7 +20599,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -18548,6 +20646,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -18700,7 +20824,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -18743,7 +20868,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -18790,6 +20915,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -18955,7 +21106,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -18984,7 +21136,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -19031,6 +21183,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -19251,7 +21429,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -19294,7 +21473,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -19342,6 +21521,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -19372,7 +21577,8 @@ json
         {
           "names": [
             "METRICS_FILE",
-            "M"
+            "M",
+            "METRICS"
           ],
           "flag": "--metrics-file",
           "short": "-M",
@@ -19507,7 +21713,8 @@ json
         },
         {
           "names": [
-            "REFERENCE_SEQUENCE"
+            "REFERENCE_SEQUENCE",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": null,
@@ -19563,7 +21770,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -19610,6 +21817,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes a BAM and a Picard metrics file. A list (picard,json) adds each further format beside the metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -19773,7 +22006,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -19829,7 +22063,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -19876,6 +22110,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -19973,7 +22233,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -20029,7 +22290,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -20076,6 +22337,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the BAM has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -20252,7 +22539,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -20281,7 +22569,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -20355,6 +22643,40 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Accepted and ignored: a comparison has no sample."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -20387,8 +22709,8 @@ json
             "OUTPUT",
             "O"
           ],
-          "flag": "--output",
-          "short": "-o",
+          "flag": null,
+          "short": null,
           "type": "text",
           "kind": "rejected",
           "repeated": false,
@@ -20439,7 +22761,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -20468,7 +22791,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -20554,6 +22877,48 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--output",
+          "short": "-o",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "The termination; standard output without one, or with -."
+        },
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard (the termination), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+        },
+        {
+          "flag": "--sample",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Accepted and ignored: a file's end has no sample."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: the last bytes are read, no record."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -20695,8 +23060,8 @@ json
             "OUTPUT",
             "O"
           ],
-          "flag": "--output",
-          "short": "-o",
+          "flag": null,
+          "short": null,
           "type": "text",
           "kind": "rejected",
           "repeated": false,
@@ -20721,7 +23086,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -20763,7 +23129,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -20810,6 +23176,40 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--output",
+          "short": "-o",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Output prefix (default ./ plus the input name without its extension); a directory gets that name as the file part."
+        },
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard first: this verb writes several Picard files. A list (picard,json) adds each further format beside every metrics file, as FILE.json."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     },
@@ -20922,7 +23322,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -20964,7 +23365,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -21025,6 +23426,32 @@ json
           "written": false,
           "help": "no JDK codec"
         }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the VCF has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
+        }
       ]
     },
     {
@@ -21083,7 +23510,8 @@ json
         {
           "names": [
             "REFERENCE_SEQUENCE",
-            "R"
+            "R",
+            "REFERENCE"
           ],
           "flag": "--reference-sequence",
           "short": "-R",
@@ -21125,7 +23553,7 @@ json
             "QUIET"
           ],
           "flag": "--quiet",
-          "short": null,
+          "short": "-q",
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -21224,6 +23652,32 @@ json
           "required": false,
           "written": false,
           "help": "no JDK codec"
+        }
+      ],
+      "verb_options": [
+        {
+          "flag": "--format",
+          "short": null,
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "picard only: the sample map has no other form."
+        },
+        {
+          "flag": "--threads",
+          "short": "-@",
+          "takes_value": true,
+          "repeated": false,
+          "required": false,
+          "help": "Checked, then ignored: only headers are read."
+        },
+        {
+          "flag": "--verbose",
+          "short": "-v",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "Print the Picard command line and each file written on standard error."
         }
       ]
     }
@@ -21916,14 +24370,6 @@ json
           "repeated": false,
           "required": false,
           "help": "Print the Picard command line and each file written on standard error."
-        },
-        {
-          "flag": "--help",
-          "short": "-h",
-          "takes_value": false,
-          "repeated": false,
-          "required": false,
-          "help": "This help."
         }
       ]
     },
@@ -22066,14 +24512,6 @@ json
           "repeated": false,
           "required": false,
           "help": "Print each step's Picard command line and each file written on standard error."
-        },
-        {
-          "flag": "--help",
-          "short": "-h",
-          "takes_value": false,
-          "repeated": false,
-          "required": false,
-          "help": "This help."
         }
       ]
     },
@@ -22133,6 +24571,20 @@ json
       "name": "completions",
       "about": "A completion script for bash, zsh, fish, elvish or powershell.",
       "options": []
+    }
+  ],
+  "recipes": [
+    {
+      "name": "prep",
+      "description": "fix mates, mark duplicates, sort by coordinate, the BAM indexed, qc's generic metrics"
+    },
+    {
+      "name": "qc-only",
+      "description": "qc's generic metrics on one read: quality yield, alignment summary, insert size, duplicates"
+    },
+    {
+      "name": "downsample",
+      "description": "keep a share of the templates by a hash of the read name, the BAM indexed"
     }
   ]
 }

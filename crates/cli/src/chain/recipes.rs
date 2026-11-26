@@ -181,6 +181,18 @@ fn shipped(name: &str) -> Option<Recipe> {
     })
 }
 
+/// The compiled-in recipes as (name, description), in `SHIPPED` order; a
+/// user's recipe file of the same name is not read.
+pub fn shipped_descriptions() -> Vec<(String, String)> {
+    SHIPPED
+        .iter()
+        .map(|(name, _)| {
+            let recipe = shipped(name).expect("a shipped name");
+            (recipe.name, recipe.description)
+        })
+        .collect()
+}
+
 /// The user recipe file `name`, when there is one.
 fn user_file(name: &str) -> Option<PathBuf> {
     let path = user_dir()?.join(format!("{name}.toml"));

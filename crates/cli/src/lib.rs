@@ -176,10 +176,13 @@ fn text_arguments(args: impl Iterator<Item = std::ffi::OsString>) -> error::Resu
 /// `qc --fail-on` 10 or 11 on a bad verdict, `doctor` 10 on a failed check (`bammetrics help check`).
 pub fn run() -> error::Result<u8> {
     let args = text_arguments(std::env::args_os().skip(1))?;
-    // `--version --json` (either order) prints the listing's `bammetrics`
+    // `--version --json` or `-V --json` (either order) prints the listing's `bammetrics`
     // member; a first `--json` or a `--version --json` with more is usage.
     let version_json = |a: &str, b: &str| args.len() >= 2 && args[0] == a && args[1] == b;
-    if version_json("--version", "--json") || version_json("--json", "--version") {
+    if ["--version", "-V"]
+        .iter()
+        .any(|v| version_json(v, "--json") || version_json("--json", v))
+    {
         if args.len() > 2 {
             return Err(error::VerbError::usage(
                 "--version",

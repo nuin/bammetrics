@@ -1137,6 +1137,63 @@ impl Verb {
         flags
     }
 
+    /// The suffixes the verb appends to the `-o` prefix, one per file it
+    /// writes, the dot included; empty for a verb with no prefix naming.
+    /// `qc` and the Picard face take the same names from
+    /// `multiple_metrics::file_extensions`; a tool that names its own
+    /// files has its constants here. The listing and its test read this.
+    pub fn extensions(&self) -> Vec<String> {
+        use bammetrics_core::{
+            arrays, artifact_to_oxog, genotype_concordance as gc, multiple_metrics, rrbs_metrics,
+            sequencing_artifact as artifact, variant_calling_metrics as calling,
+        };
+        let dotted = |names: &[&str]| names.iter().map(|n| format!(".{n}")).collect();
+        match self.class {
+            "CollectMultipleMetrics" => multiple_metrics::program_extensions()
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            "CollectVariantCallingMetrics" | "AccumulateVariantCallingMetrics" => {
+                dotted(&[calling::DETAIL_EXTENSION, calling::SUMMARY_EXTENSION])
+            }
+            "GenotypeConcordance" => dotted(&[
+                gc::SUMMARY_EXTENSION,
+                gc::DETAIL_EXTENSION,
+                gc::CONTINGENCY_EXTENSION,
+            ]),
+            "CollectSequencingArtifactMetrics" => [
+                artifact::PRE_ADAPTER_DETAILS_EXT,
+                artifact::PRE_ADAPTER_SUMMARY_EXT,
+                artifact::BAIT_BIAS_DETAILS_EXT,
+                artifact::BAIT_BIAS_SUMMARY_EXT,
+                artifact::ERROR_SUMMARY_EXT,
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+            "ConvertSequencingArtifactToOxoG" => {
+                vec![artifact_to_oxog::OXOG_METRICS_EXT.to_owned()]
+            }
+            "CollectRrbsMetrics" => dotted(&[
+                rrbs_metrics::SUMMARY_EXTENSION,
+                rrbs_metrics::DETAIL_EXTENSION,
+            ]),
+            "CreateBafRegressMetricsFile" => dotted(&[arrays::baf_regress::EXTENSION]),
+            "CreateVerifyIDIntensityContaminationMetricsFile" => {
+                dotted(&[arrays::verify_id_intensity::EXTENSION])
+            }
+            "CollectArraysVariantCallingMetrics" => dotted(&[
+                arrays::variant_calling::DETAIL_EXTENSION,
+                arrays::variant_calling::SUMMARY_EXTENSION,
+                arrays::variant_calling::CONTROL_EXTENSION,
+            ]),
+            class => multiple_metrics::file_extensions(class)
+                .unwrap_or(&[])
+                .iter()
+                .map(|(_, extension)| (*extension).to_owned())
+                .collect(),
+        }
+    }
+
     fn ignored(&self, key: Key) -> bool {
         self.ignores.iter().any(|(k, _)| *k == key)
     }

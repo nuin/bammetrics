@@ -2,7 +2,6 @@
 //! (`bammetrics.tools/1`, `docs/schema/tools-1.json`), built from the same
 //! tables the verbs, `--help` and the Python stub are built from.
 
-use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{Kind, Opt, Ty};
 use bammetrics_formats::json::Json;
 use clap::{ArgAction, Command};
@@ -43,8 +42,16 @@ pub const EXIT_CODES: &[(i32, &str)] = &[
     (11, "a verdict is incomplete and none reached --fail-on"),
     (100, "CheckTerminatorBlock found a DEFECTIVE file end"),
     (
+        129,
+        "interrupted by SIGHUP (128 + 1, as a shell reports it); partial outputs removed",
+    ),
+    (
         130,
-        "interrupted by SIGINT, SIGTERM or SIGHUP; partial outputs removed",
+        "interrupted by SIGINT (128 + 2, as a shell reports it); partial outputs removed",
+    ),
+    (
+        143,
+        "interrupted by SIGTERM (128 + 15, as a shell reports it); partial outputs removed",
     ),
 ];
 
@@ -96,18 +103,36 @@ fn short_of(flag: &Flag) -> Json {
     Json::option_text(flag.shorts.first().map(|s| format!("-{s}")).as_deref())
 }
 
-fn option_entry(opt: &Opt, flags: &[Flag]) -> Json {
+/// True when `flag` is the verb flag of the table row `opt`.
+fn is_flag_of(flag: &Flag, opt: &Opt) -> bool {
     let picard = opt.picard();
-    let flag = flags
-        .iter()
-        .find(|f| f.key == Key::Picard(picard) || f.names.contains(&picard));
+    // `QUIET=true` reads as the shared `--quiet`, a flag with no Picard key.
+    flag.key == Key::Picard(picard) || flag.names.contains(&picard) || flag.long == opt.kebab()
+}
+
+fn option_entry(opt: &Opt, flags: &[Flag]) -> Json {
+    // A rejected row has no flag: the verb's `-o` is not its `OUTPUT`.
+    let flag = if opt.kind == Kind::Rejected {
+        None
+    } else {
+        flags.iter().find(|f| is_flag_of(f, opt))
+    };
     let (long, short) = match flag {
         Some(f) => (Json::text(&format!("--{}", f.long)), short_of(f)),
         None if opt.kind == Kind::Rejected => (Json::Null, Json::Null),
         None => (Json::text(&format!("--{}", opt.kebab())), Json::Null),
     };
+    // The verb's own spellings (`MIN_HISTOGRAM_WIDTH`) join the Picard names.
+    let mut names: Vec<&str> = opt.names.to_vec();
+    if let Some(f) = flag.filter(|f| matches!(f.key, Key::Picard(_))) {
+        for name in &f.names {
+            if !names.contains(name) {
+                names.push(name);
+            }
+        }
+    }
     Json::Object(vec![
-        member("names", Json::strings(opt.names.iter().copied())),
+        member("names", Json::strings(names)),
         member("flag", long),
         member("short", short),
         member("type", Json::text(type_name(opt.ty))),
@@ -128,15 +153,20 @@ pub fn tool_entry(verb: &Verb) -> Json {
         Files::Prefix => "prefix",
         Files::Bam => "bam",
     };
-    let extensions = file_extensions(tool.name)
-        .unwrap_or(&[])
-        .iter()
-        .map(|(_, extension)| *extension);
+    let extensions = verb.extensions();
     let role = chain::role_of(verb).map_or("none", chain::Role::name);
-    let options = tool
-        .table_with_rejected()
-        .into_iter()
-        .map(|opt| option_entry(opt, &flags))
+    let table = tool.table_with_rejected();
+    let options = table.iter().map(|opt| option_entry(opt, &flags)).collect();
+    // Flags the verb adds to the table: -o, --format, --sample, -@, -q, -v.
+    let verb_options = flags
+        .iter()
+        .filter(|f| f.key != Key::Help)
+        .filter(|f| {
+            !table
+                .iter()
+                .any(|opt| opt.kind != Kind::Rejected && is_flag_of(f, opt))
+        })
+        .map(flag_option)
         .collect();
     Json::Object(vec![
         member("verb", Json::text(verb.name)),
@@ -146,9 +176,13 @@ pub fn tool_entry(verb: &Verb) -> Json {
         member("reads_stdin", Json::Bool(verb.reads_stdin)),
         member("files", Json::text(files)),
         member("writes", Json::text(verb.writes)),
-        member("extensions", Json::strings(extensions)),
+        member(
+            "extensions",
+            Json::strings(extensions.iter().map(String::as_str)),
+        ),
         member("chain_role", Json::text(role)),
         member("options", Json::Array(options)),
+        member("verb_options", Json::Array(verb_options)),
     ])
 }
 
@@ -204,21 +238,6 @@ fn clap_options(sub: &Command) -> Vec<Json> {
         .collect()
 }
 
-/// The `--format` option the info verbs `tools` and `help` take.
-fn format_option() -> Json {
-    Json::Object(vec![
-        member("flag", Json::text("--format")),
-        member("short", Json::Null),
-        member("takes_value", Json::Bool(true)),
-        member("repeated", Json::Bool(false)),
-        member("required", Json::Bool(false)),
-        member(
-            "help",
-            Json::text("The output form: text (default) or json."),
-        ),
-    ])
-}
-
 /// The `--no-config` flag every verb takes before its other arguments.
 fn no_config_option() -> Json {
     Json::Object(vec![
@@ -231,12 +250,23 @@ fn no_config_option() -> Json {
     ])
 }
 
+fn not_help(flag: &&Flag) -> bool {
+    flag.key != Key::Help
+}
+
 fn other_verb(name: &str) -> Vec<Json> {
     match name {
-        "collect" => collect::flags().iter().map(flag_option).collect(),
-        n if n == chain::VERB => chain::global_flags().iter().map(flag_option).collect(),
+        "collect" => collect::flags()
+            .iter()
+            .filter(not_help)
+            .map(flag_option)
+            .collect(),
+        n if n == chain::VERB => chain::global_flags()
+            .iter()
+            .filter(not_help)
+            .map(flag_option)
+            .collect(),
         crate::config::VERB => vec![no_config_option()],
-        "tools" | "help" => vec![format_option()],
         _ => Vec::new(),
     }
 }
@@ -268,14 +298,32 @@ pub fn listing(base: &Command) -> Json {
         ));
     }
     for (name, _) in OTHER_VERBS {
-        verbs.push(verb_entry(name, &about(name), other_verb(name)));
+        let options = match *name {
+            // Declared on the clap command, so `help tools` shows them too.
+            "tools" | "help" => full
+                .find_subcommand(name)
+                .map(clap_options)
+                .unwrap_or_default(),
+            _ => other_verb(name),
+        };
+        verbs.push(verb_entry(name, &about(name), options));
     }
+    let recipes = chain::recipes::shipped_descriptions()
+        .into_iter()
+        .map(|(name, description)| {
+            Json::Object(vec![
+                member("name", Json::text(&name)),
+                member("description", Json::text(&description)),
+            ])
+        })
+        .collect();
     Json::Object(vec![
         member("schema", Json::text(SCHEMA)),
         member("bammetrics", version_object()),
         member("exit_codes", Json::Array(exit_codes)),
         member("tools", Json::Array(VERBS.iter().map(tool_entry).collect())),
         member("verbs", Json::Array(verbs)),
+        member("recipes", Json::Array(recipes)),
     ])
 }
 
@@ -314,7 +362,14 @@ mod tests {
             .collect();
         assert_eq!(
             members,
-            ["schema", "bammetrics", "exit_codes", "tools", "verbs"]
+            [
+                "schema",
+                "bammetrics",
+                "exit_codes",
+                "tools",
+                "verbs",
+                "recipes"
+            ]
         );
     }
 
@@ -366,9 +421,9 @@ mod tests {
     }
 
     #[test]
-    fn exit_codes_are_the_documented_seven() {
+    fn exit_codes_are_the_documented_nine() {
         let codes: Vec<i32> = EXIT_CODES.iter().map(|(c, _)| *c).collect();
-        assert_eq!(codes, [0, 1, 2, 10, 11, 100, 130]);
+        assert_eq!(codes, [0, 1, 2, 10, 11, 100, 129, 130, 143]);
     }
 
     #[test]
