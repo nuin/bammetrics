@@ -407,3 +407,44 @@ fn listing_marks_aliases_ignored_and_rejected_options() {
         .collect();
     assert_eq!(codes, ["0", "1", "2", "10", "11", "100", "130"]);
 }
+
+fn parsed(out: &Output) -> Json {
+    Json::parse(std::str::from_utf8(&out.stdout).expect("utf-8")).expect("JSON")
+}
+
+#[test]
+fn version_json_equals_the_listing_member() {
+    let member = tools_listing().get("bammetrics").expect("member").clone();
+    for args in [["--version", "--json"], ["--json", "--version"]] {
+        let out = bammetrics(&args);
+        assert_eq!(out.status.code(), Some(0), "{args:?}");
+        let doc = parsed(&out);
+        assert_eq!(doc, member, "{args:?}");
+        assert_eq!(text(&doc, "version"), env!("CARGO_PKG_VERSION"));
+    }
+}
+
+#[test]
+fn plain_version_is_unchanged() {
+    let out = bammetrics(&["--version"]);
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(out.stdout).expect("utf-8"),
+        format!("bammetrics {}\n", env!("CARGO_PKG_VERSION"))
+    );
+}
+
+#[test]
+fn json_flag_alone_or_with_more_is_a_usage_error() {
+    for args in [
+        &["--json"][..],
+        &["--version", "--json", "extra"],
+        &["--json", "--version", "extra"],
+        &["--json", "tools"],
+    ] {
+        let out = bammetrics(args);
+        assert_eq!(out.status.code(), Some(2), "{args:?}");
+        assert!(out.stdout.is_empty(), "{args:?}");
+        assert!(!out.stderr.is_empty(), "{args:?}");
+    }
+}
