@@ -12,6 +12,9 @@ use crate::grammar::{Flag, Key};
 use crate::verbs::{self, VERBS};
 use crate::{chain, collect};
 
+mod listing;
+pub use listing::{EXIT_CODES, listing, tool_entry, version_object};
+
 /// The verbs that are not tool verbs, with one line each.
 const OTHER_VERBS: &[(&str, &str)] = &[
     (

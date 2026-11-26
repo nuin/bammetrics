@@ -345,20 +345,33 @@ fn tool_role(
     if let Some(role) = variant_role {
         return Ok((verb, role));
     }
-    if is_transform(verb) {
-        return Ok((verb, Role::Transform));
-    }
-    if is_split(verb) {
-        return Ok((verb, Role::Split));
-    }
-    if verb.tool().collector.is_some() {
-        return Ok((verb, Role::Tap));
-    }
-    if is_materialized(verb) {
-        return Ok((verb, Role::Materialize));
+    if let Some(role) = alignment_role(verb) {
+        return Ok((verb, role));
     }
     let label = format!("step {number} ({})", verb.name);
     Err(not_a_step(verb, &place(spec, &label)).hint(STEPS_HINT))
+}
+
+/// The role of a verb on an alignment stream: transform, split, tap or
+/// materialize; `None` for a verb that is no step of one.
+fn alignment_role(verb: &Verb) -> Option<Role> {
+    if is_transform(verb) {
+        Some(Role::Transform)
+    } else if is_split(verb) {
+        Some(Role::Split)
+    } else if verb.tool().collector.is_some() {
+        Some(Role::Tap)
+    } else if is_materialized(verb) {
+        Some(Role::Materialize)
+    } else {
+        None
+    }
+}
+
+/// The role a verb has as a chain step on either stream kind (variant
+/// role first); `None` for a tool that is refused as a step.
+pub(crate) fn role_of(verb: &Verb) -> Option<Role> {
+    variant::role_of(verb).or_else(|| alignment_role(verb))
 }
 
 /// The spelling of a file a step names by an empty value (`-o ''`, a

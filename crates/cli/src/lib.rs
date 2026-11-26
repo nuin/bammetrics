@@ -246,6 +246,10 @@ pub fn run() -> error::Result<u8> {
             "plan" if chain::is_chain(rest) => return Ok(chain::run_plan(rest)?),
             config::VERB => return Ok(config::run(rest)?),
             chain::recipes::LIST_VERB => return Ok(chain::recipes::run_list(rest)?),
+            "tools" if rest == ["--format", "json"] => {
+                print!("{}", info::listing(&Cli::command()).render());
+                return Ok(0);
+            }
             "tools" => {
                 print!("{}", info::tools(&Cli::command()));
                 return Ok(0);

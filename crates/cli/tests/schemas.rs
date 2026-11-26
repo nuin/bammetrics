@@ -83,13 +83,14 @@ fn closed(schema: &Json, path: &str, open: &mut Vec<String>) {
 }
 
 /// The committed schemas, each with the version its writer writes.
-fn versions() -> [(&'static str, &'static str); 5] {
+fn versions() -> [(&'static str, &'static str); 6] {
     [
         ("metrics-1.json", "bammetrics.metrics/1"),
         ("verdict-1.json", bammetrics_verdict::verdict::SCHEMA),
         ("manifest-1.json", bammetrics_cli::manifest::SCHEMA),
         ("manifest-2.json", bammetrics_cli::manifest::v2::SCHEMA),
         ("events-1.json", "bammetrics events, version 1"),
+        ("tools-1.json", "bammetrics.tools/1"),
     ]
 }
 
@@ -266,4 +267,136 @@ fn chain_writes_its_manifest_under_schema_2() {
         Some(&Json::Null)
     );
     let _ = fs::remove_dir_all(&dir);
+}
+
+fn tools_listing() -> Json {
+    let out = bammetrics(&["tools", "--format", "json"]);
+    assert_eq!(out.status.code(), Some(0));
+    Json::parse(std::str::from_utf8(&out.stdout).expect("utf-8")).expect("JSON")
+}
+
+fn array<'a>(value: &'a Json, key: &str) -> &'a [Json] {
+    value.get(key).and_then(Json::as_array).expect(key)
+}
+
+fn text<'a>(value: &'a Json, key: &str) -> &'a str {
+    value.get(key).and_then(Json::as_str).expect(key)
+}
+
+fn first_name(option: &Json) -> &str {
+    array(option, "names")[0].as_str().expect("name")
+}
+
+#[test]
+fn tools_listing_is_valid_under_tools_1() {
+    let doc = tools_listing();
+    valid(&schema("tools-1.json"), &doc, "tools --format json");
+}
+
+#[test]
+fn tools_listing_equals_the_registry() {
+    use bammetrics_core::registry::{COMMON, Kind, Ty};
+    let doc = tools_listing();
+    let tools = array(&doc, "tools");
+    assert_eq!(tools.len(), 77);
+    assert_eq!(tools.len(), bammetrics_cli::verbs::VERBS.len());
+    for (entry, verb) in tools.iter().zip(bammetrics_cli::verbs::VERBS) {
+        assert_eq!(text(entry, "verb"), verb.name);
+        assert_eq!(text(entry, "class"), verb.class);
+        let tool = verb.tool();
+        let own_output = tool.options.iter().any(|o| o.kind == Kind::Output);
+        let common = COMMON.iter().filter(|c| {
+            !(own_output && c.kind == Kind::Output)
+                && !tool.options.iter().any(|o| o.names.contains(&c.picard()))
+        });
+        let rows: Vec<_> = tool.options.iter().chain(common).collect();
+        let options = array(entry, "options");
+        assert_eq!(options.len(), rows.len(), "{}", verb.name);
+        for (option, row) in options.iter().zip(rows) {
+            let names: Vec<&str> = array(option, "names")
+                .iter()
+                .map(|n| n.as_str().expect("name"))
+                .collect();
+            assert_eq!(names, row.names, "{}", verb.name);
+            let kind = match row.kind {
+                Kind::Value => "value",
+                Kind::Output => "output",
+                Kind::Ignored(_) => "ignored",
+                Kind::Rejected => "rejected",
+            };
+            assert_eq!(text(option, "kind"), kind, "{} {names:?}", verb.name);
+            let ty = match row.ty {
+                Ty::Bool => "bool",
+                Ty::Int => "int",
+                Ty::Float => "float",
+                Ty::Text => "text",
+                Ty::Path => "path",
+            };
+            assert_eq!(text(option, "type"), ty, "{} {names:?}", verb.name);
+            assert_eq!(option.get("repeated"), Some(&Json::Bool(row.repeated)));
+            assert_eq!(option.get("required"), Some(&Json::Bool(row.required)));
+        }
+    }
+}
+
+#[test]
+fn tools_listing_keywords_equal_the_python_stub() {
+    use bammetrics_core::registry::python_keywords;
+    let doc = tools_listing();
+    for (entry, verb) in array(&doc, "tools")
+        .iter()
+        .zip(bammetrics_cli::verbs::VERBS)
+    {
+        let options = array(entry, "options");
+        let keywords = python_keywords(verb.tool());
+        for keyword in keywords.iter().filter(|k| !k.output) {
+            let found = options
+                .iter()
+                .find(|o| first_name(o) == keyword.picard)
+                .unwrap_or_else(|| panic!("{} lacks {}", verb.name, keyword.picard));
+            assert_eq!(first_name(found).to_ascii_lowercase(), keyword.name);
+        }
+        for option in options.iter().filter(|o| text(o, "kind") == "value") {
+            let lower = first_name(option).to_ascii_lowercase();
+            let positional = lower == "input" || option.get("required") == Some(&Json::Bool(true));
+            assert!(
+                positional || keywords.iter().any(|k| k.name == lower),
+                "{}: {lower} is no keyword",
+                verb.name
+            );
+        }
+    }
+}
+
+#[test]
+fn listing_marks_aliases_ignored_and_rejected_options() {
+    let doc = tools_listing();
+    let tools = array(&doc, "tools");
+    let tool = |verb: &str| tools.iter().find(|t| text(t, "verb") == verb).expect(verb);
+    let option = |verb: &str, name: &str| {
+        array(tool(verb), "options")
+            .iter()
+            .find(|o| first_name(o) == name)
+            .unwrap_or_else(|| panic!("{verb} {name}"))
+    };
+    let histogram = option("insert-size", "HISTOGRAM_FILE");
+    assert_eq!(text(histogram, "kind"), "ignored");
+    assert_eq!(array(histogram, "names").len(), 2);
+    assert_eq!(text(option("wgs", "ASSUME_SORTED"), "kind"), "rejected");
+    assert_eq!(text(tool("insert-size"), "chain_role"), "tap");
+    assert_eq!(text(tool("mark-duplicates"), "chain_role"), "transform");
+    assert_eq!(text(tool("split-sam-by-library"), "chain_role"), "split");
+    assert_eq!(text(tool("build-bam-index"), "chain_role"), "none");
+    assert_eq!(
+        tool("jumping-library").get("reads_stdin"),
+        Some(&Json::Bool(false))
+    );
+    let codes: Vec<&str> = array(&doc, "exit_codes")
+        .iter()
+        .map(|c| match c.get("code") {
+            Some(Json::Number(n)) => n.as_str(),
+            _ => panic!("code"),
+        })
+        .collect();
+    assert_eq!(codes, ["0", "1", "2", "10", "11", "100", "130"]);
 }

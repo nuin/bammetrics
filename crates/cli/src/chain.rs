@@ -57,6 +57,7 @@ pub use args::{Asked, global_flags, help, parse, step_flags, step_help, write_fl
 pub use describe::text as plan_text;
 pub use planfile::{parse as parse_plan, read as read_plan};
 pub use planner::bytes_or_why;
+pub(crate) use prepare::role_of;
 pub use prepare::{Chain, Planned, PlannedFile, PrefixOrigin, Role, prepare};
 pub use resolve::DICTIONARY_DEFAULTS;
 pub use run::{Outcome, StepOutcome, StepStatus, Written, execute, sample_name, summary};
