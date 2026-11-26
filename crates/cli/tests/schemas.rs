@@ -474,7 +474,18 @@ fn rejected_options_have_no_flag_and_verb_options_are_listed() {
         assert!(flags(verb).contains(&"--output"), "{verb}");
     }
     assert!(flags("insert-size").contains(&"--threads"));
-    assert!(!flags("insert-size").contains(&"--quiet"));
+    // `-q` works on the verb; the `QUIET` row it does not set has no flag.
+    assert!(flags("insert-size").contains(&"--quiet"));
+    let quiet = array(tool("insert-size"), "options")
+        .iter()
+        .find(|o| first_name(o) == "QUIET")
+        .expect("row");
+    assert_eq!(quiet.get("flag"), Some(&Json::Null));
+    let extensions: Vec<&str> = array(tool("multiple-metrics"), "extensions")
+        .iter()
+        .filter_map(|e| e.as_str())
+        .collect();
+    assert!(extensions.contains(&".bait_bias_detail_metrics"));
     let width = array(tool("insert-size"), "options")
         .iter()
         .find(|o| first_name(o) == "MINIMUM_HISTOGRAM_WIDTH")

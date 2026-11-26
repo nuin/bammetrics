@@ -1148,9 +1148,18 @@ impl Verb {
             sequencing_artifact as artifact, variant_calling_metrics as calling,
         };
         let dotted = |names: &[&str]| names.iter().map(|n| format!(".{n}")).collect();
+        const ARTIFACT: [&str; 5] = [
+            artifact::PRE_ADAPTER_DETAILS_EXT,
+            artifact::PRE_ADAPTER_SUMMARY_EXT,
+            artifact::BAIT_BIAS_DETAILS_EXT,
+            artifact::BAIT_BIAS_SUMMARY_EXT,
+            artifact::ERROR_SUMMARY_EXT,
+        ];
         match self.class {
+            // The artifact program names its own five files.
             "CollectMultipleMetrics" => multiple_metrics::program_extensions()
                 .into_iter()
+                .chain(ARTIFACT)
                 .map(str::to_owned)
                 .collect(),
             "CollectVariantCallingMetrics" | "AccumulateVariantCallingMetrics" => {
@@ -1161,15 +1170,7 @@ impl Verb {
                 gc::DETAIL_EXTENSION,
                 gc::CONTINGENCY_EXTENSION,
             ]),
-            "CollectSequencingArtifactMetrics" => [
-                artifact::PRE_ADAPTER_DETAILS_EXT,
-                artifact::PRE_ADAPTER_SUMMARY_EXT,
-                artifact::BAIT_BIAS_DETAILS_EXT,
-                artifact::BAIT_BIAS_SUMMARY_EXT,
-                artifact::ERROR_SUMMARY_EXT,
-            ]
-            .map(str::to_owned)
-            .to_vec(),
+            "CollectSequencingArtifactMetrics" => ARTIFACT.map(str::to_owned).to_vec(),
             "ConvertSequencingArtifactToOxoG" => {
                 vec![artifact_to_oxog::OXOG_METRICS_EXT.to_owned()]
             }

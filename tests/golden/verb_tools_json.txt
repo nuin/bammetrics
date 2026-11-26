@@ -230,8 +230,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -385,6 +385,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -590,8 +598,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -730,6 +738,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -878,8 +894,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -1033,6 +1049,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -1361,8 +1385,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -1495,6 +1519,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -1703,8 +1735,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -1835,6 +1867,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -1984,8 +2024,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -2139,6 +2179,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -2274,8 +2322,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -2429,6 +2477,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -2564,8 +2620,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -2719,6 +2775,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -2814,8 +2878,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -2969,6 +3033,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -3219,8 +3291,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -3362,6 +3434,14 @@ json
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
         },
         {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
+        },
+        {
           "flag": "--verbose",
           "short": "-v",
           "takes_value": false,
@@ -3390,7 +3470,12 @@ json
         ".quality_yield_metrics",
         ".mt_copy_number_metrics",
         ".adapter_content_metrics",
-        ".telomere_metrics"
+        ".telomere_metrics",
+        ".pre_adapter_detail_metrics",
+        ".pre_adapter_summary_metrics",
+        ".bait_bias_detail_metrics",
+        ".bait_bias_summary_metrics",
+        ".error_summary_metrics"
       ],
       "chain_role": "materialize",
       "options": [
@@ -3613,8 +3698,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -3747,6 +3832,14 @@ json
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
         },
         {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
+        },
+        {
           "flag": "--verbose",
           "short": "-v",
           "takes_value": false,
@@ -3854,8 +3947,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -3980,6 +4073,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -4237,8 +4338,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -4363,6 +4464,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -4618,8 +4727,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -4744,6 +4853,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -5013,8 +5130,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -5139,6 +5256,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -5463,8 +5588,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -5589,6 +5714,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -5804,8 +5937,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -5959,6 +6092,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -6138,8 +6279,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -6256,6 +6397,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -6368,8 +6517,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -6486,6 +6635,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -6760,8 +6917,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -6878,6 +7035,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -7055,8 +7220,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -7181,6 +7346,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no BAM record is read, a BAM gives only its header."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -7385,8 +7558,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -7498,6 +7671,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -7726,8 +7907,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -7826,6 +8007,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -8440,8 +8629,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -8506,6 +8695,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -8811,8 +9008,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -8943,6 +9140,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -9119,8 +9324,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -9237,6 +9442,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -9494,8 +9707,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -9620,6 +9833,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -9825,8 +10046,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -9980,6 +10201,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -10157,8 +10386,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -10314,6 +10543,14 @@ json
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
         },
         {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
+        },
+        {
           "flag": "--verbose",
           "short": "-v",
           "takes_value": false,
@@ -10419,8 +10656,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -10557,6 +10794,14 @@ json
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
         },
         {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
+        },
+        {
           "flag": "--verbose",
           "short": "-v",
           "takes_value": false,
@@ -10688,8 +10933,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -10803,6 +11048,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -10938,8 +11191,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -11081,6 +11334,14 @@ json
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
         },
         {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
+        },
+        {
           "flag": "--verbose",
           "short": "-v",
           "takes_value": false,
@@ -11201,8 +11462,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -11306,6 +11567,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -11493,8 +11762,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -11577,6 +11846,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: one thread reads and one writes."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -11736,8 +12013,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -11885,6 +12162,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -12060,8 +12345,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -12126,6 +12411,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -12318,8 +12611,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -12473,6 +12766,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -12727,8 +13028,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -12882,6 +13183,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -13043,8 +13352,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -13198,6 +13507,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -13319,8 +13636,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -13474,6 +13791,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -13649,8 +13974,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -13804,6 +14129,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -13979,8 +14312,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -14105,6 +14438,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -14280,8 +14621,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -14346,6 +14687,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -14520,8 +14869,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -14586,6 +14935,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -14761,8 +15118,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -14827,6 +15184,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -14988,8 +15353,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15054,6 +15419,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -15241,8 +15614,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15307,6 +15680,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -15494,8 +15875,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15560,6 +15941,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -15917,8 +16306,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -15983,6 +16372,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -16185,8 +16582,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -16251,6 +16648,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -16412,8 +16817,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -16478,6 +16883,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -16694,8 +17107,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -16760,6 +17173,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -16921,8 +17342,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -16987,6 +17408,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -17096,8 +17525,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -17214,6 +17643,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -17362,8 +17799,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -17517,6 +17954,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -17705,8 +18150,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -17833,6 +18278,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -18049,8 +18502,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -18167,6 +18620,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -18291,8 +18752,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -18396,6 +18857,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -18520,8 +18989,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -18625,6 +19094,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no BAM is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -18804,8 +19281,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -18909,6 +19386,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no BAM is read; NUM_PROCESSORS changes nothing."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -19268,8 +19753,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -19346,6 +19831,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -19494,8 +19987,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -19599,6 +20092,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -19735,8 +20236,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -19853,6 +20354,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -20015,8 +20524,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -20120,6 +20629,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -20255,8 +20772,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -20368,6 +20885,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: no record is read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -20598,8 +21123,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -20664,6 +21189,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -20867,8 +21400,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -20933,6 +21466,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -21135,8 +21676,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -21201,6 +21742,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -21472,8 +22021,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -21538,6 +22087,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -21769,8 +22326,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -21835,6 +22392,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -22062,8 +22627,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -22128,6 +22693,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -22289,8 +22862,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -22355,6 +22928,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -22568,8 +23149,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -22668,6 +23249,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -22790,8 +23379,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -22911,6 +23500,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: the last bytes are read, no record."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -23128,8 +23725,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -23202,6 +23799,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -23364,8 +23969,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -23443,6 +24048,14 @@ json
           "repeated": false,
           "required": false,
           "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",
@@ -23552,8 +24165,8 @@ json
           "names": [
             "QUIET"
           ],
-          "flag": "--quiet",
-          "short": "-q",
+          "flag": null,
+          "short": null,
           "type": "bool",
           "kind": "ignored",
           "repeated": false,
@@ -23670,6 +24283,14 @@ json
           "repeated": false,
           "required": false,
           "help": "Checked, then ignored: only headers are read."
+        },
+        {
+          "flag": "--quiet",
+          "short": "-q",
+          "takes_value": false,
+          "repeated": false,
+          "required": false,
+          "help": "No notes on standard error."
         },
         {
           "flag": "--verbose",

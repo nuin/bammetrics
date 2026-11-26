@@ -322,8 +322,8 @@ CollectHsMetrics
       "names": [
         "QUIET"
       ],
-      "flag": "--quiet",
-      "short": "-q",
+      "flag": null,
+      "short": null,
       "type": "bool",
       "kind": "ignored",
       "repeated": false,
@@ -456,6 +456,14 @@ CollectHsMetrics
       "repeated": false,
       "required": false,
       "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+    },
+    {
+      "flag": "--quiet",
+      "short": "-q",
+      "takes_value": false,
+      "repeated": false,
+      "required": false,
+      "help": "No notes on standard error."
     },
     {
       "flag": "--verbose",

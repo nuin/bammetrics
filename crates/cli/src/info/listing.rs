@@ -106,12 +106,12 @@ fn short_of(flag: &Flag) -> Json {
 /// True when `flag` is the verb flag of the table row `opt`.
 fn is_flag_of(flag: &Flag, opt: &Opt) -> bool {
     let picard = opt.picard();
-    // `QUIET=true` reads as the shared `--quiet`, a flag with no Picard key.
-    flag.key == Key::Picard(picard) || flag.names.contains(&picard) || flag.long == opt.kebab()
+    flag.key == Key::Picard(picard) || flag.names.contains(&picard)
 }
 
 fn option_entry(opt: &Opt, flags: &[Flag]) -> Json {
     // A rejected row has no flag: the verb's `-o` is not its `OUTPUT`.
+    // `QUIET` has none either: the verb's `-q` is a verb option of its own.
     let flag = if opt.kind == Kind::Rejected {
         None
     } else {
@@ -119,8 +119,7 @@ fn option_entry(opt: &Opt, flags: &[Flag]) -> Json {
     };
     let (long, short) = match flag {
         Some(f) => (Json::text(&format!("--{}", f.long)), short_of(f)),
-        None if opt.kind == Kind::Rejected => (Json::Null, Json::Null),
-        None => (Json::text(&format!("--{}", opt.kebab())), Json::Null),
+        None => (Json::Null, Json::Null),
     };
     // The verb's own spellings (`MIN_HISTOGRAM_WIDTH`) join the Picard names.
     let mut names: Vec<&str> = opt.names.to_vec();
