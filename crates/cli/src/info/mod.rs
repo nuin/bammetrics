@@ -15,6 +15,71 @@ use crate::{chain, collect};
 mod listing;
 pub use listing::{EXIT_CODES, listing, tool_entry, version_object};
 
+/// The form `tools` and `help VERB` print.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InfoFormat {
+    Text,
+    Json,
+}
+
+/// Takes `--format VALUE` or `--format=VALUE` from any position of `args`
+/// and returns the format and the other arguments. The value is `text` or
+/// `json`, lower case; no flag means text.
+pub fn info_format(verb: &str, args: &[String]) -> Result<(InfoFormat, Vec<String>), VerbError> {
+    let mut format = InfoFormat::Text;
+    let mut rest = Vec::with_capacity(args.len());
+    let mut words = args.iter();
+    while let Some(word) = words.next() {
+        let value = if word == "--format" {
+            Some(words.next().map(String::as_str).ok_or_else(|| {
+                VerbError::usage(verb, "--format needs a value").hint("text or json")
+            })?)
+        } else {
+            word.strip_prefix("--format=")
+        };
+        match value {
+            None => rest.push(word.clone()),
+            Some("text") => format = InfoFormat::Text,
+            Some("json") => format = InfoFormat::Json,
+            Some(other) => {
+                return Err(VerbError::usage(
+                    verb,
+                    format!("--format takes text or json, not {other:?}"),
+                ));
+            }
+        }
+    }
+    Ok((format, rest))
+}
+
+/// `bammetrics help TOPIC --format json`: the listing entry of a tool verb.
+pub fn help_json(args: &[String]) -> Result<String, VerbError> {
+    let Some(topic) = args.first() else {
+        return Err(
+            VerbError::usage("help", "--format json needs a verb or Picard class")
+                .hint("bammetrics tools --format json lists every verb"),
+        );
+    };
+    if let Some(verb) = verbs::find(topic).or_else(|| verbs::for_class(topic)) {
+        return Ok(tool_entry(verb).render());
+    }
+    let known = topics().contains(&topic.as_str());
+    let mut error = VerbError::usage(
+        "help",
+        if known {
+            format!("{topic:?} has no JSON entry")
+        } else {
+            format!("no verb or Picard class {topic:?}")
+        },
+    );
+    if known {
+        error = error.hint("it is in the verbs array of bammetrics tools --format json");
+    } else if let Some(best) = did_you_mean(topic, topics()) {
+        error = error.hint(format!("did you mean {best}?"));
+    }
+    Err(error.hint("bammetrics tools lists them"))
+}
+
 /// The verbs that are not tool verbs, with one line each.
 const OTHER_VERBS: &[(&str, &str)] = &[
     (

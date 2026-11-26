@@ -1,0 +1,12 @@
+## argv
+help
+qc
+--format
+json
+## exit
+2
+## stdout
+## stderr
+bammetrics help: "qc" has no JSON entry
+  it is in the verbs array of bammetrics tools --format json
+  bammetrics tools lists them

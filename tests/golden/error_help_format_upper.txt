@@ -1,0 +1,10 @@
+## argv
+help
+insert-size
+--format
+JSON
+## exit
+2
+## stdout
+## stderr
+bammetrics help: --format takes text or json, not "JSON"

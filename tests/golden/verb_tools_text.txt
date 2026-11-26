@@ -1,0 +1,104 @@
+## argv
+tools
+--format
+text
+## exit
+0
+## stdout
+VERB                                               PICARD CLASS
+insert-size                                        CollectInsertSizeMetrics
+alignment-summary                                  CollectAlignmentSummaryMetrics
+quality-yield                                      CollectQualityYieldMetrics
+hs-metrics                                         CollectHsMetrics
+gc-bias                                            CollectGcBiasMetrics
+quality-score-distribution                         QualityScoreDistribution
+mean-quality-by-cycle                              MeanQualityByCycle
+base-distribution-by-cycle                         CollectBaseDistributionByCycle
+duplicate-metrics                                  CollectDuplicateMetrics
+library-complexity                                 EstimateLibraryComplexity
+multiple-metrics                                   CollectMultipleMetrics
+accumulate-quality-yield                           AccumulateQualityYieldMetrics
+wgs                                                CollectWgsMetrics
+raw-wgs                                            CollectRawWgsMetrics
+wgs-with-non-zero-coverage                         CollectWgsMetricsWithNonZeroCoverage
+targeted-pcr                                       CollectTargetedPcrMetrics
+rna-seq                                            CollectRnaSeqMetrics
+variant-calling                                    CollectVariantCallingMetrics
+accumulate-variant-calling                         AccumulateVariantCallingMetrics
+genotype-concordance                               GenotypeConcordance
+bed-to-interval-list                               BedToIntervalList
+compare-metrics                                    CompareMetrics
+create-sequence-dictionary                         CreateSequenceDictionary
+mark-duplicates                                    MarkDuplicates
+sequencing-artifact                                CollectSequencingArtifactMetrics
+convert-sequencing-artifact-to-oxo-g               ConvertSequencingArtifactToOxoG
+oxo-g                                              CollectOxoGMetrics
+coverage-gaps                                      CollectCoverageGaps
+sex-check                                          CollectSexCheckMetrics
+bam-index-stats                                    BamIndexStats
+check-duplicate-marking                            CheckDuplicateMarking
+jumping-library                                    CollectJumpingLibraryMetrics
+build-bam-index                                    BuildBamIndex
+fifo-buffer                                        FifoBuffer
+view-sam                                           ViewSam
+sort-sam                                           SortSam
+mt-copy-number                                     CollectMtCopyNumberMetrics
+exon-coverage                                      CollectExonCoverageMetrics
+adapter-content                                    CollectAdapterContentMetrics
+duplicate-by-tile                                  CollectDuplicateByTileMetrics
+telomere                                           CollectTelomereMetrics
+index-depth                                        CollectIndexDepthMetrics
+add-comments-to-bam                                AddCommentsToBam
+replace-sam-header                                 ReplaceSamHeader
+add-o-a-tag                                        AddOATag
+clean-sam                                          CleanSam
+set-nm-md-and-uq-tags                              SetNmMdAndUqTags
+set-nm-and-uq-tags                                 SetNmAndUqTags
+add-or-replace-read-groups                         AddOrReplaceReadGroups
+revert-original-base-qualities-and-add-mate-cigar  RevertOriginalBaseQualitiesAndAddMateCigar
+split-sam-by-library                               SplitSamByLibrary
+split-sam-by-number-of-reads                       SplitSamByNumberOfReads
+gather-bam-files                                   GatherBamFiles
+calculate-read-group-checksum                      CalculateReadGroupChecksum
+quality-yield-s-n-v-q                              CollectQualityYieldMetricsSNVQ
+umi-prevalence                                     CollectUmiPrevalenceMetrics
+rrbs                                               CollectRrbsMetrics
+create-baf-regress-file                            CreateBafRegressMetricsFile
+create-verify-i-d-intensity-contamination-file     CreateVerifyIDIntensityContaminationMetricsFile
+arrays-variant-calling                             CollectArraysVariantCallingMetrics
+interval-list-tools                                IntervalListTools
+interval-list-to-bed                               IntervalListToBed
+vcf-to-interval-list                               VcfToIntervalList
+scatter-intervals-by-ns                            ScatterIntervalsByNs
+non-n-fasta-size                                   NonNFastaSize
+merge-sam-files                                    MergeSamFiles
+reorder-sam                                        ReorderSam
+fix-mate-information                               FixMateInformation
+filter-sam-reads                                   FilterSamReads
+downsample-sam                                     DownsampleSam
+position-based-downsample-sam                      PositionBasedDownsampleSam
+sam-format-converter                               SamFormatConverter
+compare-s-a-ms                                     CompareSAMs
+check-terminator-block                             CheckTerminatorBlock
+split-vcfs                                         SplitVcfs
+make-sites-only-vcf                                MakeSitesOnlyVcf
+make-vcf-sample-name-map                           MakeVcfSampleNameMap
+
+Other verbs:
+  collect      Several metrics from one read of the BAM, one Picard file each.
+  chain        Several steps on one BAM in one process: BAM + STEP [+ STEP ...], or --plan FILE.
+  recipes      List the named chains bammetrics NAME BAM -o OUT runs (prep, qc-only, downsample).
+  config       Print the reference, threads and directories taken from the user config file.
+  tools        List the verbs and the Picard class each runs.
+  presets      List the built-in verdict presets with version and hash.
+  help         Help for a verb or a Picard class.
+  completions  A completion script for bash, zsh, fish, elvish or powershell.
+  qc           The collectors a preset needs on one read of a BAM, then the verdict and the page.
+  plan         What qc with the same options would run.
+  check        Evaluate a preset over directories of metrics files, or read verdict.json files, and gate.
+  report       Verdicts, sample pages and a run index from directories of Picard metrics files.
+  convert      One metrics file in another format.
+  doctor       A pre-flight check of one BAM, CRAM or SAM file.
+
+Picard syntax: bammetrics <PICARD CLASS> I=... O=... [KEY=VALUE ...]
+## stderr

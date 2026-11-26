@@ -249,6 +249,13 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_coverage_gaps_no_targets", "coverage-gaps", "IS"),
     case!("error_verb_sex_check_bad_sex", "sex-check", "IS", "--sex", "unknown"),
     case!("verb_tools", "tools"),
+    case!("verb_tools_json", "tools", "--format", "json"),
+    case!("verb_tools_text", "tools", "--format", "text"),
+    case!("verb_help_insert_size_json", "help", "insert-size", "--format", "json"),
+    case!("verb_help_class_json", "help", "--format=json", "CollectHsMetrics"),
+    case!("error_tools_format_yaml", "tools", "--format", "yaml"),
+    case!("error_help_format_upper", "help", "insert-size", "--format", "JSON"),
+    case!("error_help_qc_json", "help", "qc", "--format", "json"),
     case!("verb_presets", "presets"),
     case!("error_verb_unknown_option", "insert-size", "IS", "--minmum-pct", "0.1"),
     case!("error_verb_hs_no_targets", "hs-metrics", "IS", "--baits", "IL", "-R", "REF"),
@@ -1921,7 +1928,34 @@ fn normalize(text: &str, out: &str) -> String {
     // the fingerprints of files whose `INPUT=` and `OUTPUT=` lines name
     // `OUT`, so their size and hash follow the path's length.
     let mut chain_manifest = false;
+    // The `tools --format json` listing carries the build's version, git
+    // commit and cargo features, which differ by commit and by build.
+    let listing = text.contains("\"schema\": \"bammetrics.tools/1\"");
+    let mut in_features = false;
     for line in text.lines() {
+        if in_features {
+            in_features = !line.trim_start().starts_with(']');
+            continue;
+        }
+        if listing {
+            let trimmed = line.trim_start();
+            let indent = &line[..line.len() - trimmed.len()];
+            if trimmed.starts_with("\"commit\": ") {
+                normalized.push_str(&format!("{indent}\"commit\": \"<commit>\",\n"));
+                continue;
+            }
+            if trimmed.starts_with("\"version\": ") && line.contains(env!("CARGO_PKG_VERSION")) {
+                normalized.push_str(&format!("{indent}\"version\": \"<version>\",\n"));
+                continue;
+            }
+            if trimmed == "\"features\": [" {
+                normalized.push_str(&format!(
+                    "{indent}\"features\": [\n{indent}  \"<features>\"\n{indent}],\n"
+                ));
+                in_features = true;
+                continue;
+            }
+        }
         if line.starts_with("## ") {
             chain_manifest = false;
         } else if line.contains("\"schema\": \"bammetrics.manifest/2\"") {

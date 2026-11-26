@@ -246,12 +246,21 @@ pub fn run() -> error::Result<u8> {
             "plan" if chain::is_chain(rest) => return Ok(chain::run_plan(rest)?),
             config::VERB => return Ok(config::run(rest)?),
             chain::recipes::LIST_VERB => return Ok(chain::recipes::run_list(rest)?),
-            "tools" if rest == ["--format", "json"] => {
-                print!("{}", info::listing(&Cli::command()).render());
-                return Ok(0);
-            }
             "tools" => {
-                print!("{}", info::tools(&Cli::command()));
+                let (format, rest) = info::info_format("tools", rest)?;
+                if let Some(extra) = rest.first() {
+                    return Err(VerbError::usage(
+                        "tools",
+                        format!("unexpected argument {extra:?}"),
+                    )
+                    .into());
+                }
+                match format {
+                    info::InfoFormat::Json => {
+                        events::print_stdout(&info::listing(&Cli::command()).render());
+                    }
+                    info::InfoFormat::Text => print!("{}", info::tools(&Cli::command())),
+                }
                 return Ok(0);
             }
             "presets" => {
@@ -259,7 +268,11 @@ pub fn run() -> error::Result<u8> {
                 return Ok(0);
             }
             "help" => {
-                print!("{}", info::help(Cli::command(), rest)?);
+                let (format, rest) = info::info_format("help", rest)?;
+                match format {
+                    info::InfoFormat::Json => events::print_stdout(&info::help_json(&rest)?),
+                    info::InfoFormat::Text => print!("{}", info::help(Cli::command(), &rest)?),
+                }
                 return Ok(0);
             }
             "completions" => {
