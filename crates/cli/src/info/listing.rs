@@ -370,4 +370,22 @@ mod tests {
         let codes: Vec<i32> = EXIT_CODES.iter().map(|(c, _)| *c).collect();
         assert_eq!(codes, [0, 1, 2, 10, 11, 100, 130]);
     }
+
+    #[test]
+    fn exit_codes_match_docs_cli() {
+        let cli = include_str!("../../../../docs/cli.md");
+        let table = cli
+            .split("## Exit codes")
+            .nth(1)
+            .and_then(|rest| rest.split("\n## ").next())
+            .expect("exit codes section");
+        let documented: Vec<i32> = table
+            .lines()
+            .filter_map(|line| line.strip_prefix("| "))
+            .filter_map(|row| row.split(" |").next())
+            .filter_map(|cell| cell.trim().parse().ok())
+            .collect();
+        let codes: Vec<i32> = EXIT_CODES.iter().map(|(c, _)| *c).collect();
+        assert_eq!(documented, codes);
+    }
 }

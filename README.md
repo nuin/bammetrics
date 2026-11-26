@@ -185,6 +185,8 @@ thresholds: the verdict (pass, warn, fail or incomplete) opens each page, with a
 under the failing check it explains. The presets, the rule language and `verdict.json` are in
 [docs/verdict.md](docs/verdict.md); the exit codes of `check` are in [docs/cli.md](docs/cli.md).
 
+A workflow engine or wrapper generator reads `bammetrics tools --format json`, the exit codes and the frozen schemas ([docs/embedding.md](docs/embedding.md)).
+
 The PDF report holds the same content as a tagged PDF/UA-1 file, with an appendix of every
 metrics table: `report --pdf`, `report --pdf-only`, `qc --report pdf` or `--report
 html,pdf`, and in Python `report(..., pdf=True)` and `qc(..., report="pdf")`. It needs the

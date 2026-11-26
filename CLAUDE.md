@@ -66,6 +66,8 @@ The variant stream kind (wave W16, docs/chaining.md section 33, docs/07 D236 to 
 
 `MakeVcfSampleNameMap` (verb `make-vcf-sample-name-map`, wave W16, tool 77, `make_vcf_sample_name_map.rs`, D250) reads the header of each `INPUT` (a path or a `file://` URI, `input_path`; at most `MAX_INPUTS` 100,000) and writes one line per input, the input as given, a tab and its one sample, in the order of Picard's `HashMap` (`map`, `text`), byte for byte; an input with no sample or two fails as Picard does. Not a chain step on either stream kind: it reads the headers of several files. Truth: `tests/concordance/test_make_vcf_sample_name_map.py`; golden forms of the three tools in `VCF_TOOLS_CASES` (21).
 
+The machine contract (wave E1, 0.34.1, `docs/embedding.md`): `tools --format json` (`crates/cli/src/info/listing.rs`, schema `bammetrics.tools/1`, `EXIT_CODES` held to the table of `docs/cli.md` by `exit_codes_match_docs_cli`), `help VERB --format json` and `--version --json`; the golden records normalize version, commit and features.
+
 ## Commands
 
 ```bash

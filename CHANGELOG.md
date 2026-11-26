@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.34.1
+
+Wave E1: the machine contract, no registry tool (77 tools).
+
+### Added
+
+- `bammetrics tools --format json` (schema `bammetrics.tools/1`, `docs/schema/tools-1.json`):
+  every tool and verb, its options, chain role and the exit code table. `help VERB --format json`
+  prints one tool's entry and `--version --json` the `bammetrics` member.
+- Exit codes 100 and 130 in the `docs/cli.md` table, held to `EXIT_CODES` by a test.
+- `docs/embedding.md`: what a workflow engine reads, exit codes by engine, frozen schemas.
+
 ## 0.34.0
 
 Wave W16 of docs/07, 77 tools: the VCF writer, the variant stream of `chain`, the VCF header inventory, and `SplitVcfs`, `MakeSitesOnlyVcf` and `MakeVcfSampleNameMap` (tools 75 to 77); decisions D236 to D254.
