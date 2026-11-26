@@ -6,7 +6,7 @@ Sources: the 91-tool survey (`picard <Tool> --help` on 3.5.0, one JVM at a time)
 
 ## 0. Answer
 
-- 48 waves (W00 to W47), 572 agents, versions 0.18.0 to 1.7.0. 1.0.0 is the parity gate at W40.
+- 48 waves (W00 to W47), 572 agents, versions 0.18.0 to 1.7.0. The 7 embedding waves E1 to E7 (66 agents, docs/superpowers/specs/2026-11-25-embedding-design.md) count inside the programme budget, raised to 638 agents on 2026-11-26. 1.0.0 is the parity gate at W40.
 - All 91 unbuilt Picard tools land by 0.57.0. 15 analyses beyond Picard land in W07, W08 and W41 to W47.
 - Chaining ships at 0.22.0 (`chain`), with sort at 0.23.0, resume at 0.32.0, VCF streams at 1.6.0.
 - Formats core ships at 0.20.0. PDF at 0.24.0. Parquet, XLSX, DOCX at 0.39.0.
@@ -277,7 +277,7 @@ Base gate, every wave: fmt, clippy `-D warnings`, `cargo test --workspace`, `mak
 
 Totals: 48 waves, 572 agents, 91 Picard tools (W04 1, W05 3, W09 6, W10 6, W11 6, W12 5, W13 6, W15 3, W16 3, W17 5, W18 5, W19 5, W20 1, W22 5, W23 2, W24 2, W25 2, W26 3, W27 3, W28 3, W29 to W31 1, W32 to W33 1, W34 2, W35 3, W36 2, W37 2, W38 3, W39 2), 15 analyses. Inside W09 to W13 and W22 the order follows nf-core sarek and GATK usage: SortSam, MergeSamFiles, FixMateInformation, AddOrReplaceReadGroups, SetNmMdAndUqTags, FastqToSam, SamToFastq, RevertSam before the rest.
 
-Budget cuts if Q1 lands below 572: first the 12 best-effort tools (W34 Flow, W35 to W39, 70 agents), then W47 and W45 (20), then the fingerprint family W26 to W28 (38). Nothing in W02 to W14 is cut.
+The budget is 638 agents since 2026-11-26: 572 for the W waves and 66 for E1 to E7. Budget cuts if Q1 lands below 572: first the 12 best-effort tools (W34 Flow, W35 to W39, 70 agents), then W47 and W45 (20), then the fingerprint family W26 to W28 (38). Nothing in W02 to W14 is cut.
 
 ## 6. Machine and agent schedule
 
