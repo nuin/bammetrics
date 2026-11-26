@@ -3,7 +3,7 @@
 //! tables the verbs, `--help` and the Python stub are built from.
 
 use bammetrics_core::multiple_metrics::file_extensions;
-use bammetrics_core::registry::{COMMON, Kind, Opt, Ty};
+use bammetrics_core::registry::{Kind, Opt, Ty};
 use bammetrics_formats::json::Json;
 use clap::{ArgAction, Command};
 
@@ -96,18 +96,6 @@ fn short_of(flag: &Flag) -> Json {
     Json::option_text(flag.shorts.first().map(|s| format!("-{s}")).as_deref())
 }
 
-/// The rows of a tool's option table: its own, rejected ones included,
-/// then the common rows it neither shadows nor replaces.
-fn rows(verb: &Verb) -> Vec<&'static Opt> {
-    let tool = verb.tool();
-    let own_output = tool.options.iter().any(|o| o.kind == Kind::Output);
-    let common = COMMON.iter().filter(|c| {
-        !(own_output && c.kind == Kind::Output)
-            && !tool.options.iter().any(|o| o.names.contains(&c.picard()))
-    });
-    tool.options.iter().chain(common).collect()
-}
-
 fn option_entry(opt: &Opt, flags: &[Flag]) -> Json {
     let picard = opt.picard();
     let flag = flags
@@ -145,7 +133,8 @@ pub fn tool_entry(verb: &Verb) -> Json {
         .iter()
         .map(|(_, extension)| *extension);
     let role = chain::role_of(verb).map_or("none", chain::Role::name);
-    let options = rows(verb)
+    let options = tool
+        .table_with_rejected()
         .into_iter()
         .map(|opt| option_entry(opt, &flags))
         .collect();
@@ -230,10 +219,23 @@ fn format_option() -> Json {
     ])
 }
 
+/// The `--no-config` flag every verb takes before its other arguments.
+fn no_config_option() -> Json {
+    Json::Object(vec![
+        member("flag", Json::text(crate::config::NO_CONFIG)),
+        member("short", Json::Null),
+        member("takes_value", Json::Bool(false)),
+        member("repeated", Json::Bool(false)),
+        member("required", Json::Bool(false)),
+        member("help", Json::text("Leave the user config file unread.")),
+    ])
+}
+
 fn other_verb(name: &str) -> Vec<Json> {
     match name {
         "collect" => collect::flags().iter().map(flag_option).collect(),
         n if n == chain::VERB => chain::global_flags().iter().map(flag_option).collect(),
+        crate::config::VERB => vec![no_config_option()],
         "tools" | "help" => vec![format_option()],
         _ => Vec::new(),
     }

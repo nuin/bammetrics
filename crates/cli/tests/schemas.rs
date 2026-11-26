@@ -295,7 +295,7 @@ fn tools_listing_is_valid_under_tools_1() {
 
 #[test]
 fn tools_listing_equals_the_registry() {
-    use bammetrics_core::registry::{COMMON, Kind, Ty};
+    use bammetrics_core::registry::{Kind, Ty};
     let doc = tools_listing();
     let tools = array(&doc, "tools");
     assert_eq!(tools.len(), 77);
@@ -304,12 +304,19 @@ fn tools_listing_equals_the_registry() {
         assert_eq!(text(entry, "verb"), verb.name);
         assert_eq!(text(entry, "class"), verb.class);
         let tool = verb.tool();
-        let own_output = tool.options.iter().any(|o| o.kind == Kind::Output);
-        let common = COMMON.iter().filter(|c| {
-            !(own_output && c.kind == Kind::Output)
-                && !tool.options.iter().any(|o| o.names.contains(&c.picard()))
-        });
-        let rows: Vec<_> = tool.options.iter().chain(common).collect();
+        let rows = tool.table_with_rejected();
+        // Every Tool::table() row and every rejected row, once each.
+        let table = tool.table();
+        assert!(
+            table
+                .iter()
+                .all(|t| rows.iter().any(|r| r.names == t.names)),
+            "{}",
+            verb.name
+        );
+        for row in &rows {
+            assert_eq!(rows.iter().filter(|r| r.names == row.names).count(), 1);
+        }
         let options = array(entry, "options");
         assert_eq!(options.len(), rows.len(), "{}", verb.name);
         for (option, row) in options.iter().zip(rows) {
