@@ -1,0 +1,351 @@
+## argv
+help
+insert-size
+--format
+json
+## exit
+0
+## stdout
+{
+  "verb": "insert-size",
+  "class": "CollectInsertSizeMetrics",
+  "summary": "one row per pair orientation and accumulation unit, keyed by Picard's column names; the metrics file adds the insert size histogram.",
+  "input": "BAM",
+  "reads_stdin": true,
+  "files": "single",
+  "writes": "metrics file",
+  "extensions": [
+    ".insert_size_metrics"
+  ],
+  "chain_role": "tap",
+  "options": [
+    {
+      "names": [
+        "HISTOGRAM_FILE",
+        "H"
+      ],
+      "flag": "--histogram-file",
+      "short": "-H",
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no histogram plot is drawn"
+    },
+    {
+      "names": [
+        "DEVIATIONS"
+      ],
+      "flag": "--deviations",
+      "short": null,
+      "type": "float",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Mean and SD use the histogram up to median + DEVIATIONS * MAD (default 10)."
+    },
+    {
+      "names": [
+        "HISTOGRAM_WIDTH",
+        "W"
+      ],
+      "flag": "--histogram-width",
+      "short": "-W",
+      "type": "int",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Trim the histogram at this insert size in place of DEVIATIONS."
+    },
+    {
+      "names": [
+        "MINIMUM_HISTOGRAM_WIDTH",
+        "MW",
+        "MIN_HISTOGRAM_WIDTH"
+      ],
+      "flag": "--minimum-histogram-width",
+      "short": null,
+      "type": "int",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Lower bound on the trimmed histogram width."
+    },
+    {
+      "names": [
+        "MINIMUM_PCT",
+        "M"
+      ],
+      "flag": "--minimum-pct",
+      "short": "-M",
+      "type": "float",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Drop orientations below this fraction of all pairs (default 0.05)."
+    },
+    {
+      "names": [
+        "INCLUDE_DUPLICATES"
+      ],
+      "flag": "--include-duplicates",
+      "short": null,
+      "type": "bool",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Count reads flagged as duplicates (default false)."
+    },
+    {
+      "names": [
+        "METRIC_ACCUMULATION_LEVEL",
+        "LEVEL"
+      ],
+      "flag": "--metric-accumulation-level",
+      "short": null,
+      "type": "text",
+      "kind": "value",
+      "repeated": true,
+      "required": false,
+      "written": false,
+      "help": "ALL_READS, SAMPLE, LIBRARY or READ_GROUP; each adds to the default ALL_READS, null clears."
+    },
+    {
+      "names": [
+        "INPUT",
+        "I"
+      ],
+      "flag": "--input",
+      "short": "-i",
+      "type": "path",
+      "kind": "value",
+      "repeated": false,
+      "required": true,
+      "written": false,
+      "help": "The BAM, CRAM or SAM to read."
+    },
+    {
+      "names": [
+        "OUTPUT",
+        "O"
+      ],
+      "flag": "--output",
+      "short": "-o",
+      "type": "path",
+      "kind": "output",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "The metrics file; standard output without one."
+    },
+    {
+      "names": [
+        "VALIDATION_STRINGENCY"
+      ],
+      "flag": "--validation-stringency",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "a BAM or CRAM is not validated; SAM text is checked at the level given"
+    },
+    {
+      "names": [
+        "TMP_DIR"
+      ],
+      "flag": "--tmp-dir",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no temporary files are written"
+    },
+    {
+      "names": [
+        "QUIET"
+      ],
+      "flag": null,
+      "short": null,
+      "type": "bool",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "progress is not logged"
+    },
+    {
+      "names": [
+        "VERBOSITY"
+      ],
+      "flag": "--verbosity",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "progress is not logged"
+    },
+    {
+      "names": [
+        "COMPRESSION_LEVEL"
+      ],
+      "flag": "--compression-level",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no BAM is written"
+    },
+    {
+      "names": [
+        "MAX_RECORDS_IN_RAM"
+      ],
+      "flag": "--max-records-in-ram",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "records are streamed"
+    },
+    {
+      "names": [
+        "CREATE_INDEX"
+      ],
+      "flag": "--create-index",
+      "short": null,
+      "type": "bool",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no BAM is written"
+    },
+    {
+      "names": [
+        "CREATE_MD5_FILE"
+      ],
+      "flag": "--create-md5-file",
+      "short": null,
+      "type": "bool",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no BAM is written"
+    },
+    {
+      "names": [
+        "GA4GH_CLIENT_SECRETS"
+      ],
+      "flag": "--ga4gh-client-secrets",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no GA4GH access"
+    },
+    {
+      "names": [
+        "USE_JDK_DEFLATER",
+        "USE_JDK_INFLATER"
+      ],
+      "flag": "--use-jdk-deflater",
+      "short": null,
+      "type": "bool",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no JDK codec"
+    },
+    {
+      "names": [
+        "ASSUME_SORTED",
+        "AS"
+      ],
+      "flag": "--assume-sorted",
+      "short": null,
+      "type": "bool",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "false fails a BAM whose header is not coordinate sorted (default true)."
+    },
+    {
+      "names": [
+        "REFERENCE_SEQUENCE",
+        "R",
+        "REFERENCE"
+      ],
+      "flag": "--reference-sequence",
+      "short": "-R",
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "this metric does not read the reference"
+    }
+  ],
+  "verb_options": [
+    {
+      "flag": "--format",
+      "short": null,
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+    },
+    {
+      "flag": "--sample",
+      "short": null,
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+    },
+    {
+      "flag": "--threads",
+      "short": "-@",
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+    },
+    {
+      "flag": "--quiet",
+      "short": "-q",
+      "takes_value": false,
+      "repeated": false,
+      "required": false,
+      "help": "No notes on standard error."
+    },
+    {
+      "flag": "--verbose",
+      "short": "-v",
+      "takes_value": false,
+      "repeated": false,
+      "required": false,
+      "help": "Print the Picard command line and each file written on standard error."
+    }
+  ]
+}
+## stderr

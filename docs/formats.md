@@ -580,6 +580,7 @@ JSON Schema under `docs/schema`:
 | `bammetrics.manifest/1` | `qc` | [manifest-1.json](schema/manifest-1.json) |
 | `bammetrics.manifest/2` | `chain` that resumes, keeps a stream or ends in `qc` | [manifest-2.json](schema/manifest-2.json) |
 | events, version 1 | `qc --format jsonl`, `check --format jsonl` | [events-1.json](schema/events-1.json) |
+| `bammetrics.tools/1` | `tools --format json` | [tools-1.json](schema/tools-1.json) |
 
 Frozen means four things until 1.0.0:
 

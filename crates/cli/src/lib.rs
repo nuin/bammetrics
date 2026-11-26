@@ -176,6 +176,30 @@ fn text_arguments(args: impl Iterator<Item = std::ffi::OsString>) -> error::Resu
 /// `qc --fail-on` 10 or 11 on a bad verdict, `doctor` 10 on a failed check (`bammetrics help check`).
 pub fn run() -> error::Result<u8> {
     let args = text_arguments(std::env::args_os().skip(1))?;
+    // `--version --json` or `-V --json` (either order) prints the listing's `bammetrics`
+    // member; a first `--json` or a `--version --json` with more is usage.
+    let version_json = |a: &str, b: &str| args.len() >= 2 && args[0] == a && args[1] == b;
+    if ["--version", "-V"]
+        .iter()
+        .any(|v| version_json(v, "--json") || version_json("--json", v))
+    {
+        if args.len() > 2 {
+            return Err(error::VerbError::usage(
+                "--version",
+                "--version --json takes no further argument",
+            )
+            .into());
+        }
+        events::print_stdout(&info::version_object().render());
+        return Ok(0);
+    }
+    if args.first().is_some_and(|word| word == "--json") {
+        return Err(error::VerbError::usage(
+            "--json",
+            "--json is only valid as `--version --json`",
+        )
+        .into());
+    }
     if let Some((name, rest)) = args.split_first() {
         if let Some(tool) = registry::find(name) {
             if let [flag] = rest
@@ -247,7 +271,13 @@ pub fn run() -> error::Result<u8> {
             config::VERB => return Ok(config::run(rest)?),
             chain::recipes::LIST_VERB => return Ok(chain::recipes::run_list(rest)?),
             "tools" => {
-                print!("{}", info::tools(&Cli::command()));
+                let (format, _) = info::info_format("tools", rest)?;
+                match format {
+                    info::InfoFormat::Json => {
+                        events::print_stdout(&info::listing(&Cli::command()).render());
+                    }
+                    info::InfoFormat::Text => print!("{}", info::tools(&Cli::command())),
+                }
                 return Ok(0);
             }
             "presets" => {
@@ -255,7 +285,11 @@ pub fn run() -> error::Result<u8> {
                 return Ok(0);
             }
             "help" => {
-                print!("{}", info::help(Cli::command(), rest)?);
+                let (format, rest) = info::info_format("help", rest)?;
+                match format {
+                    info::InfoFormat::Json => events::print_stdout(&info::help_json(&rest)?),
+                    info::InfoFormat::Text => print!("{}", info::help(Cli::command(), &rest)?),
+                }
                 return Ok(0);
             }
             "completions" => {

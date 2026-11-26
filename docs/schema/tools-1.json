@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nuin/bammetrics/blob/main/docs/schema/tools-1.json",
+  "title": "bammetrics.tools/1",
+  "description": "The listing of tools, options, exit codes and version: bammetrics tools --format json. Built from the option tables the verbs, --help and the Python stub use. Frozen: until 1.0.0 the schema changes only by adding members (docs/formats.md, Frozen schemas).",
+  "type": "object",
+  "required": ["schema", "bammetrics", "exit_codes", "tools", "verbs", "recipes"],
+  "properties": {
+    "schema": {"const": "bammetrics.tools/1"},
+    "bammetrics": {
+      "type": "object",
+      "required": ["name", "version", "commit", "features", "schemas"],
+      "properties": {
+        "name": {"const": "bammetrics"},
+        "version": {"type": "string"},
+        "commit": {"description": "The short commit of the build; null for a build with no git.", "type": ["string", "null"]},
+        "features": {"description": "The cargo features compiled in: parquet, pdf.", "type": "array", "items": {"enum": ["parquet", "pdf"]}},
+        "schemas": {"description": "The schemas the binary writes.", "type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "exit_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "meaning"],
+        "properties": {
+          "code": {"type": "integer", "minimum": 0},
+          "meaning": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "tools": {"type": "array", "items": {"$ref": "#/$defs/tool"}},
+    "verbs": {"type": "array", "items": {"$ref": "#/$defs/verb"}},
+    "recipes": {
+      "description": "The compiled-in recipes (bammetrics recipes); recipe files in the user's config directory are not listed.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": {"type": "string"},
+          "description": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "tool": {
+      "description": "One tool verb and the Picard class it runs.",
+      "type": "object",
+      "required": ["verb", "class", "summary", "input", "reads_stdin", "files", "writes", "extensions", "chain_role", "options", "verb_options"],
+      "properties": {
+        "verb": {"type": "string"},
+        "class": {"type": "string"},
+        "summary": {"type": "string"},
+        "input": {"description": "What the input is: BAM, VCF, FASTA, ...", "type": "string"},
+        "reads_stdin": {"description": "False for a tool that reads its input twice: a wrapper must stage a file.", "type": "boolean"},
+        "files": {"enum": ["single", "prefix", "bam"]},
+        "writes": {"type": "string"},
+        "extensions": {"description": "The suffixes, dot included, a files=prefix verb appends to its -o prefix, one per file it writes (CollectMultipleMetrics: those of every program, PROGRAM picks which are written); empty for a verb with no prefix naming.", "type": "array", "items": {"type": "string"}},
+        "chain_role": {"enum": ["transform", "tap", "split", "materialize", "none"]},
+        "options": {"type": "array", "items": {"$ref": "#/$defs/tool_option"}},
+        "verb_options": {"description": "The verb's flags with no row in options: -o, --format, --sample, -@, -q, -v and the like. No flag or short is in two entries of one tool.", "type": "array", "items": {"$ref": "#/$defs/verb_option"}}
+      },
+      "additionalProperties": false
+    },
+    "tool_option": {
+      "description": "One row of a tool's option table.",
+      "type": "object",
+      "required": ["names", "flag", "short", "type", "kind", "repeated", "required", "written", "help"],
+      "properties": {
+        "names": {"description": "The Picard names, long name first, then the verb's own spellings.", "type": "array", "items": {"type": "string"}},
+        "flag": {"description": "The verb flag; null for a rejected option and for a row the verb takes through a verb option (QUIET through -q).", "type": ["string", "null"]},
+        "short": {"type": ["string", "null"]},
+        "type": {"enum": ["bool", "int", "float", "text", "path"]},
+        "kind": {"enum": ["value", "output", "ignored", "rejected"]},
+        "repeated": {"type": "boolean"},
+        "required": {"type": "boolean"},
+        "written": {"type": "boolean"},
+        "help": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "verb": {
+      "description": "A verb that is not a tool verb.",
+      "type": "object",
+      "required": ["name", "about", "options"],
+      "properties": {
+        "name": {"type": "string"},
+        "about": {"type": "string"},
+        "options": {"type": "array", "items": {"$ref": "#/$defs/verb_option"}}
+      },
+      "additionalProperties": false
+    },
+    "verb_option": {
+      "type": "object",
+      "required": ["flag", "short", "takes_value", "repeated", "required", "help"],
+      "properties": {
+        "flag": {"type": "string"},
+        "short": {"type": ["string", "null"]},
+        "takes_value": {"type": "boolean"},
+        "repeated": {"type": "boolean"},
+        "required": {"type": "boolean"},
+        "help": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

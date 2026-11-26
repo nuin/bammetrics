@@ -1,0 +1,9 @@
+## argv
+tools
+--format
+yaml
+## exit
+2
+## stdout
+## stderr
+bammetrics tools: --format takes text or json, not "yaml"

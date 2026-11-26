@@ -121,7 +121,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "bammetrics-cli"
-version = "0.34.0"
+version = "0.34.1"
 dependencies = [
  "bammetrics-core",
  "bammetrics-formats",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-core"
-version = "0.34.0"
+version = "0.34.1"
 dependencies = [
  "hashbrown",
  "libc",
@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-formats"
-version = "0.34.0"
+version = "0.34.1"
 dependencies = [
  "bammetrics-core",
  "bytes",
@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-pdf"
-version = "0.34.0"
+version = "0.34.1"
 dependencies = [
  "bammetrics-core",
  "bammetrics-report",
@@ -174,7 +174,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-py"
-version = "0.34.0"
+version = "0.34.1"
 dependencies = [
  "bammetrics-cli",
  "bammetrics-core",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-report"
-version = "0.34.0"
+version = "0.34.1"
 dependencies = [
  "bammetrics-core",
  "bammetrics-verdict",
@@ -194,7 +194,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-verdict"
-version = "0.34.0"
+version = "0.34.1"
 dependencies = [
  "bammetrics-core",
  "thiserror",

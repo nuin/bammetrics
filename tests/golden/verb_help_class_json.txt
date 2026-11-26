@@ -1,0 +1,478 @@
+## argv
+help
+--format=json
+CollectHsMetrics
+## exit
+0
+## stdout
+{
+  "verb": "hs-metrics",
+  "class": "CollectHsMetrics",
+  "summary": "one row of the 69 HsMetrics columns per accumulation unit; the metrics file adds the coverage and base quality histograms.",
+  "input": "BAM",
+  "reads_stdin": true,
+  "files": "single",
+  "writes": "metrics file",
+  "extensions": [
+    ".hs_metrics"
+  ],
+  "chain_role": "tap",
+  "options": [
+    {
+      "names": [
+        "TARGET_INTERVALS",
+        "TI",
+        "TARGETS"
+      ],
+      "flag": "--target-intervals",
+      "short": null,
+      "type": "path",
+      "kind": "value",
+      "repeated": true,
+      "required": true,
+      "written": false,
+      "help": "Target intervals: an interval list, or a BED file; repeat for several."
+    },
+    {
+      "names": [
+        "REFERENCE_SEQUENCE",
+        "R",
+        "REFERENCE"
+      ],
+      "flag": "--reference-sequence",
+      "short": "-R",
+      "type": "path",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Reference FASTA with a .fai index, for AT_DROPOUT, GC_DROPOUT and PER_TARGET_COVERAGE."
+    },
+    {
+      "names": [
+        "METRIC_ACCUMULATION_LEVEL",
+        "LEVEL"
+      ],
+      "flag": "--metric-accumulation-level",
+      "short": null,
+      "type": "text",
+      "kind": "value",
+      "repeated": true,
+      "required": false,
+      "written": false,
+      "help": "ALL_READS, SAMPLE, LIBRARY or READ_GROUP; each adds to the default ALL_READS, null clears."
+    },
+    {
+      "names": [
+        "PER_TARGET_COVERAGE"
+      ],
+      "flag": "--per-target-coverage",
+      "short": null,
+      "type": "path",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": true,
+      "help": "Also write the coverage of every target to this file."
+    },
+    {
+      "names": [
+        "PER_BASE_COVERAGE"
+      ],
+      "flag": "--per-base-coverage",
+      "short": null,
+      "type": "path",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": true,
+      "help": "Also write the depth of every target base to this file; gzip when it ends in .gz."
+    },
+    {
+      "names": [
+        "NEAR_DISTANCE"
+      ],
+      "flag": "--near-distance",
+      "short": null,
+      "type": "int",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Reads this close to a bait are near bait (default 250)."
+    },
+    {
+      "names": [
+        "MINIMUM_MAPPING_QUALITY",
+        "MQ"
+      ],
+      "flag": "--minimum-mapping-quality",
+      "short": null,
+      "type": "int",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Reads below this MAPQ add no coverage (default 20; targeted PCR 1)."
+    },
+    {
+      "names": [
+        "MINIMUM_BASE_QUALITY",
+        "Q"
+      ],
+      "flag": "--minimum-base-quality",
+      "short": "-Q",
+      "type": "int",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Bases below this quality add no coverage (default 20; targeted PCR 0)."
+    },
+    {
+      "names": [
+        "CLIP_OVERLAPPING_READS"
+      ],
+      "flag": "--clip-overlapping-reads",
+      "short": null,
+      "type": "bool",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Count the overlap of two mates once (default true; targeted PCR false)."
+    },
+    {
+      "names": [
+        "INCLUDE_INDELS"
+      ],
+      "flag": "--include-indels",
+      "short": null,
+      "type": "bool",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Count inserted bases as on target and deleted bases as covered (default false)."
+    },
+    {
+      "names": [
+        "COVERAGE_CAP",
+        "covMax"
+      ],
+      "flag": "--coverage-cap",
+      "short": null,
+      "type": "int",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Depth cap of the het SNP sensitivity model (default 200)."
+    },
+    {
+      "names": [
+        "SAMPLE_SIZE"
+      ],
+      "flag": "--sample-size",
+      "short": null,
+      "type": "int",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "Samples of the het SNP sensitivity simulation (default 10000)."
+    },
+    {
+      "names": [
+        "THEORETICAL_SENSITIVITY_OUTPUT"
+      ],
+      "flag": "--theoretical-sensitivity-output",
+      "short": null,
+      "type": "path",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": true,
+      "help": "Also write the theoretical sensitivity per allele fraction to this file."
+    },
+    {
+      "names": [
+        "ALLELE_FRACTION"
+      ],
+      "flag": "--allele-fraction",
+      "short": null,
+      "type": "float",
+      "kind": "value",
+      "repeated": true,
+      "required": false,
+      "written": false,
+      "help": "An allele fraction for THEORETICAL_SENSITIVITY_OUTPUT; each adds to the default list, null clears."
+    },
+    {
+      "names": [
+        "ASSUME_SORTED",
+        "AS"
+      ],
+      "flag": null,
+      "short": null,
+      "type": "text",
+      "kind": "rejected",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": ""
+    },
+    {
+      "names": [
+        "BAIT_INTERVALS",
+        "BI",
+        "BAITS"
+      ],
+      "flag": "--bait-intervals",
+      "short": null,
+      "type": "path",
+      "kind": "value",
+      "repeated": true,
+      "required": true,
+      "written": false,
+      "help": "Bait intervals: an interval list, or a BED file; repeat for several."
+    },
+    {
+      "names": [
+        "BAIT_SET_NAME",
+        "N"
+      ],
+      "flag": "--bait-set-name",
+      "short": "-N",
+      "type": "text",
+      "kind": "value",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "BAIT_SET column (default: the bait file names up to the first dot)."
+    },
+    {
+      "names": [
+        "STOP_AFTER"
+      ],
+      "flag": null,
+      "short": null,
+      "type": "text",
+      "kind": "rejected",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": ""
+    },
+    {
+      "names": [
+        "INPUT",
+        "I"
+      ],
+      "flag": "--input",
+      "short": "-i",
+      "type": "path",
+      "kind": "value",
+      "repeated": false,
+      "required": true,
+      "written": false,
+      "help": "The BAM, CRAM or SAM to read."
+    },
+    {
+      "names": [
+        "OUTPUT",
+        "O"
+      ],
+      "flag": "--output",
+      "short": "-o",
+      "type": "path",
+      "kind": "output",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "The metrics file; standard output without one."
+    },
+    {
+      "names": [
+        "VALIDATION_STRINGENCY"
+      ],
+      "flag": "--validation-stringency",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "a BAM or CRAM is not validated; SAM text is checked at the level given"
+    },
+    {
+      "names": [
+        "TMP_DIR"
+      ],
+      "flag": "--tmp-dir",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no temporary files are written"
+    },
+    {
+      "names": [
+        "QUIET"
+      ],
+      "flag": null,
+      "short": null,
+      "type": "bool",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "progress is not logged"
+    },
+    {
+      "names": [
+        "VERBOSITY"
+      ],
+      "flag": "--verbosity",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "progress is not logged"
+    },
+    {
+      "names": [
+        "COMPRESSION_LEVEL"
+      ],
+      "flag": "--compression-level",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no BAM is written"
+    },
+    {
+      "names": [
+        "MAX_RECORDS_IN_RAM"
+      ],
+      "flag": "--max-records-in-ram",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "records are streamed"
+    },
+    {
+      "names": [
+        "CREATE_INDEX"
+      ],
+      "flag": "--create-index",
+      "short": null,
+      "type": "bool",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no BAM is written"
+    },
+    {
+      "names": [
+        "CREATE_MD5_FILE"
+      ],
+      "flag": "--create-md5-file",
+      "short": null,
+      "type": "bool",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no BAM is written"
+    },
+    {
+      "names": [
+        "GA4GH_CLIENT_SECRETS"
+      ],
+      "flag": "--ga4gh-client-secrets",
+      "short": null,
+      "type": "text",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no GA4GH access"
+    },
+    {
+      "names": [
+        "USE_JDK_DEFLATER",
+        "USE_JDK_INFLATER"
+      ],
+      "flag": "--use-jdk-deflater",
+      "short": null,
+      "type": "bool",
+      "kind": "ignored",
+      "repeated": false,
+      "required": false,
+      "written": false,
+      "help": "no JDK codec"
+    }
+  ],
+  "verb_options": [
+    {
+      "flag": "--format",
+      "short": null,
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "picard (the metrics file), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx or sql. A list (picard,json) writes the first to -o and each further one beside it, as FILE.json."
+    },
+    {
+      "flag": "--sample",
+      "short": null,
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "Sample name for the json and jsonl forms (default the first @RG SM, else the input name); never written into a Picard file."
+    },
+    {
+      "flag": "--panel",
+      "short": null,
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "Baits and targets in one file: --bait-intervals FILE --target-intervals FILE."
+    },
+    {
+      "flag": "--threads",
+      "short": "-@",
+      "takes_value": true,
+      "repeated": false,
+      "required": false,
+      "help": "BGZF decompression threads, or CRAM container decoders (default: available cores, at most 8; 8 here; 0 counts as 1)."
+    },
+    {
+      "flag": "--quiet",
+      "short": "-q",
+      "takes_value": false,
+      "repeated": false,
+      "required": false,
+      "help": "No notes on standard error."
+    },
+    {
+      "flag": "--verbose",
+      "short": "-v",
+      "takes_value": false,
+      "repeated": false,
+      "required": false,
+      "help": "Print the Picard command line and each file written on standard error."
+    }
+  ]
+}
+## stderr

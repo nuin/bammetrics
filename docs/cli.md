@@ -232,6 +232,14 @@ One table for every verb, `EXIT_CODES` in `check.rs`:
 | 2 | usage error, nothing ran (bad arguments; `qc` over an earlier run without `--resume` or `--force`) | all |
 | 10 | a verdict reached `--fail-on`: fail, or warn with `--fail-on warn` (`check` defaults to `--fail-on fail`); for `doctor`, a check | `check`, `qc --fail-on`, `doctor` |
 | 11 | a verdict is incomplete (a rule's file, row or column is missing) and none reached `--fail-on` | `check`, `qc --fail-on` |
+| 100 | `CheckTerminatorBlock` found a `DEFECTIVE` file end (Picard's code) | `check-terminator-block`, `CheckTerminatorBlock` |
+| 129 | interrupted by SIGHUP; partial outputs removed (128 + 1) | all |
+| 130 | interrupted by SIGINT; partial outputs removed (128 + 2) | all |
+| 143 | interrupted by SIGTERM; partial outputs removed (128 + 15) | all |
+
+The watcher removes the partial outputs and re-raises the signal, so a shell reports 128 plus
+the signal number (129, 130, 143). A parent that reads the raw wait status, such as Python's
+`subprocess`, sees the signal itself as a negative return code (-1, -2, -15).
 
 `qc` exits 0 on any verdict unless `--fail-on warn|fail` is set, so a Nextflow task is not
 killed by a bad sample, and its summary prints `use --fail-on fail or bammetrics check to
@@ -248,6 +256,21 @@ differs from the first record of its queryname.
 `check-terminator-block` and `CheckTerminatorBlock` exit 100 when the file's end is
 `DEFECTIVE`, Picard's code, and 0 for the other two outcomes; an error (a missing file)
 exits 1, or 2 for a usage error on the verb.
+
+## Machine-readable listing
+
+`bammetrics tools --format json` prints every verb, its options and the exit code table as one
+JSON document, schema `bammetrics.tools/1` ([tools-1.json](schema/tools-1.json)). `tools
+--format text` equals plain `tools`. `bammetrics help VERB --format json` prints one tool's
+entry; a clap verb such as `qc` exits 2 and points to the `verbs` array of the listing.
+`bammetrics --version --json` (or `--json --version`) prints the `bammetrics` member of the
+listing: name, version, commit, features and schema names; `commit` is null unless the build
+ran inside this repository's own git checkout. The listing's members are `schema`,
+`bammetrics`, `exit_codes`, `tools`, `verbs` and `recipes` (the compiled-in recipes; user
+recipes are not listed). Each tool entry has `options` (the option table) and `verb_options`
+(the verb's flags with no table row); `extensions` holds the suffixes a prefix verb appends to
+`-o`. Option defaults are not in the listing, only in the help
+text. [docs/embedding.md](embedding.md) says how a workflow engine reads it.
 
 ## Errors
 

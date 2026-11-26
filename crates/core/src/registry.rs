@@ -588,13 +588,20 @@ impl Tool {
     /// Every option the tool takes: its own rows, then the [`COMMON`] rows
     /// it neither shadows nor rejects. Rejected rows are left out.
     pub fn table(&self) -> Vec<&'static Opt> {
+        self.table_with_rejected()
+            .into_iter()
+            .filter(|o| o.kind != Kind::Rejected)
+            .collect()
+    }
+
+    /// [`Tool::table`] with the rows the tool rejects kept, for a listing.
+    pub fn table_with_rejected(&self) -> Vec<&'static Opt> {
         let own_output = self.options.iter().any(|o| o.kind == Kind::Output);
-        let own = self.options.iter().filter(|o| o.kind != Kind::Rejected);
         let common = COMMON.iter().filter(|c| {
             !(own_output && c.kind == Kind::Output)
                 && !self.options.iter().any(|o| o.names.contains(&c.picard()))
         });
-        own.chain(common).collect()
+        self.options.iter().chain(common).collect()
     }
 
     /// The row a verb-grammar or Python name refers to ([`Opt::matches`]).

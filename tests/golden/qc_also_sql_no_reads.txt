@@ -101,7 +101,7 @@ COMMIT;
 ## file sample.manifest.json
 {
   "schema": "bammetrics.manifest/1",
-  "tool_version": "0.34.0",
+  "tool_version": "0.34.1",
   "sample": "no_reads",
   "bam": "tests/data/no_reads.bam",
   "prefix": "OUT/sample",
@@ -119,7 +119,7 @@ COMMIT;
         "OUTPUT=OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.34.0",
+      "tool_version": "0.34.1",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -147,7 +147,7 @@ COMMIT;
         "OUTPUT=OUT/sample.alignment_summary_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.34.0",
+      "tool_version": "0.34.1",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -175,7 +175,7 @@ COMMIT;
         "OUTPUT=OUT/sample.insert_size_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.34.0",
+      "tool_version": "0.34.1",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -197,7 +197,7 @@ COMMIT;
         "METRICS_FILE=OUT/sample.duplicate_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.34.0",
+      "tool_version": "0.34.1",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -227,7 +227,7 @@ COMMIT;
         "OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.34.0",
+      "tool_version": "0.34.1",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -249,7 +249,7 @@ COMMIT;
         "--date=2026-01-02 03:04:05 UTC"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.34.0",
+      "tool_version": "0.34.1",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -281,7 +281,7 @@ COMMIT;
         "--also=sql"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.34.0",
+      "tool_version": "0.34.1",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -351,7 +351,7 @@ COMMIT;
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.34.0",
+  "tool_version": "0.34.1",
   "sample": "no_reads",
   "preset": {
     "name": "generic",
