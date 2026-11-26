@@ -17,9 +17,10 @@ library) come in E2 to E7.
 The listing has five members: `schema`, `bammetrics`, `exit_codes`, `tools` and `verbs`. Each
 entry of `tools` (a registry tool) holds `verb`, `class`, `summary`, `input`, `reads_stdin`,
 `files`, `writes`, `extensions`, `chain_role` and `options`. `chain_role` is `transform`,
-`tap`, `split`, `materialize` or `none`. `verbs` lists the verbs with no registry row
-(`chain`, `qc`, `report`, `check`, `doctor`, `convert`, `plan`, `prep`) with their options,
-read from the clap command. `help qc --format json` exits 2 and points to that array.
+`tap`, `split`, `materialize` or `none`. `verbs` lists the 14 verbs with no registry row,
+in this order: `qc`, `plan`, `check`, `report`, `convert`, `doctor`, `collect`, `chain`,
+`recipes`, `config`, `tools`, `presets`, `help`, `completions`. Each entry has the keys
+`name`, `about` and `options`; the options are read from the clap command. `help qc --format json` exits 2 and points to that array.
 Option defaults are in the help text only.
 
 The features member tells a workflow whether the binary has `pdf` and `parquet`. Plain
