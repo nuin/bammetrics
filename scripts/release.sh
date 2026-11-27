@@ -151,8 +151,11 @@ sys.exit(0 if ok else 1)' "$version" "$commit" "$2" \
 }
 
 mac_build() {
-  local target="$1"
-  run env CARGO_TARGET_DIR="$repo/target/release-mac" \
+  local target="$1" sysroot="<sysroot>"
+  # Homebrew's cargo can come first on PATH even under `rustup run`; put the
+  # pinned toolchain's bin in front so its rustc, with both Apple targets, builds.
+  [ "$dry" = 1 ] || sysroot="$("$rustup" run "$MAC_TOOLCHAIN" rustc --print sysroot)"
+  run env PATH="$sysroot/bin:$PATH" RUSTC="$sysroot/bin/rustc" CARGO_TARGET_DIR="$repo/target/release-mac" \
     MACOSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
     SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" RUSTFLAGS="$mac_rustflags" \
     "$rustup" run "$MAC_TOOLCHAIN" cargo build --release --locked -p bammetrics-cli --features pdf --target "$target"
