@@ -205,7 +205,9 @@ def test_dry_run_plan(release_repo):
     steps.append(index_of(lines, "lipo -create"))
     for target in (*LINUX, "universal-apple-darwin"):
         steps.append(index_of(lines, "tar ", f"bammetrics-1.2.3-{target}.tar.gz"))
+    steps.append(index_of(lines, "cargo cyclonedx"))
     steps.append(index_of(lines, "SHA256SUMS"))
+    steps.append(index_of(lines, "brew_formula.py"))
     assert steps == sorted(steps) and len(set(steps)) == len(steps)
     assert not any("gh release" in line for line in lines)
     assert (release_repo / "dist").exists() is False
@@ -226,6 +228,95 @@ def test_blocked_target_skipped(release_repo):
         env={"BLOCKED_TARGETS": "aarch64-unknown-linux-musl"},
     )
     assert result.returncode == 0, result.stderr
-    assert "aarch64-unknown-linux-musl" not in result.stdout
+    plan = [l for l in result.stdout.splitlines() if "brew_formula.py" not in l]
+    assert not any("aarch64-unknown-linux-musl" in l for l in plan)
     assert result.stderr.count("aarch64-unknown-linux-musl") == 1
     assert "x86_64-unknown-linux-musl" in result.stdout
+
+
+def test_sbom_line_in_dry_run(release_repo):
+    result = release(release_repo, "--snapshot", "--dry-run")
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    sbom = index_of(lines, "cargo cyclonedx")
+    assert "--spec-version 1.5" in lines[sbom]
+    assert "crates/cli/Cargo.toml" in lines[sbom]
+    assert "bammetrics-1.2.3.cdx.json" in "\n".join(lines)
+    assert sbom < index_of(lines, "SHA256SUMS") < index_of(lines, "brew_formula.py")
+
+
+def test_sums_list_only_planned_files(release_repo, tmp_path):
+    (tmp_path / "bin" / "docker").write_text(
+        '#!/bin/sh\ncase "$*" in *cyclonedx*) echo {} > "$SBOM_STUB" ;; esac\nexit 0\n')
+    sha = subprocess.run(["git", "-C", str(release_repo), "rev-parse", "--short", "HEAD"],
+                         capture_output=True, text=True).stdout.strip()
+    out = release_repo / "dist" / f"1.2.3-{sha}"
+    out.mkdir(parents=True)
+    touch = out / "bammetrics-1.2.3.cdx.json"
+    (out / "bammetrics-1.2.3-aarch64-unknown-linux-musl.tar.gz").write_text("stale")
+    (out / "bammetrics-0.0.1.cdx.json").write_text("stale")
+    result = release(
+        release_repo, "--snapshot",
+        env={"BLOCKED_TARGETS": " ".join((*LINUX, "universal-apple-darwin")), "SBOM_STUB": str(touch)},
+    )
+    assert result.returncode == 0, result.stderr
+    assert not list(out.glob("*.tar.gz"))
+    assert not (out / "bammetrics-0.0.1.cdx.json").exists()
+    sums = (out / "SHA256SUMS").read_text()
+    assert "aarch64" not in sums and "0.0.1" not in sums
+    assert sums.split()[1:] == ["bammetrics-1.2.3.cdx.json"]
+
+
+# scripts/brew_formula.py
+
+BREW = ROOT / "scripts" / "brew_formula.py"
+TARGETS = ("universal-apple-darwin", "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl")
+
+
+def sums_file(tmp_path, targets=TARGETS, version="0.34.2"):
+    lines = [f"{str(i) * 64}  bammetrics-{version}-{t}.tar.gz" for i, t in enumerate(targets, 1)]
+    path = tmp_path / "SHA256SUMS"
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+def brew(tmp_path, sums, *extra):
+    out = tmp_path / "bammetrics.rb"
+    result = subprocess.run(
+        [sys.executable, str(BREW), "0.34.2", str(sums), str(out), *extra],
+        capture_output=True, text=True)
+    return result, out
+
+
+def test_formula_from_sums(tmp_path):
+    result, out = brew(tmp_path, sums_file(tmp_path))
+    assert result.returncode == 0, result.stderr
+    text = out.read_text()
+    base = "https://github.com/nuin/bammetrics/releases/download/v0.34.2/bammetrics-0.34.2-"
+    for want in (
+        "class Bammetrics < Formula", 'version "0.34.2"',
+        'homepage "https://github.com/nuin/bammetrics"',
+        "on_macos do", "on_linux do", "on_intel do", "on_arm do",
+        f'url "{base}universal-apple-darwin.tar.gz"', "1" * 64,
+        f'url "{base}x86_64-unknown-linux-musl.tar.gz"', "2" * 64,
+        f'url "{base}aarch64-unknown-linux-musl.tar.gz"', "3" * 64,
+        'bin.install "bammetrics"',
+        "test do", 'shell_output("#{bin}/bammetrics --version")', "0.34.2",
+    ):
+        assert want in text, want
+    assert "license" not in text
+
+
+def test_formula_missing_target(tmp_path):
+    result, out = brew(tmp_path, sums_file(tmp_path, TARGETS[:2]))
+    assert result.returncode == 2
+    assert "aarch64-unknown-linux-musl" in result.stderr
+    assert not out.exists()
+
+
+def test_formula_skips_blocked_target(tmp_path):
+    result, out = brew(tmp_path, sums_file(tmp_path, TARGETS[:2]),
+                       "--skip", "aarch64-unknown-linux-musl")
+    assert result.returncode == 0, result.stderr
+    text = out.read_text()
+    assert "aarch64" not in text and "on_arm" not in text and "on_intel do" in text

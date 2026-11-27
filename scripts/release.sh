@@ -202,7 +202,15 @@ if has universal-apple-darwin; then
   echo "release.sh: universal-apple-darwin built in $((SECONDS - start)) s" >&2
 fi
 
-# --- tarballs, sums, build info -------------------------------------------
+# --- tarballs, SBOM, sums, formula, build info ------------------------------
+# Files left by an earlier run in this directory are not part of this run.
+if [ "$dry" = 1 ]; then
+  echo "+ rm -f $out/*.tar.gz $out/*.cdx.json $out/bammetrics.rb"
+else
+  mkdir -p "$out"
+  rm -f "$out"/*.tar.gz "$out"/*.cdx.json "$out"/bammetrics.rb
+fi
+
 tarball() {
   local target="$1" name tar_script
   name="$(name_of "$target")"
@@ -218,15 +226,46 @@ tarball() {
 }
 for t in "${targets[@]}"; do tarball "$t"; done
 
+sbom="bammetrics-$version.cdx.json"
+sbom_build() {
+  local script
+  script="apk add --no-cache musl-dev git >/dev/null; git config --global --add safe.directory '*'"
+  script+="; [ -x /tools/bin/cargo-cyclonedx ] || cargo install --locked cargo-cyclonedx"
+  script+="; export PATH=/tools/bin:\$PATH"
+  script+="; cargo cyclonedx --manifest-path crates/cli/Cargo.toml --format json --spec-version 1.5 --features pdf --override-filename bammetrics-$version"
+  script+="; mv crates/cli/bammetrics-$version.json $out/$sbom"
+  script+="; chown $(id -u):$(id -g) $out/$sbom"
+  run docker run --rm \
+    -v "$repo:$repo" -w "$repo" \
+    -v "$git_common:$git_common:ro" \
+    -v bammetrics-cargo-registry:/usr/local/cargo/registry \
+    -v bammetrics-cargo-tools:/tools \
+    -e CARGO_INSTALL_ROOT=/tools -e CARGO_TARGET_DIR=/target \
+    "$RUST_ALPINE_IMAGE" sh -euc "$script"
+}
+sbom_build
+
+# SHA256SUMS lists what this run made: the tarballs of the unblocked targets and the SBOM.
+listed=()
+for t in "${targets[@]}"; do listed+=("$(name_of "$t").tar.gz"); done
+listed+=("$sbom")
 if [ "$dry" = 1 ]; then
-  echo "+ (cd $out && shasum -a 256 *.tar.gz | sort by name > SHA256SUMS)"
+  echo "+ (cd $out && shasum -a 256 ${listed[*]} > SHA256SUMS)"
 else
   (
     cd "$out"
     # shellcheck disable=SC2046
-    shasum -a 256 $(ls | grep -E '\.tar\.gz$|\.cdx\.json$' | LC_ALL=C sort) > SHA256SUMS
+    shasum -a 256 $(printf '%s\n' "${listed[@]}" | LC_ALL=C sort) > SHA256SUMS
   )
   (cd "$out" && shasum -a 256 -c SHA256SUMS >/dev/null) || fail "SHA256SUMS does not verify"
+fi
+
+skip_args=()
+for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl universal-apple-darwin; do
+  has "$t" || skip_args+=(--skip "$t")
+done
+if [ "${#targets[@]}" -gt 0 ]; then
+  run python3 "$repo/scripts/brew_formula.py" "$version" "$out/SHA256SUMS" "$out/bammetrics.rb" ${skip_args[@]+"${skip_args[@]}"}
 fi
 
 if [ "$dry" = 1 ]; then
@@ -255,6 +294,7 @@ if [ "$publish" = 1 ]; then
   fi
   files=()
   for t in "${targets[@]}"; do files+=("$out/$(name_of "$t").tar.gz"); done
+  files+=("$out/$sbom")
   run gh release create "v$version" --title "BAMmetrics $version" --notes-file "$notes" \
     "${files[@]}" "$out/SHA256SUMS" "$out/BUILDINFO"
 fi
