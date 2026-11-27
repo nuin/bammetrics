@@ -139,7 +139,7 @@ linux_build() {
   bin_dir="$repo/$work/$(name_of "$target")"
   script="apk add --no-cache musl-dev git >/dev/null; git config --global --add safe.directory '*'"
   script+="; $(pin_tool cargo-auditable "$CARGO_AUDITABLE_VERSION")"
-  script+="; apk info -v musl-dev > $repo/$work/musl-dev.txt"
+  script+="; apk list -I musl-dev | cut -d\" \" -f1 > $repo/$work/musl-dev.txt"
   script+="; export PATH=/tools/bin:\$PATH"
   script+="; cargo auditable build --release --locked -p bammetrics-cli --features pdf --target $target"
   script+="; rustc --version > $repo/$work/rustc-$target.txt"
