@@ -1436,6 +1436,91 @@ and open. Tab reaches every summary, link and table scroll box outside a closed
 box) and a sample page with its tables open was 556 px (an unbroken Picard class name in
 a heading). `make a11y` needs node and npm and is not run in CI.
 
+## musl against glibc (wave E2)
+
+The static musl release binaries were slower than a glibc build of the same commit, so
+the musl build links mimalloc (`crates/cli/src/main.rs`, `cfg(target_env = "musl")`).
+Decision rule: an arm64 geometric mean of musl/glibc over 1.20 adds the allocator.
+Measured 1.36 before, so it was added; 0.93 after.
+
+Setup. `benches/musl_speed.sh ARCH MUSL_BIN GLIBC_BIN` runs six commands on
+`target/bench_wgs` (`make bench-wgs`: 200,000 pairs, 2 Mb): the four of
+`benches/wgs_bench.py`, `MarkDuplicates` and `CollectMultipleMetrics`. Each runs 5 times,
+wall time from `/usr/bin/time -f %e`, the median is kept. The musl binary runs in
+`alpine:3.22` and the glibc binary in `rust:1.100-bookworm`, one container per libc,
+inputs read-only, outputs in the container. Both binaries are `--features pdf`, built with
+rustc 1.100.0 (0ef1bc386 2026-11-09). The musl binary is the one inside the release
+tarball. The glibc binary is `cargo build --release --locked` of commit 60ae080 in
+`RUST_GLIBC_IMAGE` (the allocator change does not touch glibc builds). Host: Apple
+silicon, Docker Desktop 29.9.2.
+
+The amd64 rows are emulated (Docker Desktop, linux/amd64 on Apple silicon). Their
+absolute seconds say nothing about real x86-64 hardware; only the ratio is read.
+
+Images (from `scripts/release.env`):
+
+| Role | Image |
+|---|---|
+| musl build | `rust:1.100-alpine@sha256:8d0e82abfdf9a38071e07cabc5afba4ddbe077631a80e4e742a760c38beadc33` |
+| glibc build and run | `rust:1.100-bookworm@sha256:75d26c23c24cc6ea1cdabf0714a6bff8fd7bf3248716043fd7ae86dac7f41b94` |
+| musl run | `alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f` |
+
+### Before mimalloc (musl from commit 60ae080)
+
+arm64, native:
+
+| command | glibc s | musl s | musl/glibc |
+|---|---:|---:|---:|
+| CollectWgsMetrics | 2.46 | 2.94 | 1.20 |
+| CollectWgsMetrics USE_FAST_ALGORITHM=true | 1.58 | 1.83 | 1.16 |
+| CollectRawWgsMetrics | 5.26 | 5.75 | 1.09 |
+| CollectWgsMetricsWithNonZeroCoverage | 3.36 | 3.84 | 1.14 |
+| MarkDuplicates | 1.24 | 2.50 | 2.02 |
+| CollectMultipleMetrics | 0.52 | 0.96 | 1.85 |
+| geometric mean | | | 1.36 |
+
+amd64, emulated:
+
+| command | glibc s | musl s | musl/glibc |
+|---|---:|---:|---:|
+| CollectWgsMetrics | 3.15 | 4.05 | 1.29 |
+| CollectWgsMetrics USE_FAST_ALGORITHM=true | 2.50 | 2.73 | 1.09 |
+| CollectRawWgsMetrics | 7.62 | 8.57 | 1.12 |
+| CollectWgsMetricsWithNonZeroCoverage | 4.60 | 5.52 | 1.20 |
+| MarkDuplicates | 1.16 | 2.95 | 2.54 |
+| CollectMultipleMetrics | 0.92 | 1.34 | 1.46 |
+| geometric mean | | | 1.38 |
+
+### With mimalloc (musl from commit e5c1d6e)
+
+arm64, native:
+
+| command | glibc s | musl s | musl/glibc |
+|---|---:|---:|---:|
+| CollectWgsMetrics | 2.46 | 2.23 | 0.91 |
+| CollectWgsMetrics USE_FAST_ALGORITHM=true | 1.58 | 1.63 | 1.03 |
+| CollectRawWgsMetrics | 5.29 | 5.08 | 0.96 |
+| CollectWgsMetricsWithNonZeroCoverage | 3.40 | 3.16 | 0.93 |
+| MarkDuplicates | 1.27 | 0.99 | 0.78 |
+| CollectMultipleMetrics | 0.54 | 0.55 | 1.02 |
+| geometric mean | | | 0.93 |
+
+amd64, emulated:
+
+| command | glibc s | musl s | musl/glibc |
+|---|---:|---:|---:|
+| CollectWgsMetrics | 3.15 | 3.10 | 0.98 |
+| CollectWgsMetrics USE_FAST_ALGORITHM=true | 2.49 | 2.41 | 0.97 |
+| CollectRawWgsMetrics | 7.61 | 7.60 | 1.00 |
+| CollectWgsMetricsWithNonZeroCoverage | 4.62 | 4.57 | 0.99 |
+| MarkDuplicates | 1.16 | 1.18 | 1.02 |
+| CollectMultipleMetrics | 0.92 | 0.82 | 0.89 |
+| geometric mean | | | 0.97 |
+
+Checks after the change: `make golden` passes (33 tests). `cargo deny check`: licenses
+and sources ok, mimalloc (MIT) adds no finding; the two failures (rustybuzz unmaintained,
+two versions of `syn`) are the ones docs/release.md already lists.
+
 ## Reproduce
 
 ```bash

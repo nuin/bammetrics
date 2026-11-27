@@ -19,6 +19,26 @@ uv venv .venv && uv pip install --python .venv/bin/python maturin
 .venv/bin/maturin develop --release            # the bammetrics Python module
 ```
 
+### Release binaries
+
+Each release holds three tarballs, a CycloneDX SBOM, `SHA256SUMS`, `BUILDINFO` and a Homebrew
+formula (`bammetrics.rb`). All carry the `pdf` and `parquet` features.
+
+| Tarball | Platform |
+|---|---|
+| `bammetrics-<ver>-x86_64-unknown-linux-musl.tar.gz` | Linux x86_64, static |
+| `bammetrics-<ver>-aarch64-unknown-linux-musl.tar.gz` | Linux arm64, static |
+| `bammetrics-<ver>-universal-apple-darwin.tar.gz` | macOS 11 or later, arm64 and x86_64 |
+
+```bash
+shasum -a 256 -c SHA256SUMS --ignore-missing   # checks the files you downloaded
+tar -xzf bammetrics-<ver>-<target>.tar.gz
+bammetrics-<ver>-<target>/bammetrics --version
+```
+
+`bammetrics.rb` is the formula for a Homebrew tap. How the files are built:
+[docs/release.md](docs/release.md).
+
 ## Use
 
 Put `bammetrics` where `picard` was and keep the arguments:

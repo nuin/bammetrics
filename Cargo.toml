@@ -4,17 +4,17 @@ members = ["crates/core", "crates/verdict", "crates/report", "crates/formats", "
 exclude = ["vendor"]
 
 [workspace.package]
-version = "0.34.1"
+version = "0.34.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.91"
 
 [workspace.dependencies]
-bammetrics-core = { path = "crates/core", version = "0.34.1" }
-bammetrics-verdict = { path = "crates/verdict", version = "0.34.1" }
-bammetrics-report = { path = "crates/report", version = "0.34.1" }
-bammetrics-formats = { path = "crates/formats", version = "0.34.1" }
-bammetrics-pdf = { path = "crates/pdf", version = "0.34.1" }
+bammetrics-core = { path = "crates/core", version = "0.34.2" }
+bammetrics-verdict = { path = "crates/verdict", version = "0.34.2" }
+bammetrics-report = { path = "crates/report", version = "0.34.2" }
+bammetrics-formats = { path = "crates/formats", version = "0.34.2" }
+bammetrics-pdf = { path = "crates/pdf", version = "0.34.2" }
 clap = { version = "4", features = ["derive", "string"] }
 libc = "0.2"
 hashbrown = { version = "0.17", default-features = false }

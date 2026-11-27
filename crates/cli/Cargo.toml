@@ -39,3 +39,8 @@ clap_complete = "4"
 libc.workspace = true
 signal-hook = "0.3"
 thiserror.workspace = true
+
+# musl's allocator is slow under the multi-threaded record passes (docs/benchmarks.md,
+# "musl against glibc"); the static musl release binaries use mimalloc instead.
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = { version = "0.1", default-features = false }

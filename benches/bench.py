@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BAMMETRICS = ROOT / "target" / "release" / "bammetrics"
+BAMMETRICS = Path(os.environ.get("BAMMETRICS_BIN") or ROOT / "target" / "release" / "bammetrics")
 FAKE_R = ROOT / "target" / "fakeR"
 
 sys.path.insert(0, str(ROOT / "tests" / "concordance"))

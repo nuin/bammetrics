@@ -2,8 +2,9 @@
 
 A workflow engine or wrapper generator reads three things from the binary: a JSON listing of
 every tool, an exit code table, and frozen JSON schemas for what the tools write. Layer 1
-(this page) ships in 0.34.1. Layers 2 to 4 (packages, workflow wrappers, an in-process
-library) come in E2 to E7.
+(this page) ships in 0.34.1. The release binaries, layer 2a, ship in 0.34.2
+([release.md](release.md)). Python wheels (E3), workflow wrappers (E4) and the in-process
+library (E5 to E7) follow.
 
 ## What a program reads
 
