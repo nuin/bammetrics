@@ -8,7 +8,7 @@
 # --snapshot (default)  dist/<version>-<shortsha>/, any commit
 # --tag                 dist/v<version>/, HEAD must carry the tag v<version>
 # --dry-run             print one line per command, run none
-# --publish             gh release create (needs --tag)
+# --publish             gh release create as a draft, then published (needs --tag)
 # --clean               drop the build volumes and target/release-mac first
 #
 # Exit 2: refused before any build. Exit 1: a build or a self-check failed.
@@ -39,6 +39,9 @@ done
 dirty="$( { git diff --name-only HEAD; git diff --cached --name-only; } | sort -u)"
 [ -z "$dirty" ] || die "tracked files differ from HEAD: $(echo "$dirty" | tr '\n' ' ')"
 
+untracked="$(git ls-files --others --exclude-standard -- .cargo crates vendor)"
+[ -z "$untracked" ] || die "untracked files under .cargo, crates or vendor: $(echo "$untracked" | tr '\n' ' ')"
+
 version="$(grep -m1 '^version *= *"' Cargo.toml | cut -d'"' -f2)"
 [ -n "$version" ] || die "no version in Cargo.toml"
 commit="$(git rev-parse --short HEAD)"
@@ -51,8 +54,23 @@ else
   out="dist/$version-$commit"
 fi
 
+notes_text=""
+if [ "$publish" = 1 ]; then
+  notes_text="$(awk -v h="## $version" '$0 == h {on=1; next} /^## / {on=0} on' CHANGELOG.md)"
+  [ -n "$(printf '%s' "$notes_text" | tr -d '[:space:]')" ] \
+    || die "CHANGELOG.md has no notes under '## $version'"
+  # The tag on origin must be the commit being released, or gh would tag another one.
+  if [ "$dry" = 1 ]; then
+    echo "+ git ls-remote --tags origin refs/tags/v$version (must resolve to $full_commit)"
+  else
+    remote_tag="$(git ls-remote --tags origin "refs/tags/v$version" "refs/tags/v$version^{}" | awk '{print $1}' | tail -n 1)"
+    [ "$remote_tag" = "$full_commit" ] \
+      || die "tag v$version on origin is '${remote_tag:-missing}', not $full_commit"
+  fi
+fi
+
 need() { command -v "$1" >/dev/null 2>&1 || die "missing tool: $1"; }
-for tool in docker lipo shasum python3; do need "$tool"; done
+for tool in docker lipo shasum python3 file arch; do need "$tool"; done
 [ "$publish" = 0 ] || need gh
 rustup="$(command -v rustup || true)"
 if [ -z "$rustup" ] && command -v brew >/dev/null 2>&1; then
@@ -77,6 +95,12 @@ work="$out/.work"
 run() {
   if [ "$dry" = 1 ]; then printf '+'; printf ' %s' "$@"; echo; else "$@"; fi
 }
+# Shell text for a container script: install NAME@VERSION unless that version is
+# in the tools volume, then fail when it still is not.
+pin_tool() {
+  printf "grep -q '^\"%s %s (' /tools/.crates.toml 2>/dev/null || cargo install --locked %s@%s; grep -q '^\"%s %s (' /tools/.crates.toml || { echo 'tool %s %s is not installed' >&2; exit 1; }" \
+    "$1" "$2" "$1" "$2" "$1" "$2" "$1" "$2"
+}
 blocked() { case " $BLOCKED_TARGETS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 fail() { echo "release.sh: self-check failed: $*" >&2; exit 1; }
 
@@ -99,6 +123,14 @@ if [ "$clean" = 1 ]; then
   done
   run rm -rf "$repo/target/release-mac" "$repo/$out"
 fi
+# Files left by an earlier run in this directory are not part of this run, and a
+# run that fails must not leave old sums beside new files.
+if [ "$dry" = 1 ]; then
+  echo "+ rm -f $out/*.tar.gz $out/*.cdx.json $out/bammetrics.rb $out/SHA256SUMS $out/BUILDINFO"
+else
+  mkdir -p "$out"
+  rm -f "$out"/*.tar.gz "$out"/*.cdx.json "$out"/bammetrics.rb "$out"/SHA256SUMS "$out"/BUILDINFO
+fi
 [ "$dry" = 1 ] || mkdir -p "$work"
 
 linux_build() {
@@ -106,7 +138,8 @@ linux_build() {
   arch="$(arch_of "$target")"
   bin_dir="$repo/$work/$(name_of "$target")"
   script="apk add --no-cache musl-dev git >/dev/null; git config --global --add safe.directory '*'"
-  script+="; [ -x /tools/bin/cargo-auditable ] || cargo install --locked cargo-auditable"
+  script+="; $(pin_tool cargo-auditable "$CARGO_AUDITABLE_VERSION")"
+  script+="; apk info -v musl-dev > $repo/$work/musl-dev.txt"
   script+="; export PATH=/tools/bin:\$PATH"
   script+="; cargo auditable build --release --locked -p bammetrics-cli --features pdf --target $target"
   script+="; rustc --version > $repo/$work/rustc-$target.txt"
@@ -203,21 +236,13 @@ if has universal-apple-darwin; then
 fi
 
 # --- tarballs, SBOM, sums, formula, build info ------------------------------
-# Files left by an earlier run in this directory are not part of this run.
-if [ "$dry" = 1 ]; then
-  echo "+ rm -f $out/*.tar.gz $out/*.cdx.json $out/bammetrics.rb"
-else
-  mkdir -p "$out"
-  rm -f "$out"/*.tar.gz "$out"/*.cdx.json "$out"/bammetrics.rb
-fi
-
 tarball() {
   local target="$1" name tar_script
   name="$(name_of "$target")"
   if [ "$dry" = 0 ]; then
-    cp README.md CHANGELOG.md "$work/$name/"
+    cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "$work/$name/"
     chmod 755 "$work/$name/bammetrics"
-    chmod 644 "$work/$name/README.md" "$work/$name/CHANGELOG.md"
+    chmod 644 "$work/$name/README.md" "$work/$name/CHANGELOG.md" "$work/$name/LICENSE-MIT" "$work/$name/LICENSE-APACHE"
   fi
   tar_script="apk add --no-cache tar >/dev/null; cd /out"
   tar_script+="; tar --sort=name --mtime=@$SOURCE_DATE_EPOCH --owner=0 --group=0 --numeric-owner -cf - -C .work $name | gzip -n > $name.tar.gz"
@@ -230,14 +255,14 @@ sbom="bammetrics-$version.cdx.json"
 sbom_build() {
   local script
   script="apk add --no-cache musl-dev git >/dev/null; git config --global --add safe.directory '*'"
-  script+="; [ -x /tools/bin/cargo-cyclonedx ] || cargo install --locked cargo-cyclonedx"
+  script+="; $(pin_tool cargo-cyclonedx "$CARGO_CYCLONEDX_VERSION")"
   script+="; export PATH=/tools/bin:\$PATH"
   script+="; cargo cyclonedx --manifest-path crates/cli/Cargo.toml --format json --spec-version 1.5 --features pdf --override-filename bammetrics-$version"
   script+="; mv crates/cli/bammetrics-$version.json $out/$sbom"
   script+="; rm -f crates/*/bammetrics-$version.json"
   script+="; chown $(id -u):$(id -g) $out/$sbom"
   run docker run --rm \
-    -v "$repo:$repo" -w "$repo" \
+    -v "$repo:/build" -w /build \
     -v "$git_common:$git_common:ro" \
     -v bammetrics-cargo-registry:/usr/local/cargo/registry \
     -v bammetrics-cargo-tools:/tools \
@@ -247,6 +272,54 @@ sbom_build() {
 sbom_build
 # cargo cyclonedx stamps the run's clock and a random serial number; pin both to the commit.
 run python3 "$repo/scripts/sbom_pin.py" "$out/$sbom" "$full_commit" "$SOURCE_DATE_EPOCH"
+
+if [ "$dry" = 1 ]; then
+  echo "+ write $out/BUILDINFO"
+else
+  {
+    echo "commit $full_commit"
+    echo "source_date_epoch $SOURCE_DATE_EPOCH"
+    echo "rust_alpine_image $RUST_ALPINE_IMAGE"
+    echo "runner_image $RUNNER_IMAGE"
+    echo "mac_toolchain $MAC_TOOLCHAIN"
+    echo "cargo_auditable $CARGO_AUDITABLE_VERSION"
+    echo "cargo_cyclonedx $CARGO_CYCLONEDX_VERSION"
+    [ -f "$work/musl-dev.txt" ] && echo "apk $(cat "$work/musl-dev.txt")"
+    echo "macosx_deployment_target $MACOSX_DEPLOYMENT_TARGET"
+    for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
+      has "$t" && echo "rustc $t $(cat "$work/rustc-$t.txt")"
+    done
+    has universal-apple-darwin \
+      && echo "rustc universal-apple-darwin $("$rustup" run "$MAC_TOOLCHAIN" rustc --version)"
+  } > "$out/BUILDINFO"
+fi
+
+# No artifact may name the build host: the repository path or $HOME.
+leak_check() {
+  local scan="$work/scan" needle hit f
+  if [ "$dry" = 1 ]; then
+    echo "+ leak check: $* for the repository path and \$HOME"
+    return
+  fi
+  rm -rf "$scan"; mkdir -p "$scan"
+  for f in "$@"; do
+    case "$f" in
+      *.tar.gz) mkdir -p "$scan/$(basename "$f")"; tar -xzf "$f" -C "$scan/$(basename "$f")" ;;
+      *) cp "$f" "$scan/" ;;
+    esac
+  done
+  for needle in "$repo" "${HOME:-}"; do
+    case "$needle" in ""|/) continue ;; esac
+    hit="$(grep -rlaF -- "$needle" "$scan" | head -n 1 || true)"
+    [ -z "$hit" ] || fail "$needle found in ${hit#"$scan"/}"
+  done
+  rm -rf "$scan"
+}
+
+artifacts=()
+for t in "${targets[@]}"; do artifacts+=("$out/$(name_of "$t").tar.gz"); done
+artifacts+=("$out/$sbom" "$out/BUILDINFO")
+leak_check ${artifacts[@]+"${artifacts[@]}"}
 
 # SHA256SUMS lists what this run made: the tarballs of the unblocked targets and the SBOM.
 listed=()
@@ -271,35 +344,19 @@ if [ "${#targets[@]}" -gt 0 ]; then
   run python3 "$repo/scripts/brew_formula.py" "$version" "$out/SHA256SUMS" "$out/bammetrics.rb" ${skip_args[@]+"${skip_args[@]}"}
 fi
 
-if [ "$dry" = 1 ]; then
-  echo "+ write $out/BUILDINFO"
-else
-  {
-    echo "commit $full_commit"
-    echo "source_date_epoch $SOURCE_DATE_EPOCH"
-    echo "rust_alpine_image $RUST_ALPINE_IMAGE"
-    echo "runner_image $RUNNER_IMAGE"
-    echo "mac_toolchain $MAC_TOOLCHAIN"
-    echo "macosx_deployment_target $MACOSX_DEPLOYMENT_TARGET"
-    for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
-      has "$t" && echo "rustc $t $(cat "$work/rustc-$t.txt")"
-    done
-    has universal-apple-darwin \
-      && echo "rustc universal-apple-darwin $("$rustup" run "$MAC_TOOLCHAIN" rustc --version)"
-  } > "$out/BUILDINFO"
-fi
+if [ -f "$out/bammetrics.rb" ]; then leak_check "$out/bammetrics.rb"; fi
 
 # --- publish ----------------------------------------------------------------
 if [ "$publish" = 1 ]; then
   notes="$work/notes.md"
-  if [ "$dry" = 0 ]; then
-    awk -v h="## $version" '$0 == h {on=1; next} /^## / {on=0} on' CHANGELOG.md > "$notes"
-  fi
+  if [ "$dry" = 0 ]; then printf '%s\n' "$notes_text" > "$notes"; fi
   files=()
   for t in "${targets[@]}"; do files+=("$out/$(name_of "$t").tar.gz"); done
   files+=("$out/$sbom")
-  run gh release create "v$version" --title "BAMmetrics $version" --notes-file "$notes" \
-    "${files[@]}" "$out/SHA256SUMS" "$out/BUILDINFO"
+  # A draft first: a failed upload leaves no public release with missing files.
+  run gh release create "v$version" --draft --verify-tag --title "BAMmetrics $version" \
+    --notes-file "$notes" "${files[@]}" "$out/SHA256SUMS" "$out/BUILDINFO"
+  run gh release edit "v$version" --draft=false
 fi
 
 [ "$dry" = 1 ] || rm -rf "$work"

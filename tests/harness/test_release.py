@@ -116,6 +116,8 @@ def release_repo(tmp_path, monkeypatch):
     (repo / "scripts" / "release.sh").chmod(0o755)
     (repo / "Cargo.toml").write_text('[workspace.package]\nversion = "1.2.3"\n')
     (repo / "README.md").write_text("readme\n")
+    (repo / "LICENSE-MIT").write_text("mit\n")
+    (repo / "LICENSE-APACHE").write_text("apache\n")
     (repo / "CHANGELOG.md").write_text("# Changelog\n\n## Unreleased\n\n## 1.2.3\n\nNotes.\n")
     git(repo, "init", "-q", "-b", "main")
     git(repo, "add", ".")
@@ -124,7 +126,7 @@ def release_repo(tmp_path, monkeypatch):
     git(repo, "commit", "-q", "-am", "two")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in ("docker", "lipo", "rustup", "gh"):
+    for name in ("docker", "lipo", "rustup", "gh", "file", "arch"):
         (bin_dir / name).write_text(STUB)
         (bin_dir / name).chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
@@ -206,7 +208,7 @@ def test_dry_run_plan(release_repo):
     for target in (*LINUX, "universal-apple-darwin"):
         steps.append(index_of(lines, "tar ", f"bammetrics-1.2.3-{target}.tar.gz"))
     steps.append(index_of(lines, "cargo cyclonedx"))
-    steps.append(index_of(lines, "SHA256SUMS"))
+    steps.append(index_of(lines, "shasum -a 256"))
     steps.append(index_of(lines, "brew_formula.py"))
     assert steps == sorted(steps) and len(set(steps)) == len(steps)
     assert not any("gh release" in line for line in lines)
@@ -219,7 +221,7 @@ def test_dry_run_publish_line(release_repo):
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
     assert "dist/v1.2.3" in result.stdout
-    assert index_of(lines, "gh release create v1.2.3") > index_of(lines, "SHA256SUMS")
+    assert index_of(lines, "gh release create v1.2.3") > index_of(lines, "shasum -a 256")
 
 
 def test_blocked_target_skipped(release_repo):
@@ -242,7 +244,7 @@ def test_sbom_line_in_dry_run(release_repo):
     assert "--spec-version 1.5" in lines[sbom]
     assert "crates/cli/Cargo.toml" in lines[sbom]
     assert "bammetrics-1.2.3.cdx.json" in "\n".join(lines)
-    assert sbom < index_of(lines, "SHA256SUMS") < index_of(lines, "brew_formula.py")
+    assert sbom < index_of(lines, "shasum -a 256") < index_of(lines, "brew_formula.py")
 
 
 def test_sums_list_only_planned_files(release_repo, tmp_path):
@@ -304,7 +306,7 @@ def test_formula_from_sums(tmp_path):
         "test do", 'shell_output("#{bin}/bammetrics --version")', "0.34.2",
     ):
         assert want in text, want
-    assert "license" not in text
+    assert 'license any_of: ["MIT", "Apache-2.0"]' in text
 
 
 def test_formula_missing_target(tmp_path):
@@ -343,3 +345,137 @@ def test_sbom_pin_sets_timestamp_and_serial(tmp_path):
     path.write_text(source)
     assert sbom_pin.main(["sbom_pin.py", str(path), sha, "1795000000"]) == 0
     assert path.read_text() == text
+
+
+# Review fixes: no host path in artifacts, licences, publish checks, pins.
+
+def planned(repo, *args, env=None):
+    result = release(repo, *args, "--dry-run", env=env)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.splitlines()
+
+
+def test_sbom_container_mounts_repo_at_build(release_repo):
+    lines = planned(release_repo, "--snapshot")
+    sbom = lines[index_of(lines, "cargo cyclonedx") - 0]
+    assert "/build" in sbom
+    assert f"{release_repo}:{release_repo}" not in sbom
+    assert "-w /build" in sbom
+
+
+def test_leak_check_in_plan_before_sums(release_repo):
+    lines = planned(release_repo, "--snapshot")
+    assert index_of(lines, "leak check") < index_of(lines, "shasum -a 256")
+
+
+def stub_sbom(release_repo, tmp_path, text):
+    sha = subprocess.run(["git", "-C", str(release_repo), "rev-parse", "--short", "HEAD"],
+                         capture_output=True, text=True).stdout.strip()
+    out = release_repo / "dist" / f"1.2.3-{sha}"
+    out.mkdir(parents=True)
+    (tmp_path / "bin" / "docker").write_text(
+        f'#!/bin/sh\ncase "$*" in *cyclonedx*) echo \'{text}\' > "$SBOM_STUB" ;; esac\nexit 0\n')
+    env = {"BLOCKED_TARGETS": " ".join((*LINUX, "universal-apple-darwin")),
+           "SBOM_STUB": str(out / "bammetrics-1.2.3.cdx.json")}
+    return out, env
+
+
+def test_leak_check_fires_on_repo_path(release_repo, tmp_path):
+    out, env = stub_sbom(release_repo, tmp_path,
+                         '{"metadata": {}, "ref": "path+file://%s/crates/x"}' % release_repo)
+    result = release(release_repo, "--snapshot", env=env)
+    assert result.returncode == 1
+    assert "cdx.json" in result.stderr and str(release_repo) in result.stderr
+    assert not (out / "SHA256SUMS").exists()
+
+
+def test_leak_check_fires_on_home(release_repo, tmp_path):
+    out, env = stub_sbom(release_repo, tmp_path, '{"metadata": {}, "p": "/home/zed/x"}')
+    result = release(release_repo, "--snapshot", env={**env, "HOME": "/home/zed"})
+    assert result.returncode == 1
+    assert "/home/zed" in result.stderr
+
+
+def test_leak_check_passes_clean(release_repo, tmp_path):
+    out, env = stub_sbom(release_repo, tmp_path, '{"metadata": {}}')
+    result = release(release_repo, "--snapshot", env=env)
+    assert result.returncode == 0, result.stderr
+    assert (out / "SHA256SUMS").exists()
+    info = (out / "BUILDINFO").read_text()
+    assert "cargo_auditable " + release_env()["CARGO_AUDITABLE_VERSION"] in info
+    assert "cargo_cyclonedx " + release_env()["CARGO_CYCLONEDX_VERSION"] in info
+
+
+def test_tarballs_get_both_licences(release_repo):
+    lines = planned(release_repo, "--snapshot")
+    assert any("rm -f" in l and "SHA256SUMS" in l and "BUILDINFO" in l for l in lines)
+    text = (ROOT / "scripts" / "release.sh").read_text()
+    assert "LICENSE-MIT LICENSE-APACHE" in text
+
+
+def test_tool_versions_pinned(release_repo):
+    lines = planned(release_repo, "--snapshot")
+    env = release_env()
+    auditable = lines[index_of(lines, "cargo auditable build")]
+    cyclonedx = lines[index_of(lines, "cargo cyclonedx")]
+    assert "cargo install --locked cargo-auditable@" + env["CARGO_AUDITABLE_VERSION"] in auditable
+    assert "cargo install --locked cargo-cyclonedx@" + env["CARGO_CYCLONEDX_VERSION"] in cyclonedx
+    assert "exit 1" in auditable and "exit 1" in cyclonedx
+
+
+def test_dry_run_publish_plan_verifies_tag_and_drafts(release_repo):
+    git(release_repo, "tag", "v1.2.3")
+    lines = planned(release_repo, "--tag", "--publish")
+    ls = index_of(lines, "git ls-remote --tags origin")
+    assert ls < index_of(lines, "--platform")
+    create = lines[index_of(lines, "gh release create v1.2.3")]
+    assert "--draft" in create and "--verify-tag" in create
+    assert index_of(lines, "gh release edit v1.2.3", "--draft=false") > index_of(lines, "gh release create")
+
+
+def test_publish_refuses_when_origin_lacks_tag(release_repo, tmp_path):
+    git(release_repo, "tag", "v1.2.3")
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+    git(release_repo, "remote", "add", "origin", str(bare))
+    result = release(release_repo, "--tag", "--publish")
+    assert result.returncode == 2
+    assert "v1.2.3" in result.stderr and "origin" in result.stderr
+
+
+def test_publish_refuses_when_origin_tag_is_another_commit(release_repo, tmp_path):
+    git(release_repo, "tag", "v1.2.3")
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+    git(release_repo, "remote", "add", "origin", str(bare))
+    git(release_repo, "push", "-q", "origin", "HEAD~1:refs/tags/v1.2.3")
+    result = release(release_repo, "--tag", "--publish")
+    assert result.returncode == 2
+    assert "not" in result.stderr
+
+
+def test_empty_release_notes_refused(release_repo):
+    (release_repo / "CHANGELOG.md").write_text("# Changelog\n\n## 1.2.3\n\n## 1.2.2\n\nOld.\n")
+    git(release_repo, "commit", "-q", "-am", "empty notes")
+    git(release_repo, "tag", "v1.2.3")
+    result = release(release_repo, "--tag", "--publish", "--dry-run")
+    assert result.returncode == 2
+    assert "notes" in result.stderr
+
+
+def test_untracked_file_under_crates_refused(release_repo):
+    (release_repo / "crates" / "core").mkdir(parents=True)
+    (release_repo / "crates" / "core" / "stray.rs").write_text("x\n")
+    result = release(release_repo, "--snapshot", "--dry-run")
+    assert result.returncode == 2
+    assert "stray.rs" in result.stderr
+
+
+def test_stale_sums_removed_at_start(release_repo, tmp_path):
+    out, env = stub_sbom(release_repo, tmp_path, '{"metadata": {}, "p": "%s"}' % release_repo)
+    (out / "SHA256SUMS").write_text("old\n")
+    (out / "BUILDINFO").write_text("old\n")
+    result = release(release_repo, "--snapshot", env=env)
+    assert result.returncode == 1
+    assert not (out / "SHA256SUMS").exists()
+    assert (out / "BUILDINFO").read_text() != "old\n"

@@ -4,7 +4,7 @@
     brew_formula.py VERSION SHA256SUMS OUT [--skip TARGET ...]
 
 Exit 2 when a target that is not skipped has no tarball line in SHA256SUMS.
-The formula has no license line while the repository has no licence.
+The formula declares the repository's licence: MIT or Apache-2.0.
 """
 import re
 import sys
@@ -43,6 +43,7 @@ def formula(version, sums, skip):
         '  desc "Picard BAM QC metrics, reimplemented in Rust"',
         f'  homepage "{REPO}"',
         f'  version "{version}"',
+        '  license any_of: ["MIT", "Apache-2.0"]',
         "",
     ]
     if MAC not in skip:

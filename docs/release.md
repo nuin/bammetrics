@@ -14,16 +14,21 @@ Output goes to `dist/<version>-<shortsha>/` for a snapshot and `dist/v<version>/
 | `bammetrics-<ver>-universal-apple-darwin.tar.gz` | arm64 and x86_64 slices joined by `lipo`, deployment target 11.0 |
 | `bammetrics-<ver>.cdx.json` | SBOM, CycloneDX 1.5, from `cargo cyclonedx` with feature `pdf` |
 | `SHA256SUMS` | one line per tarball and the SBOM |
-| `BUILDINFO` | commit, `SOURCE_DATE_EPOCH`, image digests, toolchain, rustc per target |
+| `BUILDINFO` | commit, `SOURCE_DATE_EPOCH`, image digests, toolchain, `cargo-auditable` and `cargo-cyclonedx` versions, `musl-dev` version, rustc per target |
 | `bammetrics.rb` | Homebrew formula with the three tarball urls and sums |
 
-Each tarball unpacks to `bammetrics-<ver>-<target>/` with `bammetrics`, `README.md` and
-`CHANGELOG.md`. Every binary is built with features `pdf` and the default `parquet`, with
+Each tarball unpacks to `bammetrics-<ver>-<target>/` with `bammetrics`, `README.md`,
+`CHANGELOG.md`, `LICENSE-MIT` and `LICENSE-APACHE`. The formula declares
+`license any_of: ["MIT", "Apache-2.0"]`. Every binary is built with features `pdf` and the default `parquet`, with
 `cargo auditable` for the Linux ones, `--locked`, and paths remapped to `/build` and `/cargo`.
 
 The SBOM is made reproducible after `cargo cyclonedx` writes it: `scripts/sbom_pin.py` sets
 `metadata.timestamp` to `SOURCE_DATE_EPOCH` in UTC and `serialNumber` to a UUID v5 of the
-commit URL. One commit gives one SBOM, byte for byte.
+commit URL. One commit gives one SBOM, byte for byte. The SBOM container mounts the repository
+at `/build`, so no bom-ref holds the host path.
+
+Before `SHA256SUMS`, the script searches every tarball (extracted), the SBOM, `BUILDINFO` and
+the formula for the repository path and `$HOME`. A hit exits 1 and names the file.
 
 ## Cutting a release
 
@@ -37,7 +42,10 @@ scripts/release.sh --tag --publish        # gh release create, after the owner a
 
 Options: `--snapshot` (default), `--tag`, `--dry-run`, `--publish` (needs `--tag`), `--clean`
 (drops the build volumes and `target/release-mac`). Exit 2 means a refusal before any build:
-tracked files differ from `HEAD`, a tool is missing, the tag does not point at `HEAD`. Exit 1
+tracked files differ from `HEAD`, untracked files under `.cargo`, `crates` or `vendor`, a tool
+is missing, the tag does not point at `HEAD`, or with `--publish` empty release notes (no
+`## <version>` heading in `CHANGELOG.md`) and a tag on origin that is not the full commit
+(`git ls-remote --tags origin`). Exit 1
 means a build or a self-check failed. After each build the script runs `--version --json` on
 the binary and compares version and commit, checks the ELF is static and the `lipo` archs
 are `x86_64 arm64`, then runs the x86_64 slice under Rosetta.
@@ -47,12 +55,19 @@ are `x86_64 arm64`, then runs the x86_64 slice under Rosetta.
 - Docker Desktop (linux/arm64 native, linux/amd64 emulated).
 - rustup, keg-only from Homebrew (`/opt/homebrew/opt/rustup/bin`), with toolchain
   `1.100.0` and targets `aarch64-apple-darwin` and `x86_64-apple-darwin`.
-- `lipo`, `shasum`, `python3`. `gh` only for `--publish`.
+- `lipo`, `shasum`, `python3`, `file`, `arch`. `gh` only for `--publish`.
+- A macOS host. `release.sh` runs on macOS only: it needs `lipo`, Rosetta and the Homebrew rustup.
 - `cargo-auditable` and `cargo-cyclonedx` install on first use into the docker volume
-  `bammetrics-cargo-tools`.
+  `bammetrics-cargo-tools`, at the versions `CARGO_AUDITABLE_VERSION` (0.7.8) and
+  `CARGO_CYCLONEDX_VERSION` (0.5.10) of `scripts/release.env`. A different installed version is
+  replaced by `cargo install --locked NAME@X.Y.Z`; a mismatch after that exits 1.
 
 The pinned inputs (four image digests, `MAC_TOOLCHAIN`, `MACOSX_DEPLOYMENT_TARGET`,
 `BLOCKED_TARGETS`) live in `scripts/release.env`.
+
+`--publish` creates the release as a draft with `--verify-tag`, uploads the files, then runs
+`gh release edit --draft=false`. A failed upload leaves a draft, never a public release with
+missing files. A run removes `SHA256SUMS` and `BUILDINFO` with the stale tarballs at its start.
 
 ### Blocked targets
 
@@ -91,6 +106,8 @@ BM_LINUX_ARCH=arm64 BM_LINUX_BIN=/tmp/bm/bammetrics-0.34.2-aarch64-unknown-linux
 
 Filled from the runs of 0.34.2 at commit 0f5019e (`scripts/release.sh --snapshot --clean`, 17 min 29 s).
 `BLOCKED_TARGETS` stays empty: no gate showed a difference in output bytes.
+
+The spec's E2 row asks for libm results. The hs, wgs and gc_bias concordance modules write floating-point output, and they are equal on both musl binaries (669 of 669 each, Task 6).
 
 Speed of the musl binaries against glibc, and the mimalloc decision: docs/benchmarks.md, section "musl against glibc (wave E2)".
 
@@ -143,7 +160,9 @@ Two runs of `scripts/release.sh --snapshot --clean` at the same commit, the seco
 | `universal-apple-darwin` | `e0515bfca92b56c0342674bd9c6a9074bb6baf37b55bfa16efbb7eafa8b07542` | same | equal |
 | SBOM (`bammetrics-0.34.2.cdx.json`) | `db4e22406bdbe30806df1cafe3aff2fbee75c940d8120e1ffcc5a103e0102f3d` | same | equal |
 
-`BUILDINFO` and `bammetrics.rb` are also equal between the two runs.
+`SHA256SUMS`, `BUILDINFO` and `bammetrics.rb` are also byte-identical between the two runs.
+
+`scripts/build-linux.sh` (the fallback for old glibc hosts) uses the unpinned `rust:1-alpine` image, so its output is not reproducible.
 
 ### SBOM and formula
 
