@@ -151,7 +151,7 @@ Without tzdata the container cannot resolve the zone and prints the dates in UTC
 
 ### Reproducibility
 
-Two runs of `scripts/release.sh --snapshot --clean` at the same commit, the second after dropping the build volumes and `target/release-mac`.
+Two runs of `scripts/release.sh --snapshot --clean` at commit 0f5019e. The second ran after dropping the build volumes and `target/release-mac`. These hashes predate the licence files in the tarballs (27e0aaa), so a build of a later commit gives other hashes.
 
 | Target | Run 1 sha256 | Run 2 sha256 | Result |
 |---|---|---|---|
