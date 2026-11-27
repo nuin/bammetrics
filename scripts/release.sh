@@ -234,6 +234,7 @@ sbom_build() {
   script+="; export PATH=/tools/bin:\$PATH"
   script+="; cargo cyclonedx --manifest-path crates/cli/Cargo.toml --format json --spec-version 1.5 --features pdf --override-filename bammetrics-$version"
   script+="; mv crates/cli/bammetrics-$version.json $out/$sbom"
+  script+="; rm -f crates/*/bammetrics-$version.json"
   script+="; chown $(id -u):$(id -g) $out/$sbom"
   run docker run --rm \
     -v "$repo:$repo" -w "$repo" \

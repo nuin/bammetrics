@@ -46,7 +46,11 @@ def formula(version, sums, skip):
         "",
     ]
     if MAC not in skip:
-        out += ["  on_macos do", block(MAC, sums, version, 4).rstrip("\n"), "  end", ""]
+        # brew style allows url only inside on_arm and on_intel, so both get the universal file.
+        out.append("  on_macos do")
+        for name in ("on_arm", "on_intel"):
+            out += [f"    {name} do", block(MAC, sums, version, 6).rstrip("\n"), "    end"]
+        out += ["  end", ""]
     linux = [(n, t) for n, t in (("on_intel", INTEL), ("on_arm", ARM)) if t not in skip]
     if linux:
         out.append("  on_linux do")

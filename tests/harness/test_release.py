@@ -319,4 +319,4 @@ def test_formula_skips_blocked_target(tmp_path):
                        "--skip", "aarch64-unknown-linux-musl")
     assert result.returncode == 0, result.stderr
     text = out.read_text()
-    assert "aarch64" not in text and "on_arm" not in text and "on_intel do" in text
+    assert "aarch64" not in text and "on_intel do" in text and "x86_64-unknown-linux-musl" in text
