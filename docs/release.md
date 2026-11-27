@@ -89,33 +89,61 @@ BM_LINUX_ARCH=arm64 BM_LINUX_BIN=/tmp/bm/bammetrics-0.34.2-aarch64-unknown-linux
 
 ## Results
 
-Filled from the runs of 0.34.2.
+Filled from the runs of 0.34.2 at commit 0f5019e (`scripts/release.sh --snapshot --clean`, 17 min 29 s).
+`BLOCKED_TARGETS` stays empty: no gate showed a difference in output bytes.
 
 Speed of the musl binaries against glibc, and the mimalloc decision: docs/benchmarks.md, section "musl against glibc (wave E2)".
 
 ### Gates
 
-| Target | Golden | Concordance | Result |
-|---|---|---|---|
-| | | | |
+Golden is `cargo test --release -p bammetrics-cli --features pdf --test golden` with `BAMMETRICS_BIN` set to the tarball binary: 33 tests. Concordance is `tests/concordance/test_hs_metrics.py`, `test_wgs_metrics.py`, `test_gc_bias.py` and `test_variant_tools.py` through the shim of the target. Workspace is `cargo test --release --locked --workspace --exclude bammetrics-py` with the features of the PDF report, run in `RUST_ALPINE_IMAGE` on the platform of the target.
+
+| Target | Golden | Concordance | Workspace tests | Result |
+|---|---|---|---|---|
+| `universal-apple-darwin`, arm64 half | 33 passed, 0 failed | 669 passed, 0 failed (82 min 41 s) | not run | pass |
+| `universal-apple-darwin`, x86_64 half under Rosetta (`scripts/rosetta-bammetrics`) | 33 passed, 0 failed | not run | not run | pass |
+| `aarch64-unknown-linux-musl` | 33 passed, 0 failed | 669 passed, 0 failed (2 h 09 min) | 1,646 passed, 1 failed (see notes) | pass |
+| `x86_64-unknown-linux-musl` | 33 passed, 0 failed | 669 passed, 0 failed (2 h 11 min) | 1,647 passed, 0 failed | pass |
+
+Notes on the runs, none of which changes a binary:
+
+- The golden record `qc_report_html_pdf` holds a page count that depends on the length of the output path in the run provenance. Linux containers use `/tmp`, which is shorter than the macOS temporary directory, so the report is 6 pages and the record says 7. Run the container with `TMPDIR` set to a path as long as the macOS one (49 characters) and the record matches. The same binary gives 6 pages on macOS when the path is short.
+- `a_materialized_tool_spills_under_the_chains_tmp_dir` and `an_unwritable_prefix_directory_fails_before_the_read` fail as root, which ignores a mode 0500 directory. Both pass as a non-root user in the same container.
+- `cleanup::tests::forgetting_many_paths_oldest_first_is_not_quadratic` and `vcf::site_header::tests::many_distinct_keys_parse_in_linear_time` have a 2 s limit and failed once each on a loaded machine with the test profile at `lto=false`. Both pass on a rerun.
+- `standard_input_is_indexed_and_needs_an_output_name` failed on arm64 in two runs and passed on amd64. The test writes a BAM into the standard input of `build-bam-index -`, which exits 2 at once without reading it, so the write gets a broken pipe when the child exits first. The tarball binary gives the expected message and exit code 2, and five pipes with `-o` give the same index. This is a race in the test, left for the owner.
+- The workspace tests built with `CARGO_PROFILE_RELEASE_LTO=false` and 16 code generation units, because two fat-LTO test builds exceeded the 15.6 GiB of the Docker VM. Only the golden suite reads `BAMMETRICS_BIN`; the other tests run the binary their own build made.
 
 ### Time zones
 
+The two `case_utc!` cases (`picard_collect_arrays_variant_calling_metrics` and `verb_arrays_variant_calling`) pass in every golden run above. The table is the verb form of `verb_arrays_variant_calling` with `TZ=America/Toronto`, compared with the macOS output after the output path and the `Started on` line.
+
 | Target | TZ | Result |
 |---|---|---|
-| | | |
+| `universal-apple-darwin` | America/Toronto | reference: `AUTOCALL_DATE` 2013-04-13T03:03:00-0400, `IMAGING_DATE` 2013-04-04T04:03:21-0400 |
+| `aarch64-unknown-linux-musl` in `RUNNER_IMAGE` with `apk add tzdata` | America/Toronto | equal in all three files |
+| `aarch64-unknown-linux-musl` in `RUNNER_IMAGE` without tzdata | America/Toronto | detail file differs: `2013-04-13T03:03:00+0000` and `2013-04-04T08:03:21+0000` for the two dates; summary and control code files equal |
+
+Without tzdata the container cannot resolve the zone and prints the dates in UTC. A user who sets `TZ` in a bare Alpine image gets UTC offsets.
 
 ### Old glibc
 
 | Image | Binary | Result |
 |---|---|---|
-| | | |
+| `CENTOS_IMAGE` (CentOS 7.9, glibc 2.17, amd64) | `x86_64-unknown-linux-musl` tarball binary | `--version --json` exits 0 with version 0.34.2; `insert-size tests/data/insert_size.bam` gives the macOS bytes after the `Started on` line |
+| `CENTOS_IMAGE` | `scripts/build-linux.sh` fallback | builds in 5 min 17 s (static-pie, features `parquet` only, no `pdf`, commit not recorded); `--version --json` exits 0 with version 0.34.2 |
 
 ### Reproducibility
 
+Two runs of `scripts/release.sh --snapshot --clean` at the same commit, the second after dropping the build volumes and `target/release-mac`.
+
 | Target | Run 1 sha256 | Run 2 sha256 | Result |
 |---|---|---|---|
-| | | | |
+| `aarch64-unknown-linux-musl` | `6463577d2b9d5fc83689b6ebefc17b15d89621f79cf9b500298c49e0abdb1fb7` | same | equal |
+| `x86_64-unknown-linux-musl` | `58130cad96eb42ad015e7b0bafa552c3593bec831180d9b08ecc880244573cdc` | same | equal |
+| `universal-apple-darwin` | `e0515bfca92b56c0342674bd9c6a9074bb6baf37b55bfa16efbb7eafa8b07542` | same | equal |
+| SBOM (`bammetrics-0.34.2.cdx.json`) | `db4e22406bdbe30806df1cafe3aff2fbee75c940d8120e1ffcc5a103e0102f3d` | same | equal |
+
+`BUILDINFO` and `bammetrics.rb` are also equal between the two runs.
 
 ### SBOM and formula
 
