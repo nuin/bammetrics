@@ -67,7 +67,8 @@ The pinned inputs (four image digests, `MAC_TOOLCHAIN`, `MACOSX_DEPLOYMENT_TARGE
 
 `--publish` creates the release as a draft with `--verify-tag`, uploads the files, then runs
 `gh release edit --draft=false`. A failed upload leaves a draft, never a public release with
-missing files. A run removes `SHA256SUMS` and `BUILDINFO` with the stale tarballs at its start.
+missing files. Before a rerun, delete that draft with `gh release delete v<version>`;
+a second `gh release create` fails on the existing tag. A run removes `SHA256SUMS` and `BUILDINFO` with the stale tarballs at its start.
 
 ### Blocked targets
 
@@ -168,7 +169,7 @@ Two runs of `scripts/release.sh --snapshot --clean` at commit 0f5019e. The secon
 
 | Check | Result |
 |---|---|
-| SBOM components | 185, CycloneDX 1.5 |
+| SBOM components | 194 (6 of them workspace crates), CycloneDX 1.5 |
 | `cargo deny` licenses, sources | ok |
 | `cargo deny` advisories | failed: RUSTSEC-2026-0206, rustybuzz unmaintained; pinned at krilla's version for feature `pdf`; left for the owner |
 | `cargo deny` bans | failed: two versions of `syn`; left for the owner |
