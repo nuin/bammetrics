@@ -91,6 +91,8 @@ BM_LINUX_ARCH=arm64 BM_LINUX_BIN=/tmp/bm/bammetrics-0.34.2-aarch64-unknown-linux
 
 Filled from the runs of 0.34.2.
 
+Speed of the musl binaries against glibc, and the mimalloc decision: docs/benchmarks.md, section "musl against glibc (wave E2)".
+
 ### Gates
 
 | Target | Golden | Concordance | Result |
