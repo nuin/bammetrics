@@ -223,8 +223,7 @@ else
     # shellcheck disable=SC2046
     shasum -a 256 $(ls | grep -E '\.tar\.gz$|\.cdx\.json$' | LC_ALL=C sort) > SHA256SUMS
   )
-  shasum -a 256 -c "$out/SHA256SUMS" >/dev/null 2>&1 || (cd "$out" && shasum -a 256 -c SHA256SUMS) \
-    || fail "SHA256SUMS does not verify"
+  (cd "$out" && shasum -a 256 -c SHA256SUMS >/dev/null) || fail "SHA256SUMS does not verify"
 fi
 
 if [ "$dry" = 1 ]; then
