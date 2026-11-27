@@ -245,6 +245,8 @@ sbom_build() {
     "$RUST_ALPINE_IMAGE" sh -euc "$script"
 }
 sbom_build
+# cargo cyclonedx stamps the run's clock and a random serial number; pin both to the commit.
+run python3 "$repo/scripts/sbom_pin.py" "$out/$sbom" "$full_commit" "$SOURCE_DATE_EPOCH"
 
 # SHA256SUMS lists what this run made: the tarballs of the unblocked targets and the SBOM.
 listed=()

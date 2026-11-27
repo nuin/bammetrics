@@ -111,7 +111,7 @@ def git(repo, *args):
 def release_repo(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     (repo / "scripts").mkdir(parents=True)
-    for name in ("release.sh", "release.env"):
+    for name in ("release.sh", "release.env", "sbom_pin.py"):
         (repo / "scripts" / name).write_text((ROOT / "scripts" / name).read_text())
     (repo / "scripts" / "release.sh").chmod(0o755)
     (repo / "Cargo.toml").write_text('[workspace.package]\nversion = "1.2.3"\n')
@@ -247,7 +247,7 @@ def test_sbom_line_in_dry_run(release_repo):
 
 def test_sums_list_only_planned_files(release_repo, tmp_path):
     (tmp_path / "bin" / "docker").write_text(
-        '#!/bin/sh\ncase "$*" in *cyclonedx*) echo {} > "$SBOM_STUB" ;; esac\nexit 0\n')
+        '#!/bin/sh\ncase "$*" in *cyclonedx*) echo \'{"metadata": {}}\' > "$SBOM_STUB" ;; esac\nexit 0\n')
     sha = subprocess.run(["git", "-C", str(release_repo), "rev-parse", "--short", "HEAD"],
                          capture_output=True, text=True).stdout.strip()
     out = release_repo / "dist" / f"1.2.3-{sha}"
@@ -320,3 +320,26 @@ def test_formula_skips_blocked_target(tmp_path):
     assert result.returncode == 0, result.stderr
     text = out.read_text()
     assert "aarch64" not in text and "on_intel do" in text and "x86_64-unknown-linux-musl" in text
+
+
+EXPECTED_SERIAL = "d4ca3c70-334d-5979-a8e3-59e98d8aaf5c"
+
+
+def test_sbom_pin_sets_timestamp_and_serial(tmp_path):
+    sys.path.insert(0, str(ROOT / "scripts"))
+    sbom_pin = importlib.import_module("sbom_pin")
+    sha = "e8e34200000000000000000000000000000000aa"
+    source = (
+        '{\n  "bomFormat": "CycloneDX",\n  "serialNumber": "urn:uuid:random",\n'
+        '  "metadata": {\n    "timestamp": "2026-11-27T01:57:27.097447295Z"\n  },\n'
+        '  "components": []\n}'
+    )
+    text = sbom_pin.pin(source, sha, "1795000000")
+    assert text == source.replace("urn:uuid:random", "urn:uuid:" + EXPECTED_SERIAL).replace(
+        "2026-11-27T01:57:27.097447295Z", "2026-11-18T11:06:40Z"
+    )
+    assert sbom_pin.pin(source, sha, "1795000000") == text
+    path = tmp_path / "x.cdx.json"
+    path.write_text(source)
+    assert sbom_pin.main(["sbom_pin.py", str(path), sha, "1795000000"]) == 0
+    assert path.read_text() == text
