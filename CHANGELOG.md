@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.34.2
+
+Wave E2: release artifacts, no registry tool (77 tools). No change in metric output.
+
+### Added
+
+- `scripts/release.sh`: static x86_64 and aarch64 musl binaries (Docker, pinned images), a
+  macOS universal binary (rustup toolchain 1.100.0), one tarball each, a CycloneDX 1.5 SBOM
+  with a timestamp and serial number fixed by the commit, `SHA256SUMS`, `BUILDINFO` and the
+  Homebrew formula `bammetrics.rb`. `--snapshot`, `--tag`, `--dry-run`, `--publish`, `--clean`.
+- `scripts/linux-bammetrics` and `scripts/rosetta-bammetrics`, shims that run the Linux and the
+  x86_64 macOS binary for the harnesses through `BAMMETRICS_BIN`.
+- `docs/release.md`.
+
 ## 0.34.1
 
 Wave E1: the machine contract, no registry tool (77 tools).
