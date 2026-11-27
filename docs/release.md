@@ -48,8 +48,8 @@ are `x86_64 arm64`, then runs the x86_64 slice under Rosetta.
 - rustup, keg-only from Homebrew (`/opt/homebrew/opt/rustup/bin`), with toolchain
   `1.100.0` and targets `aarch64-apple-darwin` and `x86_64-apple-darwin`.
 - `lipo`, `shasum`, `python3`. `gh` only for `--publish`.
-- `cargo-auditable`, `cargo-cyclonedx` and `cargo-deny` install on first use into the docker
-  volume `bammetrics-cargo-tools`.
+- `cargo-auditable` and `cargo-cyclonedx` install on first use into the docker volume
+  `bammetrics-cargo-tools`.
 
 The pinned inputs (four image digests, `MAC_TOOLCHAIN`, `MACOSX_DEPLOYMENT_TARGET`,
 `BLOCKED_TARGETS`) live in `scripts/release.env`.
@@ -72,7 +72,9 @@ set `BAMMETRICS_BIN`. `crates/cli/tests/golden.rs`, `tests/concordance/cases.py`
 | `scripts/rosetta-bammetrics` | the x86_64 slice, through `arch -x86_64` | `BM_MAC_BIN` (path of the universal binary) |
 
 ```bash
-BM_LINUX_ARCH=arm64 BM_LINUX_BIN=$PWD/dist/0.34.2-abc1234/.work/... \
+# release.sh removes dist/<dir>/.work at the end, so take the binary from the tarball
+tar -xzf dist/v0.34.2/bammetrics-0.34.2-aarch64-unknown-linux-musl.tar.gz -C /tmp/bm
+BM_LINUX_ARCH=arm64 BM_LINUX_BIN=/tmp/bm/bammetrics-0.34.2-aarch64-unknown-linux-musl/bammetrics \
   BAMMETRICS_BIN=$PWD/scripts/linux-bammetrics make golden
 ```
 
@@ -81,7 +83,9 @@ BM_LINUX_ARCH=arm64 BM_LINUX_BIN=$PWD/dist/0.34.2-abc1234/.work/... \
 - Unit: `make harness-test` covers the shims, the refusals, the dry run, the formula and the
   SBOM pin.
 - Gates: the golden suite and the concordance cases run against each binary through its shim.
-- `cargo deny check`, `brew style` and `brew audit --strict` on `bammetrics.rb`.
+- Manual, not run by `release.sh`: `cargo deny check` (in `RUST_ALPINE_IMAGE` with
+  `cargo-deny` installed into the `bammetrics-cargo-tools` volume, `-w` at the repository),
+  and `brew style bammetrics.rb` and `brew audit --strict bammetrics.rb` on the formula.
 
 ## Results
 
