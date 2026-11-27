@@ -4,6 +4,7 @@ One case is one Picard run and one bammetrics run on the same BAM with the
 same settings. Both run_picard.py and test_concordance.py read CASES, so a
 case added here gets a reference file and a test.
 """
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -12,7 +13,7 @@ CORPUS = ROOT / "tests" / "corpus" / "out"
 FIXTURES = ROOT / "tests" / "data"
 PICARD_DIR = CORPUS / "picard"
 OURS_DIR = ROOT / "target" / "concordance"
-BAMMETRICS = ROOT / "target" / "release" / "bammetrics"
+BAMMETRICS = Path(os.environ.get("BAMMETRICS_BIN") or ROOT / "target" / "release" / "bammetrics")
 PICARD_VERSION = "3.5.0"
 
 

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Run a Linux bammetrics binary from macOS in a container, so the harness can
+# use it through BAMMETRICS_BIN. BM_LINUX_BIN is the binary, BM_LINUX_ARCH is
+# amd64 or arm64. The working directory and the temp directories are mounted
+# at their own paths, so file arguments mean the same inside.
+set -euo pipefail
+
+[ -n "${BM_LINUX_ARCH:-}" ] || {
+  echo "linux-bammetrics: BM_LINUX_ARCH is not set (amd64 or arm64)" >&2
+  exit 2
+}
+[ -n "${BM_LINUX_BIN:-}" ] || {
+  echo "linux-bammetrics: BM_LINUX_BIN is not set" >&2
+  exit 2
+}
+
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=release.env
+. "$here/release.env"
+
+exec docker run --rm -i --platform "linux/$BM_LINUX_ARCH" \
+  --user "$(id -u):$(id -g)" -w "$PWD" \
+  -v /Users:/Users -v /private:/private -v /private/var/folders:/var/folders \
+  -e TZ -e XDG_CONFIG_HOME -e BAMMETRICS_REFERENCE \
+  "$RUNNER_IMAGE" "$BM_LINUX_BIN" "$@"

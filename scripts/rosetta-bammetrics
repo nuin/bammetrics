@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run the x86_64 half of the universal macOS binary under Rosetta, so the
+# harness can use it through BAMMETRICS_BIN. BM_MAC_BIN is the binary.
+set -euo pipefail
+
+[ -n "${BM_MAC_BIN:-}" ] || {
+  echo "rosetta-bammetrics: BM_MAC_BIN is not set" >&2
+  exit 2
+}
+exec arch -x86_64 "$BM_MAC_BIN" "$@"
